@@ -1245,14 +1245,10 @@ pub async fn run_agent_loop(
                                 }
                             }
                         }
-                    }
                     _ => "Herramienta desconocida".to_string(),
                 };
-                        } else {
-                            tool_result.clone()
-                        },
-                        timestamp: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs(),
-                    });
+
+                let display_result = if tool_result.len() > 25000 {
                     save_chat_steps_to_disk(&state, &session_id, &status.steps);
                 }
 
