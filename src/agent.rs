@@ -1132,20 +1132,21 @@ pub async fn run_agent_loop(
                             let before_len = messages.len();
                             messages.retain(|msg| {
                                 // Si el content es un array (mensaje multimodal), buscar el marcador en las partes de texto
+                            messages.retain(|msg| {
+                                // Nuevo formato: content string (texto plano de image_view)
+                                if let Some(text) = msg["content"].as_str() {
+                                    if text.contains(&marker) { return false; }
+                                }
+                                // Formato antiguo: content array (multimodal con image_url)
                                 if let Some(content_arr) = msg["content"].as_array() {
                                     for part in content_arr {
                                         if let Some(text) = part["text"].as_str() {
-                                            if text.contains(&marker) {
-                                                return false; // Eliminar este mensaje
-                                            }
+                                            if text.contains(&marker) { return false; }
                                         }
                                     }
                                 }
-                                true // Mantener los demás mensajes
+                                true
                             });
-                            let removed = before_len - messages.len();
-                            if removed > 0 {
-                                json!({
                                     "message": format!("Imagen '{}' eliminada del contexto. Ya no consumirá tokens en las siguientes iteraciones.", id)
                                 }).to_string()
                             } else {
