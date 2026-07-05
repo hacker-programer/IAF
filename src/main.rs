@@ -765,15 +765,15 @@ async fn chat_endpoint(State(state): State<AppState>, Json(payload): Json<ChatIn
             session_messages_clone,
             project_name_clone,
             state_clone.clone(),
+        let agent_task = tokio::spawn(run_agent_loop(
+            session_messages_clone,
+            project_name_clone,
+            state_clone.clone(),
             deepseek_key(),
             voyage_key(),
+            openrouter_key(),
             Some(session_id_clone.clone()),
         ));
-
-        let run_result = match agent_task.await {
-            Ok(Ok(reply)) => Ok(reply),
-            Ok(Err(e)) => Err(format!("Error de ejecución: {}", e)),
-            Err(join_err) => {
                 if join_err.is_panic() {
                     // Obtener el payload del pánico
                     let panic_any = join_err.into_panic();
