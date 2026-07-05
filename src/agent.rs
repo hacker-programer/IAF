@@ -712,7 +712,7 @@ pub async fn run_agent_loop(
                                     .stdout(std::process::Stdio::null())
                                     .stderr(std::process::Stdio::null())
                                     .env("GIT_TERMINAL_PROMPT", "0")
-                                    .status();
+                                    .env("GIT_TERMINAL_PROMPT", "0")
                                     .status();
                             }
 
