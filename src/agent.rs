@@ -295,7 +295,6 @@ pub async fn run_agent_loop(
             }
         }),
         json!({
-            "type": "function",
             "function": {
                 "name": "image_release",
                 "description": "Elimina una imagen del contexto del chat (deja de enviarla a la API en las siguientes iteraciones). El archivo permanece en disco. Úsalo cuando ya no necesites ver la imagen para reducir costos de tokens.",
@@ -306,13 +305,12 @@ pub async fn run_agent_loop(
                     },
                     "required": ["id"]
                 }
-                    "required": ["id"]
-                }
             }
         }),
         json!({
             "type": "function",
             "function": {
+                "name": "git_resolve_divergence",
                 "name": "git_resolve_divergence",
                 "description": "Resuelve una divergencia entre repositorio local y remoto. Usa 'keep_local' para sobrescribir remoto con local (push --force), 'keep_remote' para descartar local y usar remoto (reset --hard), 'merge_both' para fusionar ambos (pull --rebase --autostash).",
                 "parameters": {
