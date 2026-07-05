@@ -1090,33 +1090,40 @@ pub async fn run_agent_loop(
                     }
                     "image_release" => {
                         let id = args["id"].as_str().unwrap_or("");
+                    "image_release" => {
+                        let id = args["id"].as_str().unwrap_or("");
                         if id.is_empty() {
                             json!({"error": "No se proporcionó ID de imagen"}).to_string()
                         } else {
-                            // Buscar y eliminar del array messages cualquier mensaje que contenga esta imagen
                             let marker = format!("(id: {})", id);
                             let before_len = messages.len();
                             messages.retain(|msg| {
-                                // Si el content es un array (mensaje multimodal), buscar el marcador en las partes de texto
+                                // Nuevo formato: content es string (texto plano con descripción)
+                                if let Some(text) = msg["content"].as_str() {
+                                    if text.contains(&marker) {
+                                        return false;
+                                    }
+                                }
+                                // Formato antiguo: content es array (multimodal con image_url)
                                 if let Some(content_arr) = msg["content"].as_array() {
                                     for part in content_arr {
                                         if let Some(text) = part["text"].as_str() {
                                             if text.contains(&marker) {
-                                                return false; // Eliminar este mensaje
+                                                return false;
                                             }
                                         }
                                     }
                                 }
-                                true // Mantener los demás mensajes
+                                true
                             });
                             let removed = before_len - messages.len();
                             if removed > 0 {
                                 json!({
-                                    "message": format!("Imagen '{}' eliminada del contexto. Ya no consumirá tokens en las siguientes iteraciones.", id)
+                                    "message": format!("Imagen '{}' eliminada del contexto. Ya no consumirá tokens.", id)
                                 }).to_string()
                             } else {
                                 json!({
-                                    "message": format!("No se encontró la imagen '{}' en el contexto activo. Es posible que ya haya sido liberada o comprimida.", id)
+                                    "message": format!("No se encontró la imagen '{}' en el contexto activo.", id)
                                 }).to_string()
                             }
                         }
