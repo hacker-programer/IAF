@@ -1116,9 +1116,11 @@ pub async fn run_agent_loop(
                                                 "message": format!("Imagen '{}' analizada e inyectada (solo texto). Usa image_release('{}') para liberarla.", id, id)
                                             }).to_string()
                                         }
+                                        Err(e) => json!({"error": format!("Error leyendo archivo de imagen: {}", e)}).to_string(),
+                                    }
+                                }
                                 None => json!({"error": format!("No se encontró imagen con id '{}'", id)}).to_string(),
                             }
-                        }
                     }
                     "image_release" => {
                         let id = args["id"].as_str().unwrap_or("");
