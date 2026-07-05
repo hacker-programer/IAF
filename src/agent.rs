@@ -538,9 +538,6 @@ pub async fn run_agent_loop(
                             let proj_path = get_project_path(&state, proj_name);
                             let full_path = Path::new(&proj_path).join(rel_path);
 
-                            let proj_path = get_project_path(&state, proj_name);
-                            let full_path = Path::new(&proj_path).join(rel_path);
-
                             // --- PASO 0 (CRÍTICO): Verificar que el repositorio tenga un remote "origin" configurado ---
                             // Si no existe, intentar crearlo. Si falla, NO ejecutar operaciones destructivas.
                             let remote_check = Command::new("git")
