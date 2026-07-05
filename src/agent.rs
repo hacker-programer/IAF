@@ -592,80 +592,75 @@ pub async fn run_agent_loop(
                             
                             // Autocuración en caso de que git pull falle
                             if status_pull.as_ref().map(|s| !s.success()).unwrap_or(true) {
-                                println!("Advertencia: git pull falló al inicio (repositorio posiblemente bloqueado o sucio). Iniciando autocuración...");
-                                
-                                // 1. Abortar cualquier rebase/merge en curso de forma silenciosa
-                                let _ = Command::new("git")
-                                    .args(&["rebase", "--abort"])
-                                    .current_dir(&proj_path)
-                                    .stdin(std::process::Stdio::null())
-                                    .stdout(std::process::Stdio::null())
-                                    .stderr(std::process::Stdio::null())
-                                    .env("GIT_TERMINAL_PROMPT", "0")
-                                    .status();
-                                
-                                let _ = Command::new("git")
-                                    .args(&["merge", "--abort"])
-                                    .current_dir(&proj_path)
-                                    .stdin(std::process::Stdio::null())
-                                    .stdout(std::process::Stdio::null())
-                                    .stderr(std::process::Stdio::null())
-                                    .env("GIT_TERMINAL_PROMPT", "0")
-                                    .status();
+                            // Autocuración: recopilar divergencias para que el agente decida
+                            if status_pull.as_ref().map(|s| !s.success()).unwrap_or(true) {
+                                println!("INFO: Divergencia detectada. Recopilando diferencias para el agente...");
 
-                                // 2. Descartar cualquier cambio local sucio o pendiente en el working directory
-                                let _ = Command::new("git")
-                                    .args(&["reset", "--hard", "HEAD"])
-                                    .current_dir(&proj_path)
-                                    .stdin(std::process::Stdio::null())
-                                    .stdout(std::process::Stdio::null())
-                                    .stderr(std::process::Stdio::null())
-                                    .env("GIT_TERMINAL_PROMPT", "0")
-                                    .status();
-                                
-                                let _ = Command::new("git")
-                                    .args(&["clean", "-fd"])
-                                    .current_dir(&proj_path)
-                                    .stdin(std::process::Stdio::null())
-                                    .stdout(std::process::Stdio::null())
-                                    .stderr(std::process::Stdio::null())
-                                    .env("GIT_TERMINAL_PROMPT", "0")
-                                    .status();
-
-                                // 3. Forzar eliminación física de carpetas residuales y archivos lock
+                                // Limpiar carpetas residuales
                                 let rebase_merge_path = std::path::Path::new(&proj_path).join(".git").join("rebase-merge");
                                 let rebase_apply_path = std::path::Path::new(&proj_path).join(".git").join("rebase-apply");
                                 let index_lock_path = std::path::Path::new(&proj_path).join(".git").join("index.lock");
-                                if rebase_merge_path.exists() {
-                                    let _ = fs::remove_dir_all(&rebase_merge_path);
-                                }
-                                if rebase_apply_path.exists() {
-                                    let _ = fs::remove_dir_all(&rebase_apply_path);
-                                }
-                                if index_lock_path.exists() {
-                                    let _ = fs::remove_file(&index_lock_path);
-                                }
+                                if rebase_merge_path.exists() { let _ = fs::remove_dir_all(&rebase_merge_path); }
+                                if rebase_apply_path.exists() { let _ = fs::remove_dir_all(&rebase_apply_path); }
+                                if index_lock_path.exists() { let _ = fs::remove_file(&index_lock_path); }
 
-                                // 4. Alinear el historial local forzadamente con el repositorio remoto
-                                println!("Ejecutando git reset --hard origin/master para alinear el historial local con el remoto...");
+                                // Fetch para referencia remota actualizada
                                 let _ = Command::new("git")
-                                    .args(&["reset", "--hard", "origin/master"])
+                                    .args(&["fetch", "origin", "master"])
                                     .current_dir(&proj_path)
-                                    .stdin(std::process::Stdio::null())
                                     .stdout(std::process::Stdio::null())
                                     .stderr(std::process::Stdio::null())
                                     .env("GIT_TERMINAL_PROMPT", "0")
                                     .status();
 
-                                // 5. Reintentar pull final
-                                status_pull = Command::new("git")
-                                    .args(&["pull", "--rebase", "--autostash", "origin", "master"])
-                                    .current_dir(&proj_path)
-                                    .stdin(std::process::Stdio::null())
-                                    .stdout(std::process::Stdio::null())
-                                    .stderr(std::process::Stdio::null())
-                                    .env("GIT_TERMINAL_PROMPT", "0")
-                                    .status();
+                                let mut divergence_info = String::from(
+                                    "⚠️ **DIVERGENCIA DETECTADA** entre repositorio local y remoto.\n\n"
+                                );
+
+                                // Commits remotos no presentes localmente
+                                if let Ok(o) = Command::new("git")
+                                    .args(&["log", "HEAD..origin/master", "--oneline", "--no-merges", "-20"])
+                                    .current_dir(&proj_path).output()
+                                {
+                                    let s = String::from_utf8_lossy(&o.stdout).trim().to_string();
+                                    if !s.is_empty() {
+                                        divergence_info.push_str(&format!("📥 **Commits en remoto que NO tienes localmente:**\n```\n{}\n```\n\n", s));
+                                    } else {
+                                        divergence_info.push_str("📥 No hay commits nuevos en remoto.\n\n");
+                                    }
+                                }
+
+                                // Commits locales no presentes en remoto
+                                if let Ok(o) = Command::new("git")
+                                    .args(&["log", "origin/master..HEAD", "--oneline", "--no-merges", "-20"])
+                                    .current_dir(&proj_path).output()
+                                {
+                                    let s = String::from_utf8_lossy(&o.stdout).trim().to_string();
+                                    if !s.is_empty() {
+                                        divergence_info.push_str(&format!("📤 **Commits locales NO presentes en remoto:**\n```\n{}\n```\n\n", s));
+                                    } else {
+                                        divergence_info.push_str("📤 No hay commits locales sin enviar.\n\n");
+                                    }
+                                }
+
+                                // Archivos con diferencias
+                                if let Ok(o) = Command::new("git")
+                                    .args(&["diff", "origin/master", "--stat"])
+                                    .current_dir(&proj_path).output()
+                                {
+                                    let s = String::from_utf8_lossy(&o.stdout).trim().to_string();
+                                    if !s.is_empty() {
+                                        divergence_info.push_str(&format!("📊 **Archivos con diferencias:**\n```\n{}\n```\n\n", s));
+                                    }
+                                }
+
+                                divergence_info.push_str("---\n**Resolución requerida**: Usa la herramienta `git_resolve_divergence` con:\n");
+                                divergence_info.push_str("- `keep_local`: Sobrescribir remoto con local (push --force)\n");
+                                divergence_info.push_str("- `keep_remote`: Descartar local y usar remoto (reset --hard)\n");
+                                divergence_info.push_str("- `merge_both`: Fusionar ambos (pull --rebase --autostash)\n");
+
+                                return Ok(divergence_info);
+                            }
                             }
 
                             let pull_success = status_pull.as_ref().map(|s| s.success()).unwrap_or(false);
