@@ -37,7 +37,12 @@ fn voyage_key() -> &'static str {
     KEY.get_or_init(|| std::env::var("VOYAGE_API_KEY").expect("VOYAGE_API_KEY no configurada"))
 }
 
-const DEFAULT_GLOBAL_SYSTEM_PROMPT: &str = "Eres un asistente de desarrollo autónomo inteligente (DeepSeek V4 Pro) enfocado en resolver problemas en repositorios de software.
+fn openrouter_key() -> &'static str {
+    static KEY: OnceLock<String> = OnceLock::new();
+    KEY.get_or_init(|| std::env::var("OPENROUTER_API_KEY").expect("OPENROUTER_API_KEY no configurada"))
+}
+
+const DEFAULT_GLOBAL_SYSTEM_PROMPT: &str = "
 Tienes acceso a buscar en Google, ejecutar comandos de PowerShell, buscar código semánticamente, leer y modificar archivos haciendo commit en GitHub.
 Cuando modifiques un archivo, SIEMPRE debes hacerlo a través de write_file_with_commit para subir los cambios a GitHub.
 Para dar por terminada la tarea de forma definitiva y cerrar tu ejecución, debes obligatoriamente llamar a la herramienta `finalizar_tarea`. No basta con responder textualmente que has terminado; la única forma de concluir el proceso es ejecutando dicha herramienta.
