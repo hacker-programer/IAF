@@ -538,6 +538,95 @@ pub async fn run_agent_loop(
                             let proj_path = get_project_path(&state, proj_name);
                             let full_path = Path::new(&proj_path).join(rel_path);
 
+                            let proj_path = get_project_path(&state, proj_name);
+                            let full_path = Path::new(&proj_path).join(rel_path);
+
+                            // --- PASO 0 (CRÍTICO): Verificar que el repositorio tenga un remote "origin" configurado ---
+                            // Si no existe, intentar crearlo. Si falla, NO ejecutar operaciones destructivas.
+                            let remote_check = Command::new("git")
+                                .args(&["remote", "get-url", "origin"])
+                                .current_dir(&proj_path)
+                                .stdout(std::process::Stdio::piped())
+                                .stderr(std::process::Stdio::null())
+                                .output();
+
+                            let remote_exists = remote_check.as_ref().map(|o| o.status.success()).unwrap_or(false);
+
+                            if !remote_exists {
+                                println!("INFO: El proyecto '{}' no tiene repositorio remoto en GitHub (no se encontró 'origin'). Intentando crearlo...", proj_name);
+                                
+                                // Intentar crear el repositorio remoto en GitHub mediante gh CLI
+                                let create_result = Command::new("gh")
+                                    .args(&["repo", "create", "--source=.", "--push", "--remote=origin", "--public", "--description=Proyecto IAF"])
+                                    .current_dir(&proj_path)
+                                    .stdin(std::process::Stdio::null())
+                                    .stdout(std::process::Stdio::piped())
+                                    .stderr(std::process::Stdio::piped())
+                                    .output();
+
+                                match create_result {
+                                    Ok(ref out) if out.status.success() => {
+                                        println!("INFO: Repositorio remoto creado y vinculado exitosamente en GitHub para '{}'.", proj_name);
+                                    }
+                                    _ => {
+                                        // No se pudo crear el remoto. FALLAR DE FORMA SEGURA sin tocar archivos locales.
+                                        let stderr_str = create_result.as_ref()
+                                            .ok()
+                                            .map(|o| String::from_utf8_lossy(&o.stderr).to_string())
+                                            .unwrap_or_else(|| "gh CLI no disponible o no autenticado".to_string());
+                                        play_error_beep();
+                                        return Ok(format!(
+                                            "⛔ ERROR DE SINCRONIZACIÓN: Este proyecto NO tiene un repositorio remoto en GitHub y no se pudo crear uno automáticamente.\n\n\
+                                             Detalles técnicos: {}\n\n\
+                                             ⚠️ IMPORTANTE: NO se ha modificado ni eliminado ningún archivo local. Tu código está completamente intacto.\n\n\
+                                             Para solucionarlo manualmente, ejecuta en la terminal:\n\
+                                             1. 'gh auth login' (si gh CLI no está autenticado)\n\
+                                             2. 'gh repo create --source=. --push --remote=origin' dentro de la carpeta del proyecto\n\
+                                             3. O agrega un remote manualmente: 'git remote add origin <URL_DEL_REPO>'",
+                                            stderr_str.trim()
+                                        ));
+                                    }
+                                }
+                            }
+
+                            // Verificar que el remote origin es accesible (tiene el branch master)
+                            let remote_accessible = Command::new("git")
+                                .args(&["ls-remote", "--exit-code", "--heads", "origin", "master"])
+                                .current_dir(&proj_path)
+                                .stdin(std::process::Stdio::null())
+                                .stdout(std::process::Stdio::null())
+                                .stderr(std::process::Stdio::null())
+                                .status()
+                                .map(|s| s.success())
+                                .unwrap_or(false);
+
+                            if !remote_accessible {
+                                println!("INFO: El remote 'origin' existe pero el branch 'master' no es accesible en GitHub. Intentando push inicial...");
+                                
+                                // Intentar un push inicial para crear el branch master en el remoto
+                                let push_initial = Command::new("git")
+                                    .args(&["push", "--set-upstream", "origin", "master"])
+                                    .current_dir(&proj_path)
+                                    .stdin(std::process::Stdio::null())
+                                    .stdout(std::process::Stdio::null())
+                                    .stderr(std::process::Stdio::null())
+                                    .env("GIT_TERMINAL_PROMPT", "0")
+                                    .status();
+                                
+                                if push_initial.as_ref().map(|s| !s.success()).unwrap_or(true) {
+                                    play_error_beep();
+                                    return Ok(format!(
+                                        "⛔ ERROR DE SINCRONIZACIÓN: El repositorio remoto en GitHub existe pero no se pudo acceder al branch 'master' ni crear uno.\n\n\
+                                         ⚠️ IMPORTANTE: NO se ha modificado ni eliminado ningún archivo local.\n\n\
+                                         Verifica que:\n\
+                                         1. El repositorio remoto no esté vacío (necesita al menos un commit inicial)\n\
+                                         2. Tengas permisos de escritura en el repositorio\n\
+                                         3. El branch 'master' exista en GitHub"
+                                    ));
+                                }
+                                println!("INFO: Push inicial exitoso. Branch 'master' creado en el remoto.");
+                            }
+
                             // --- PASO 1: Sincronizar con el repositorio remoto ANTES de realizar cualquier cambio local ---
                             let mut status_pull = Command::new("git")
                                 .args(&["pull", "--rebase", "--autostash", "origin", "master"])
@@ -548,9 +637,10 @@ pub async fn run_agent_loop(
                                 .env("GIT_TERMINAL_PROMPT", "0")
                                 .status();
                             
-                            // Autocuración en caso de que git pull falle
+                            // Autocuración SEGURA en caso de que git pull falle
+                            // SOLO se ejecuta si confirmamos que el remote existe y es accesible
                             if status_pull.as_ref().map(|s| !s.success()).unwrap_or(true) {
-                                println!("Advertencia: git pull falló al inicio (repositorio posiblemente bloqueado o sucio). Iniciando autocuración...");
+                                println!("Advertencia: git pull falló (repositorio posiblemente bloqueado o sucio). Iniciando autocuración segura...");
                                 
                                 // 1. Abortar cualquier rebase/merge en curso de forma silenciosa
                                 let _ = Command::new("git")
@@ -571,26 +661,7 @@ pub async fn run_agent_loop(
                                     .env("GIT_TERMINAL_PROMPT", "0")
                                     .status();
 
-                                // 2. Descartar cualquier cambio local sucio o pendiente en el working directory
-                                let _ = Command::new("git")
-                                    .args(&["reset", "--hard", "HEAD"])
-                                    .current_dir(&proj_path)
-                                    .stdin(std::process::Stdio::null())
-                                    .stdout(std::process::Stdio::null())
-                                    .stderr(std::process::Stdio::null())
-                                    .env("GIT_TERMINAL_PROMPT", "0")
-                                    .status();
-                                
-                                let _ = Command::new("git")
-                                    .args(&["clean", "-fd"])
-                                    .current_dir(&proj_path)
-                                    .stdin(std::process::Stdio::null())
-                                    .stdout(std::process::Stdio::null())
-                                    .stderr(std::process::Stdio::null())
-                                    .env("GIT_TERMINAL_PROMPT", "0")
-                                    .status();
-
-                                // 3. Forzar eliminación física de carpetas residuales y archivos lock
+                                // 2. Forzar eliminación física de carpetas residuales y archivos lock
                                 let rebase_merge_path = std::path::Path::new(&proj_path).join(".git").join("rebase-merge");
                                 let rebase_apply_path = std::path::Path::new(&proj_path).join(".git").join("rebase-apply");
                                 let index_lock_path = std::path::Path::new(&proj_path).join(".git").join("index.lock");
@@ -604,8 +675,22 @@ pub async fn run_agent_loop(
                                     let _ = fs::remove_file(&index_lock_path);
                                 }
 
-                                // 4. Alinear el historial local forzadamente con el repositorio remoto
-                                println!("Ejecutando git reset --hard origin/master para alinear el historial local con el remoto...");
+                                // 3. Alinear el historial local con el remoto (fetch + reset --hard)
+                                //    NOTA: NO usamos 'git clean -fd' porque es demasiado destructivo.
+                                //    Solo descartamos cambios tracked, no borramos archivos nuevos no commiteados.
+                                println!("Ejecutando git fetch + git reset --hard origin/master para alinear historial...");
+                                
+                                // Fetch para asegurar que tenemos la referencia remota más reciente
+                                let _ = Command::new("git")
+                                    .args(&["fetch", "origin", "master"])
+                                    .current_dir(&proj_path)
+                                    .stdin(std::process::Stdio::null())
+                                    .stdout(std::process::Stdio::null())
+                                    .stderr(std::process::Stdio::null())
+                                    .env("GIT_TERMINAL_PROMPT", "0")
+                                    .status();
+                                
+                                // Reset al estado del remoto
                                 let _ = Command::new("git")
                                     .args(&["reset", "--hard", "origin/master"])
                                     .current_dir(&proj_path)
@@ -615,7 +700,7 @@ pub async fn run_agent_loop(
                                     .env("GIT_TERMINAL_PROMPT", "0")
                                     .status();
 
-                                // 5. Reintentar pull final
+                                // 4. Reintentar pull final
                                 status_pull = Command::new("git")
                                     .args(&["pull", "--rebase", "--autostash", "origin", "master"])
                                     .current_dir(&proj_path)
@@ -629,7 +714,7 @@ pub async fn run_agent_loop(
                             let pull_success = status_pull.as_ref().map(|s| s.success()).unwrap_or(false);
                             if !pull_success {
                                 play_error_beep();
-                                return Ok(format!("Error crítico de Git: No se pudo sincronizar el repositorio con la versión remota antes de escribir. Git pull (rebase) falló definitivamente."));
+                                return Ok(format!("Error crítico de Git: No se pudo sincronizar el repositorio con la versión remota antes de escribir. Git pull (rebase) falló definitivamente tras reintentos."));
                             }
                             
                             let mut write_success = false;
