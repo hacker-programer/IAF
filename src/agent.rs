@@ -647,17 +647,69 @@ pub async fn run_agent_loop(
                                 }
 
                                 // 4. Alinear el historial local forzadamente con el repositorio remoto
-                                println!("Ejecutando git reset --hard origin/master para alinear el historial local con el remoto...");
+                                // 4. En lugar de reset --hard ciegamente, recopilar diferencias para el agente
+                                println!("INFO: Divergencia detectada. Recopilando diferencias para decisión del agente...");
+                                
+                                // Fetch para tener referencia remota actualizada
                                 let _ = Command::new("git")
-                                    .args(&["reset", "--hard", "origin/master"])
+                                    .args(&["fetch", "origin", "master"])
                                     .current_dir(&proj_path)
-                                    .stdin(std::process::Stdio::null())
                                     .stdout(std::process::Stdio::null())
                                     .stderr(std::process::Stdio::null())
                                     .env("GIT_TERMINAL_PROMPT", "0")
                                     .status();
 
-                                // 5. Reintentar pull final
+                                let mut divergence_info = String::from(
+                                    "⚠️ **DIVERGENCIA DETECTADA** entre repositorio local y remoto.\n\n"
+                                );
+
+                                // Commits remotos no presentes localmente
+                                if let Ok(o) = Command::new("git")
+                                    .args(&["log", "HEAD..origin/master", "--oneline", "--no-merges", "-20"])
+                                    .current_dir(&proj_path)
+                                    .output()
+                                {
+                                    let s = String::from_utf8_lossy(&o.stdout).trim().to_string();
+                                    if !s.is_empty() {
+                                        divergence_info.push_str(&format!("📥 **Commits en remoto que NO tienes localmente:**\n```\n{}\n```\n\n", s));
+                                    } else {
+                                        divergence_info.push_str("📥 No hay commits nuevos en remoto.\n\n");
+                                    }
+                                }
+
+                                // Commits locales no presentes en remoto
+                                if let Ok(o) = Command::new("git")
+                                    .args(&["log", "origin/master..HEAD", "--oneline", "--no-merges", "-20"])
+                                    .current_dir(&proj_path)
+                                    .output()
+                                {
+                                    let s = String::from_utf8_lossy(&o.stdout).trim().to_string();
+                                    if !s.is_empty() {
+                                        divergence_info.push_str(&format!("📤 **Commits locales NO presentes en remoto:**\n```\n{}\n```\n\n", s));
+                                    } else {
+                                        divergence_info.push_str("📤 No hay commits locales sin enviar.\n\n");
+                                    }
+                                }
+
+                                // Resumen de archivos modificados
+                                if let Ok(o) = Command::new("git")
+                                    .args(&["diff", "origin/master", "--stat"])
+                                    .current_dir(&proj_path)
+                                    .output()
+                                {
+                                    let s = String::from_utf8_lossy(&o.stdout).trim().to_string();
+                                    if !s.is_empty() {
+                                        divergence_info.push_str(&format!("📊 **Archivos con diferencias:**\n```\n{}\n```\n\n", s));
+                                    }
+                                }
+
+                                divergence_info.push_str("---\n**Resolución requerida**: Usa la herramienta `git_resolve_divergence` con una de estas acciones:\n");
+                                divergence_info.push_str("- `keep_local`: Sobrescribir el remoto con tu trabajo local (push --force)\n");
+                                divergence_info.push_str("- `keep_remote`: Descartar cambios locales y adoptar el estado remoto (reset --hard)\n");
+                                divergence_info.push_str("- `merge_both`: Intentar fusionar ambos historiales (pull --rebase --autostash)\n");
+                                divergence_info.push_str("\nAnaliza las diferencias mostradas arriba y decide cuál es la mejor opción.");
+
+                                // Reintentar pull final para ver si ahora funciona
                                 status_pull = Command::new("git")
                                     .args(&["pull", "--rebase", "--autostash", "origin", "master"])
                                     .current_dir(&proj_path)
@@ -666,6 +718,7 @@ pub async fn run_agent_loop(
                                     .stderr(std::process::Stdio::null())
                                     .env("GIT_TERMINAL_PROMPT", "0")
                                     .status();
+                            }
                             }
 
                             let pull_success = status_pull.as_ref().map(|s| s.success()).unwrap_or(false);
