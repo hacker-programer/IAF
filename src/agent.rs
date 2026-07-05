@@ -1175,11 +1175,14 @@ pub async fn run_agent_loop(
                                 }).to_string()
                             } else {
                                 json!({
+                            } else {
+                                json!({
                                     "message": format!("No se encontró la imagen '{}' en el contexto activo. Es posible que ya haya sido liberada o comprimida.", id)
                                 }).to_string()
+                            }
+                        }
+                    }
                     "git_resolve_divergence" => {
-                        let action = args["action"].as_str().unwrap_or("");
-                        let proj_path = if let Some(ref proj_name) = project_name {
                             get_project_path(&state, proj_name)
                         } else {
                             return json!({"error": "No hay proyecto activo"}).to_string();
