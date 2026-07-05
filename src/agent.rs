@@ -1172,9 +1172,6 @@ pub async fn run_agent_loop(
                             if removed > 0 {
                                 json!({
                                     "message": format!("Imagen '{}' eliminada del contexto. Ya no consumirá tokens en las siguientes iteraciones.", id)
-                            if removed > 0 {
-                                json!({
-                                    "message": format!("Imagen '{}' eliminada del contexto. Ya no consumirá tokens en las siguientes iteraciones.", id)
                                 }).to_string()
                             } else {
                                 json!({
@@ -1190,6 +1187,7 @@ pub async fn run_agent_loop(
                         } else {
                             return json!({"error": "No hay proyecto activo"}).to_string();
                         };
+                        match action {
                             match action {
                                 "keep_local" => {
                                     match Command::new("git")
