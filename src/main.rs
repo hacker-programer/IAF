@@ -37,12 +37,7 @@ fn voyage_key() -> &'static str {
     KEY.get_or_init(|| std::env::var("VOYAGE_API_KEY").expect("VOYAGE_API_KEY no configurada"))
 }
 
-fn openrouter_key() -> &'static str {
-    static KEY: OnceLock<String> = OnceLock::new();
-    KEY.get_or_init(|| std::env::var("OPENROUTER_API_KEY").expect("OPENROUTER_API_KEY no configurada"))
-}
-
-const DEFAULT_GLOBAL_SYSTEM_PROMPT: &str = "
+const DEFAULT_GLOBAL_SYSTEM_PROMPT: &str = "Eres un asistente de desarrollo autónomo inteligente (DeepSeek V4 Pro) enfocado en resolver problemas en repositorios de software.
 Tienes acceso a buscar en Google, ejecutar comandos de PowerShell, buscar código semánticamente, leer y modificar archivos haciendo commit en GitHub.
 Cuando modifiques un archivo, SIEMPRE debes hacerlo a través de write_file_with_commit para subir los cambios a GitHub.
 Para dar por terminada la tarea de forma definitiva y cerrar tu ejecución, debes obligatoriamente llamar a la herramienta `finalizar_tarea`. No basta con responder textualmente que has terminado; la única forma de concluir el proceso es ejecutando dicha herramienta.
@@ -769,7 +764,6 @@ async fn chat_endpoint(State(state): State<AppState>, Json(payload): Json<ChatIn
             state_clone.clone(),
             deepseek_key(),
             voyage_key(),
-            openrouter_key(),
             Some(session_id_clone.clone()),
         ));
 
@@ -981,8 +975,8 @@ async fn main() {
         abort_handle: Arc::new(Mutex::new(None)),
         desktop: Arc::new(Mutex::new(DesktopController::new())),
         image_store: Arc::new(Mutex::new(HashMap::new())),
-        context_store: Arc::new(Mutex::new(HashMap::new())),
     };
+
     // Auto-descubrir proyectos locales por defecto
     discover_projects(&state);
 

@@ -17,7 +17,6 @@ pub async fn run_agent_loop(
     state: AppState,
     deepseek_key: &str,
     voyage_key: &str,
-    openrouter_key: &str,
     session_id: Option<String>,
 ) -> Result<String, Box<dyn Error + Send + Sync>> {
     let global_prompt = {
@@ -305,45 +304,6 @@ pub async fn run_agent_loop(
                         "id": { "type": "string", "description": "UUID de la imagen a liberar del contexto" }
                     },
                     "required": ["id"]
-                }
-            }
-        }),
-        json!({
-            "function": {
-                "name": "git_resolve_divergence",
-                "description": "Resuelve una divergencia entre repositorio local y remoto. Usa 'keep_local' para sobrescribir remoto con local (push --force), 'keep_remote' para descartar local y usar remoto (reset --hard), 'merge_both' para fusionar ambos (pull --rebase --autostash).",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "action": {
-                            "type": "string",
-                            "enum": ["keep_local", "keep_remote", "merge_both"],
-                            "description": "Acción para resolver la divergencia."
-                        }
-                    },
-                    "required": ["action"]
-                }
-            }
-        }),
-        json!({
-            "type": "function",
-            "function": {
-                "name": "analyze_images",
-                "description": "Analiza una o varias imágenes locales con un modelo multimodal (Qwen2.5-VL) vía OpenRouter. Permite preguntar sobre el contenido visual, estilo, comparar imágenes, etc.",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "image_paths": {
-                            "type": "array",
-                            "items": { "type": "string" },
-                            "description": "Rutas a archivos de imagen locales."
-                        },
-                        "query": {
-                            "type": "string",
-                            "description": "Pregunta sobre las imágenes."
-                        }
-                    },
-                    "required": ["image_paths", "query"]
                 }
             }
         })
@@ -778,12 +738,17 @@ pub async fn run_agent_loop(
                                             let pid_copy = pid;
                                             tokio::spawn(async move {
                                                 tokio::time::sleep(tokio::time::Duration::from_secs(seconds)).await;
+                                            tokio::spawn(async move {
+                                                tokio::time::sleep(tokio::time::Duration::from_secs(seconds)).await;
                                                 println!("Timer de {}s expiró para PID {}", seconds, pid_copy);
                                             });
+                                                ));
                                             });
                                         }
 
                                         if is_long_running {
+                                            json!({
+                                                "message": "Comando de larga duración iniciado en background.",
                                                 "pid": pid
                                             }).to_string()
                                         } else {
@@ -1058,60 +1023,31 @@ pub async fn run_agent_loop(
                                 Some(img_path) => {
                                     match fs::read(&img_path) {
                                         Ok(bytes) => {
+                                            // Codificar en Base64
                                             let b64 = general_purpose::STANDARD.encode(&bytes);
+                                            // Determinar tipo MIME por extensión
                                             let mime_type = mime_guess::from_path(&img_path)
                                                 .first_or_octet_stream()
                                                 .to_string();
                                             let data_url = format!("data:{};base64,{}", mime_type, b64);
-
-                                            // Llamar a Qwen2.5-VL para describir la imagen (DeepSeek no soporta vision)
-                                            let api_key = openrouter_key;
-                                            let body = json!({
-                                                "model": "qwen/qwen2.5-vl-72b-instruct",
-                                                "messages": [{
-                                                    "role": "user",
-                                                    "content": [
-                                                        {"type": "text", "text": "Describe detalladamente esta imagen. Incluye todos los elementos visuales relevantes, colores, composición, estilo y cualquier texto visible."},
-                                                        {"type": "image_url", "image_url": {"url": data_url}}
-                                                    ]
-                                                }]
-                                            });
-
-                                            let description = match reqwest::blocking::Client::new()
-                                                .post("https://openrouter.ai/api/v1/chat/completions")
-                                                .header("Authorization", format!("Bearer {}", api_key))
-                                                .header("Content-Type", "application/json")
-                                                .header("HTTP-Referer", "https://github.com/iaf")
-                                                .header("X-Title", "IAF Image View")
-                                                .json(&body)
-                                                .timeout(std::time::Duration::from_secs(120))
-                                                .send()
-                                            {
-                                                Ok(resp) if resp.status().is_success() => {
-                                                    match resp.json::<serde_json::Value>() {
-                                                        Ok(json_resp) => {
-                                                            json_resp["choices"][0]["message"]["content"]
-                                                                .as_str()
-                                                                .unwrap_or("(Sin respuesta)")
-                                                                .to_string()
-                                                        }
-                                                        Err(_) => "(Error al parsear respuesta)".to_string()
-                                                    }
-                                                }
-                                                _ => "(No se pudo obtener descripción)".to_string()
-                                            };
-
-                                            // Inyectar SOLO texto en el historial de DeepSeek (no la imagen)
+                                            // Inyectar mensaje multimodal en el array messages
                                             messages.push(json!({
                                                 "role": "user",
-                                                "content": format!(
-                                                    "[Sistema] Imagen inyectada (id: {}). Descripción con Qwen2.5-VL:\n\n{}\n\nUsa image_release('{}') cuando ya no la necesites.",
-                                                    id, description, id
-                                                )
+                                                "content": [
+                                                    {
+                                                        "type": "text",
+                                                        "text": format!("[Sistema] Imagen inyectada en contexto (id: {}). Cuando ya no la necesites, llama a image_release con este id para ahorrar tokens.", id)
+                                                    },
+                                                    {
+                                                        "type": "image_url",
+                                                        "image_url": {
+                                                            "url": data_url
+                                                        }
+                                                    }
+                                                ]
                                             }));
-
                                             json!({
-                                                "message": format!("Imagen '{}' analizada e inyectada (solo texto). Usa image_release('{}') para liberarla.", id, id)
+                                                "message": format!("Imagen '{}' inyectada en el contexto. La verás en tu próxima respuesta. Recuerda llamar image_release('{}') cuando ya no la necesites.", id, id)
                                             }).to_string()
                                         }
                                         Err(e) => json!({"error": format!("Error leyendo archivo de imagen: {}", e)}).to_string(),
@@ -1129,26 +1065,28 @@ pub async fn run_agent_loop(
                             // Buscar y eliminar del array messages cualquier mensaje que contenga esta imagen
                             let marker = format!("(id: {})", id);
                             let before_len = messages.len();
-                            let marker = format!("(id: {})", id);
-                            let before_len = messages.len();
                             messages.retain(|msg| {
-                                if let Some(text) = msg["content"].as_str() {
-                                    if text.contains(&marker) { return false; }
-                                }
+                                // Si el content es un array (mensaje multimodal), buscar el marcador en las partes de texto
                                 if let Some(content_arr) = msg["content"].as_array() {
                                     for part in content_arr {
                                         if let Some(text) = part["text"].as_str() {
-                                            if text.contains(&marker) { return false; }
+                                            if text.contains(&marker) {
+                                                return false; // Eliminar este mensaje
+                                            }
                                         }
                                     }
                                 }
-                                true
+                                true // Mantener los demás mensajes
                             });
                             let removed = before_len - messages.len();
                             if removed > 0 {
-                                json!({"message": format!("Imagen '{}' eliminada del contexto.", id)}).to_string()
+                                json!({
+                                    "message": format!("Imagen '{}' eliminada del contexto. Ya no consumirá tokens en las siguientes iteraciones.", id)
+                                }).to_string()
                             } else {
-                                json!({"message": format!("Imagen '{}' no encontrada en contexto.", id)}).to_string()
+                                json!({
+                                    "message": format!("No se encontró la imagen '{}' en el contexto activo. Es posible que ya haya sido liberada o comprimida.", id)
+                                }).to_string()
                             }
                         }
                     }
