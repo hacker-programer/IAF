@@ -1328,8 +1328,9 @@ pub async fn run_agent_loop(
         }
     }
 }
+}
 
-fn save_chat_steps_to_disk(state: &AppState, session_id_opt: &Option<String>, steps: &[crate::state::AuditStep]) {
+fn save_chat_steps_to_disk
     if let Some(ref session_id) = *session_id_opt {
         let chat_file = state.base_workspace.join(".config").join("chats").join(format!("{}.json", session_id));
         if chat_file.exists() {
