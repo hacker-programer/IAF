@@ -77,7 +77,7 @@ pub struct AppState {
     pub desktop: Arc<Mutex<DesktopController>>,
     pub image_store: Arc<Mutex<HashMap<String, String>>>,
     pub context_store: Arc<Mutex<HashMap<String, ContextEntry>>>,
-}
+    pub context_store: Arc<Mutex<HashMap<String, ContextEntry>>>,
 }
 
 
