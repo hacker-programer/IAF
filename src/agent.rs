@@ -303,11 +303,14 @@ pub async fn run_agent_loop(
                     "type": "object",
                     "properties": {
                         "id": { "type": "string", "description": "UUID de la imagen a liberar del contexto" }
-                    },
                     "required": ["id"]
                 }
-                }
             }
+        }),
+        json!({
+            "type": "function",
+            "function": {
+                "name": "git_resolve_divergence",
         }),
         json!({
             "type": "function",
