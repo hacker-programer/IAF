@@ -17,6 +17,7 @@ pub async fn run_agent_loop(
     state: AppState,
     deepseek_key: &str,
     voyage_key: &str,
+    openrouter_key: &str,
     session_id: Option<String>,
 ) -> Result<String, Box<dyn Error + Send + Sync>> {
     let global_prompt = {
