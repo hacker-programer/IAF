@@ -350,7 +350,9 @@ pub async fn run_agent_loop(
     ];
 
     let client = reqwest::Client::builder()
-    let mut iteration = {
+        .timeout(std::time::Duration::from_secs(600))
+        .tcp_keepalive(std::time::Duration::from_secs(30))
+        .build()?;
         let status = state.active_agent.lock().unwrap();
         status.steps.iter().filter(|s| s.step_type == "thinking").count()
     };
