@@ -67,8 +67,10 @@ pub struct ContextEntry {
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct CaptchaRequest {
+    pub id: String,
     pub sitekey: String,
     pub url: String,
+    pub solved_content: Option<String>,
 }
 
 #[derive(Clone)]
