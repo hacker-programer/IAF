@@ -1040,8 +1040,9 @@ pub async fn run_agent_loop(
                                 Err(e) => json!({"error": format!("Error creando cliente HTTP: {}", e)}).to_string(),
                             }
                         }
+                        }
+                    }
                     "image_view" => {
-                        let id = args["id"].as_str().unwrap_or("");
                         if id.is_empty() {
                             json!({"error": "No se proporcionó ID de imagen"}).to_string()
                         } else {
