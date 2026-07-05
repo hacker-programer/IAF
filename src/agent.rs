@@ -1131,10 +1131,9 @@ pub async fn run_agent_loop(
                             let marker = format!("(id: {})", id);
                             let before_len = messages.len();
                             messages.retain(|msg| {
-                                // Nuevo formato: content string (texto plano de image_view)
+                                if let Some(text) = msg["content"].as_str() {
                                     if text.contains(&marker) { return false; }
                                 }
-                                // Formato antiguo: content array (multimodal con image_url)
                                 if let Some(content_arr) = msg["content"].as_array() {
                                     for part in content_arr {
                                         if let Some(text) = part["text"].as_str() {
@@ -1144,12 +1143,11 @@ pub async fn run_agent_loop(
                                 }
                                 true
                             });
-                                    "message": format!("Imagen '{}' eliminada del contexto. Ya no consumirá tokens en las siguientes iteraciones.", id)
-                                }).to_string()
+                            let removed = before_len - messages.len();
+                            if removed > 0 {
+                                json!({"message": format!("Imagen '{}' eliminada del contexto.", id)}).to_string()
                             } else {
-                                json!({
-                                    "message": format!("No se encontró la imagen '{}' en el contexto activo. Es posible que ya haya sido liberada o comprimida.", id)
-                                }).to_string()
+                                json!({"message": format!("Imagen '{}' no encontrada en contexto.", id)}).to_string()
                             }
                         }
                     }
