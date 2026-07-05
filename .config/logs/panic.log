@@ -1,0 +1,3 @@
+[2026-07-04T02:03:26.348474500+00:00] Pánico fantasma crítico detectado en el agente (el servidor se recuperó de forma resiliente).
+[2026-07-04T02:12:42.042050700+00:00] Pánico crítico en el agente: end byte index 1500 is not a char boundary; it is inside '═' (bytes 1498..1501 of string)
+[2026-07-04T02:19:01.808658800+00:00] Pánico crítico en el agente: end byte index 1500 is not a char boundary; it is inside '═' (bytes 1498..1501 of string)

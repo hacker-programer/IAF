@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agent-First System</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="glass-bg"></div>
+    <div class="app-container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="logo">
+                <span class="neon-text">AGENT</span>FIRST
+            </div>
+            
+            <section class="section">
+                <h3>Proyectos</h3>
+                <div class="project-actions">
+                    <input type="text" id="repoUrl" placeholder="Repo de Github (URL o usuario/repo)">
+                    <button id="forkBtn" class="btn btn-primary">Fork & Clone</button>
+                    
+                    <div style="border-top: 1px solid var(--border-color); margin: 8px 0; padding-top: 8px;"></div>
+                    
+                    <input type="text" id="localProjName" placeholder="Nombre Proyecto Local">
+                    <input type="text" id="localProjPath" placeholder="Ruta Absoluta Carpeta">
+                    <button id="addLocalBtn" class="btn btn-secondary">Agregar Carpeta Local</button>
+                </div>
+                <div id="projectList" class="project-list">
+                    <!-- Dinámico -->
+                </div>
+            </section>
+
+            <section class="section">
+                <h3>Historial de Chats</h3>
+                <div id="chatHistoryList" class="project-list">
+                    <!-- Dinámico -->
+                </div>
+                <button id="newChatBtn" class="btn btn-secondary" style="width: 100%; margin-top: 8px;">Nuevo Chat</button>
+            </section>
+
+            <section class="section config-section">
+                <h3>System Prompts</h3>
+                <div class="form-group">
+                    <label>Global (Editable)</label>
+                    <textarea id="globalPrompt" rows="4"></textarea>
+                </div>
+                <div class="btn-group">
+                    <button id="savePromptsBtn" class="btn btn-success">Guardar Prompts</button>
+                    <button id="resetPromptBtn" class="btn btn-danger">Restaurar Defecto</button>
+                </div>
+
+                <div class="form-group project-prompt-group" style="margin-top: 12px;">
+                    <label>Prompt Local del Proyecto</label>
+                    <textarea id="localPrompt" rows="4" placeholder="Instrucciones específicas de este proyecto..."></textarea>
+                </div>
+            </section>
+        </aside>
+
+        <!-- Main Chat and Console area -->
+        <main class="main-content">
+            <header class="header">
+                <h2>Proyecto Activo: <span id="activeProjectName">Ninguno (Global)</span></h2>
+                <div class="header-actions">
+                    <div id="captchaAlert" class="captcha-alert hidden">
+                        <span>⚠️ Google CAPTCHA</span>
+                        <button id="openCaptchaBtn" class="btn btn-warning btn-sm">Resolver</button>
+                    </div>
+                </div>
+            </header>
+
+            <div class="chat-layout">
+                <div class="chat-pane">
+                    <div class="chat-area" id="chatArea">
+                        <div class="message system-msg">
+                            <strong>Sistema:</strong> ¡Bienvenido al panel Agent-First! Selecciona un proyecto, configura sus instrucciones o agrega una carpeta para empezar.
+                        </div>
+                    </div>
+
+                    <footer class="footer">
+                        <div class="input-container">
+                            <textarea id="chatInput" placeholder="Pídele al agente resolver tareas... (Ej: 'Crea pruebas unitarias para el controlador de usuarios')"></textarea>
+                            <div class="btn-group-vertical" style="display: flex; flex-direction: column; gap: 8px;">
+                                <button id="sendBtn" class="btn btn-primary" style="white-space: nowrap;">Refinar y Enviar</button>
+                                <button id="sendDirectBtn" class="btn btn-warning" style="white-space: nowrap; font-size: 11px; padding: 4px 8px;">Enviar Directo</button>
+                            </div>
+                        </div>
+                    </footer>
+                </div>
+
+                <!-- Auditoría / Consola del Agente -->
+                <div class="console-pane">
+                    <div class="console-header">
+                        <h3>Consola de Auditoría</h3>
+                        <button id="interruptBtn" class="btn btn-danger btn-sm hidden">Interrumpir Agente</button>
+                        <button id="summarizeStepsBtn" class="btn btn-warning btn-sm" style="margin-left: 8px;">Resumir Pasos</button>
+                    </div>
+                    <div id="consoleArea" class="console-area">
+                        <div class="console-empty">El agente está inactivo. Envía un mensaje para comenzar a auditar sus pasos.</div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Modal para CAPTCHA -->
+    <div id="captchaModal" class="modal hidden">
+        <div class="modal-content">
+            <h3>Resolver CAPTCHA</h3>
+            <p>Se detectó actividad sospechosa al buscar en Google. Abre la página para verificar que eres humano, resuelve el CAPTCHA y pega el código HTML completo o contenido visible resultante aquí para que el agente continúe.</p>
+            <a id="captchaLink" href="#" target="_blank" class="btn btn-primary">Abrir página de Google</a>
+            <textarea id="captchaSolution" rows="6" placeholder="Pega el HTML o contenido aquí..."></textarea>
+            <div class="btn-group">
+                <button id="submitCaptchaBtn" class="btn btn-success">Enviar Solución</button>
+                <button id="closeCaptchaBtn" class="btn btn-danger">Cancelar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal para Refinar Prompt -->
+    <div id="refinePromptModal" class="modal hidden">
+        <div class="modal-content" style="max-width: 600px;">
+            <h3>Prompt Refinado y Estructurado</h3>
+            <p>El sistema ha estructurado tu instrucción. Puedes **editarlo manualmente** abajo directamente o proveer **instrucciones adicionales** de cambio al modelo y hacer clic en **Re-Refinar con Instrucción**:</p>
+            <textarea id="refinedPromptText" rows="12" style="font-family: inherit; font-size: 13px; width: 100%; padding: 8px; background: rgba(0,0,0,0.2); border: 1px solid var(--border-color); border-radius: 8px; color: var(--text-color); margin-bottom: 12px;"></textarea>
+            
+            <div class="form-group" style="margin-bottom: 12px;">
+                <label style="font-size: 12px; color: var(--text-muted);">Instrucción adicional para el modelo (Ej: "No, no es que no pueda... Siempre, es que si X, ahí no puede"):</label>
+                <input type="text" id="refinePromptFeedback" placeholder="Escribe aquí las correcciones al prompt..." style="width: 100%; padding: 8px; background: rgba(0,0,0,0.2); border: 1px solid var(--border-color); border-radius: 8px; color: var(--text-color);">
+            </div>
+
+            <div class="btn-group">
+                <button id="applyRefinedPromptBtn" class="btn btn-success">Sí, Aplicar y Enviar</button>
+                <button id="reRefinePromptBtn" class="btn btn-warning">Re-Refinar con Instrucción</button>
+                <button id="cancelRefinedPromptBtn" class="btn btn-danger">No, Usar Original</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal para Preguntas del Agente (Pausa Activa) -->
+    <div id="agentQuestionModal" class="modal hidden">
+        <div class="modal-content">
+            <h3>El Agente Necesita Clarificación</h3>
+            <p>El agente se ha pausado y requiere que definas la visión exacta antes de continuar:</p>
+            <div id="agentQuestionPrompt" style="background: rgba(255,255,255,0.05); padding: 12px; border-radius: 8px; font-weight: bold; margin-bottom: 12px;"></div>
+            <textarea id="agentQuestionResponse" rows="4" placeholder="Escribe tu respuesta aquí..."></textarea>
+            <div class="btn-group">
+                <button id="submitAgentResponseBtn" class="btn btn-success">Enviar Respuesta</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal para Aprobación del Plan (Plan Review) -->
+    <div id="agentPlanModal" class="modal hidden">
+        <div class="modal-content" style="max-width: 650px;">
+            <h3>Plan de Cambios Propuesto</h3>
+            <p>Revisa el plan detallado de cambios que propone el agente antes de que modifique los archivos de tu máquina:</p>
+            <div id="agentPlanContent" style="background: rgba(0,0,0,0.3); border: 1px solid var(--border-color); padding: 16px; border-radius: 8px; max-height: 250px; overflow-y: auto; font-family: 'JetBrains Mono', monospace; font-size: 12px; white-space: pre-wrap; margin-bottom: 12px;"></div>
+            <div class="btn-group">
+                <button id="approvePlanBtn" class="btn btn-success">Aprobar Plan</button>
+                <button id="rejectPlanBtn" class="btn btn-danger">Rechazar / Cancelar</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
+
