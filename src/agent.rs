@@ -299,11 +299,6 @@ pub async fn run_agent_loop(
             "type": "function",
             "function": {
                 "name": "image_release",
-                "name": "image_release",
-                "description": "Elimina una imagen del contexto del chat (deja de enviarla a la API en las siguientes iteraciones). El archivo permanece en disco. Úsalo cuando ya no necesites ver la imagen para reducir costos de tokens.",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
                         "id": { "type": "string", "description": "UUID de la imagen a liberar del contexto" }
                     },
                     "required": ["id"]
