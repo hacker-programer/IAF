@@ -55,10 +55,14 @@ pub struct ActiveAgentStatus {
     pub thinking_content: Vec<String>,
     pub steps: Vec<AuditStep>,
 }
-    pub entry_type: String,      // "file_read", "command_exec", "file_write"
-    pub summary: String,         // Resumen corto (1-2 líneas)
-    pub full_content: String,    // Contenido completo
-    pub created_at: u64,         // Timestamp Unix
+
+#[derive(Clone, Serialize, Deserialize)]
+pub struct ContextEntry {
+    pub id: String,
+    pub entry_type: String,
+    pub summary: String,
+    pub full_content: String,
+    pub created_at: u64,
 }
 
 #[derive(Clone)]
