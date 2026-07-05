@@ -20,6 +20,7 @@ pub async fn run_agent_loop(
     openrouter_key: &str,
     session_id: Option<String>,
 ) -> Result<String, Box<dyn Error + Send + Sync>> {
+) -> Result<String, Box<dyn Error + Send + Sync>> {
     let global_prompt = {
         let prompts = state.prompts.lock().unwrap();
         prompts.global_current.clone()
@@ -295,6 +296,7 @@ pub async fn run_agent_loop(
             }
         }),
         json!({
+            "type": "function",
             "function": {
                 "name": "image_release",
                 "description": "Elimina una imagen del contexto del chat (deja de enviarla a la API en las siguientes iteraciones). El archivo permanece en disco. Úsalo cuando ya no necesites ver la imagen para reducir costos de tokens.",
@@ -306,49 +308,10 @@ pub async fn run_agent_loop(
                     "required": ["id"]
                 }
             }
-        }),
-        json!({
-            "type": "function",
-            "function": {
-                "name": "git_resolve_divergence",
-                "name": "git_resolve_divergence",
-                "description": "Resuelve una divergencia entre repositorio local y remoto. Usa 'keep_local' para sobrescribir remoto con local (push --force), 'keep_remote' para descartar local y usar remoto (reset --hard), 'merge_both' para fusionar ambos (pull --rebase --autostash).",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "action": {
-                            "type": "string",
-                            "enum": ["keep_local", "keep_remote", "merge_both"],
-                            "description": "Acción para resolver la divergencia."
-                        }
-                    },
-                    "required": ["action"]
-                }
-            }
-        }),
-        json!({
-            "type": "function",
-            "function": {
-                "name": "analyze_images",
-                "description": "Analiza una o varias imágenes locales con un modelo multimodal (Qwen2.5-VL) vía OpenRouter. Permite preguntar sobre el contenido visual, estilo, comparar imágenes, etc.",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "image_paths": {
-                            "type": "array",
-                            "items": { "type": "string" },
-                            "description": "Lista de rutas a archivos de imagen locales."
-                        },
-                        "query": {
-                            "type": "string",
-                            "description": "Pregunta o solicitud de análisis sobre las imágenes."
-                        }
-                    },
-                    "required": ["image_paths", "query"]
-                }
-            }
         })
     ];
+
+    let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(600))
         .tcp_keepalive(std::time::Duration::from_secs(30))
         .build()?;
@@ -642,72 +605,28 @@ pub async fn run_agent_loop(
                                 if index_lock_path.exists() {
                                     let _ = fs::remove_file(&index_lock_path);
                                 }
-                                // 4. En lugar de reset --hard ciegamente, recopilar diferencias para el agente
-                                println!("INFO: Divergencia detectada. Recopilando diferencias para decisión del agente...");
-                                
-                                // Fetch para tener referencia remota actualizada
+
+                                // 4. Alinear el historial local forzadamente con el repositorio remoto
+                                println!("Ejecutando git reset --hard origin/master para alinear el historial local con el remoto...");
                                 let _ = Command::new("git")
-                                    .args(&["fetch", "origin", "master"])
+                                    .args(&["reset", "--hard", "origin/master"])
                                     .current_dir(&proj_path)
+                                    .stdin(std::process::Stdio::null())
                                     .stdout(std::process::Stdio::null())
                                     .stderr(std::process::Stdio::null())
                                     .env("GIT_TERMINAL_PROMPT", "0")
                                     .status();
 
-                                let mut divergence_info = String::from(
-                                    "⚠️ **DIVERGENCIA DETECTADA** entre repositorio local y remoto.\n\n"
-                                );
-
-                                // Commits remotos no presentes localmente
-                                if let Ok(o) = Command::new("git")
-                                    .args(&["log", "HEAD..origin/master", "--oneline", "--no-merges", "-20"])
+                                // 5. Reintentar pull final
+                                status_pull = Command::new("git")
+                                    .args(&["pull", "--rebase", "--autostash", "origin", "master"])
                                     .current_dir(&proj_path)
-                                    .output()
-                                {
-                                    let s = String::from_utf8_lossy(&o.stdout).trim().to_string();
-                                    if !s.is_empty() {
-                                        divergence_info.push_str(&format!("📥 **Commits en remoto NO locales:**\n```\n{}\n```\n\n", s));
-                                    } else {
-                                        divergence_info.push_str("📥 No hay commits nuevos en remoto.\n\n");
-                                    }
-                                }
-
-                                // Commits locales no presentes en remoto
-                                if let Ok(o) = Command::new("git")
-                                    .args(&["log", "origin/master..HEAD", "--oneline", "--no-merges", "-20"])
-                                    .current_dir(&proj_path)
-                                    .output()
-                                {
-                                    let s = String::from_utf8_lossy(&o.stdout).trim().to_string();
-                                    if !s.is_empty() {
-                                        divergence_info.push_str(&format!("📤 **Commits locales NO en remoto:**\n```\n{}\n```\n\n", s));
-                                    } else {
-                                        divergence_info.push_str("📤 No hay commits locales sin enviar.\n\n");
-                                    }
-                                }
-
-                                // Resumen de archivos modificados
-                                if let Ok(o) = Command::new("git")
-                                    .args(&["diff", "origin/master", "--stat"])
-                                    .current_dir(&proj_path)
-                                    .output()
-                                {
-                                    let s = String::from_utf8_lossy(&o.stdout).trim().to_string();
-                                    if !s.is_empty() {
-                                        divergence_info.push_str(&format!("📊 **Archivos con diferencias:**\n```\n{}\n```\n\n", s));
-                                    }
-                                }
-
-                                divergence_info.push_str("---\nUsa la herramienta `git_resolve_divergence` con:\n");
-                                divergence_info.push_str("- `keep_local`: Sobrescribir remoto con trabajo local (push --force)\n");
-                                divergence_info.push_str("- `keep_remote`: Descartar local y usar remoto (reset --hard)\n");
-                                divergence_info.push_str("- `merge_both`: Fusionar ambos (pull --rebase --autostash)\n");
-
-                                // Devolver al agente para que decida
-                                return Ok(format!(
-                                    "❌ No se pudo completar write_file_with_commit por divergencia local/remota.\n\n{}\n\n⚠️ El archivo NO fue escrito. Resuelve la divergencia primero con git_resolve_divergence y luego reintenta.",
-                                    divergence_info
-                                ));
+                                    .stdin(std::process::Stdio::null())
+                                    .stdout(std::process::Stdio::null())
+                                    .stderr(std::process::Stdio::null())
+                                    .env("GIT_TERMINAL_PROMPT", "0")
+                                    .status();
+                            }
 
                             let pull_success = status_pull.as_ref().map(|s| s.success()).unwrap_or(false);
                             if !pull_success {
@@ -1171,150 +1090,11 @@ pub async fn run_agent_loop(
                                 }).to_string()
                             }
                         }
-                    "git_resolve_divergence" => {
-                        let action = args["action"].as_str().unwrap_or("");
-                        let proj_path = if let Some(ref proj_name) = project_name {
-                            get_project_path(&state, proj_name)
-                        } else {
-                            json!({"error": "No hay proyecto activo"}).to_string()
-                        };
-                        if action.is_empty() {
-                            json!({"error": "Se requiere el parámetro 'action' (keep_local, keep_remote o merge_both)"}).to_string()
-                        } else {
-                            match action {
-                                "keep_local" => {
-                                    match Command::new("git")
-                                        .args(&["push", "origin", "master", "--force"])
-                                        .current_dir(&proj_path)
-                                        .env("GIT_TERMINAL_PROMPT", "0")
-                                        .output()
-                                    {
-                                        Ok(o) if o.status.success() => 
-                                            format!("✅ Push forzado exitoso. Remoto actualizado.\n{}", String::from_utf8_lossy(&o.stdout).trim()),
-                                        Ok(o) => 
-                                            format!("❌ Error push: {}", String::from_utf8_lossy(&o.stderr).trim()),
-                                        Err(e) => format!("❌ Error: {}", e),
-                                    }
-                                }
-                                "keep_remote" => {
-                                    match Command::new("git")
-                                        .args(&["reset", "--hard", "origin/master"])
-                                        .current_dir(&proj_path)
-                                        .env("GIT_TERMINAL_PROMPT", "0")
-                                        .output()
-                                    {
-                                        Ok(o) if o.status.success() => 
-                                            format!("✅ Reset exitoso. Local coincide con remoto.\n{}", String::from_utf8_lossy(&o.stdout).trim()),
-                                        Ok(o) => 
-                                            format!("❌ Error reset: {}", String::from_utf8_lossy(&o.stderr).trim()),
-                                        Err(e) => format!("❌ Error: {}", e),
-                                    }
-                                }
-                                "merge_both" => {
-                                    match Command::new("git")
-                                        .args(&["pull", "--rebase", "--autostash", "origin", "master"])
-                                        .current_dir(&proj_path)
-                                        .env("GIT_TERMINAL_PROMPT", "0")
-                                        .output()
-                                    {
-                                        Ok(o) if o.status.success() => 
-                                            format!("✅ Merge exitoso.\n{}", String::from_utf8_lossy(&o.stdout).trim()),
-                                        Ok(o) => {
-                                            let stderr = String::from_utf8_lossy(&o.stderr).trim().to_string();
-                                            if stderr.contains("CONFLICT") {
-                                                let _ = Command::new("git").args(&["rebase", "--abort"]).current_dir(&proj_path).status();
-                                                format!("⚠️ Conflictos detectados. Rebase abortado.\n{}", stderr)
-                                            } else {
-                                                format!("❌ Error merge: {}", stderr)
-                                            }
-                                        }
-                                        Err(e) => format!("❌ Error: {}", e),
-                                    }
-                                }
-                                _ => format!("❌ Acción desconocida: '{}'. Usa keep_local, keep_remote o merge_both.", action),
-                            }
-                        }
-                    }
-                    "analyze_images" => {
-                        let image_paths: Vec<String> = args.get("image_paths")
-                            .and_then(|v| v.as_array())
-                            .map(|a| a.iter().filter_map(|v| v.as_str().map(String::from)).collect())
-                            .unwrap_or_default();
-                        let query = args["query"].as_str().unwrap_or("Describe esta imagen.");
-                        
-                        if image_paths.is_empty() {
-                            json!({"error": "Se requiere al menos una ruta de imagen"}).to_string()
-                        } else if openrouter_key.is_empty() {
-                            json!({"error": "OPENROUTER_API_KEY no configurada"}).to_string()
-                        } else {
-                            let mut content_parts: Vec<Value> = Vec::new();
-                            content_parts.push(json!({"type": "text", "text": query}));
-                            let mut errors = Vec::new();
-                            for path_str in &image_paths {
-                                let path = Path::new(path_str);
-                                if !path.exists() {
-                                    errors.push(format!("No existe: {}", path_str));
-                                    continue;
-                                }
-                                match fs::read(path) {
-                                    Ok(bytes) => {
-                                        if bytes.len() > 4_500_000 {
-                                            errors.push(format!("Muy grande ({}B): {}", bytes.len(), path_str));
-                                            continue;
-                                        }
-                                        let mime = match path.extension().and_then(|e| e.to_str()) {
-                                            Some("jpg") | Some("jpeg") => "image/jpeg",
-                                            Some("png") => "image/png",
-                                            Some("gif") => "image/gif",
-                                            Some("webp") => "image/webp",
-                                            _ => "image/png",
-                                        };
-                                        let b64 = general_purpose::STANDARD.encode(&bytes);
-                                        content_parts.push(json!({"type": "image_url", "image_url": {"url": format!("data:{};base64,{}", mime, b64)}}));
-                                    }
-                                    Err(e) => errors.push(format!("Error {}: {}", path_str, e)),
-                                }
-                            }
-                            if content_parts.len() <= 1 {
-                                json!({"error": format!("No se pudo procesar ninguna imagen: {}", errors.join("; "))}).to_string()
-                            } else {
-                                let mut result = String::new();
-                                if !errors.is_empty() { result.push_str(&format!("⚠️ Advertencias: {}\n\n", errors.join("; "))); }
-                                
-                                let client = reqwest::blocking::Client::new();
-                                let body = json!({
-                                    "model": "qwen/qwen2.5-vl-72b-instruct",
-                                    "messages": [{"role": "user", "content": content_parts}]
-                                });
-                                match client.post("https://openrouter.ai/api/v1/chat/completions")
-                                    .header("Authorization", format!("Bearer {}", openrouter_key))
-                                    .header("Content-Type", "application/json")
-                                    .header("HTTP-Referer", "https://github.com/iaf")
-                                    .header("X-Title", "IAF Image Analysis")
-                                    .json(&body)
-                                    .timeout(std::time::Duration::from_secs(120))
-                                    .send()
-                                {
-                                    Ok(resp) => {
-                                        if resp.status().is_success() {
-                                            match resp.json::<Value>() {
-                                                Ok(j) => {
-                                                    let content = j["choices"][0]["message"]["content"].as_str().unwrap_or("(sin respuesta)");
-                                                    result.push_str(&format!("📷 Análisis de {} imagen(es):\n\n{}", image_paths.len() - errors.len(), content));
-                                                }
-                                                Err(e) => result.push_str(&format!("❌ Error parse: {}", e)),
-                                            }
-                                        } else {
-                                            result.push_str(&format!("❌ HTTP {}: {}", resp.status(), resp.text().unwrap_or_default()));
-                                        }
-                                    }
-                                    Err(e) => result.push_str(&format!("❌ Red: {}", e)),
-                                }
-                                result
-                            }
-                        }
                     }
                     _ => "Herramienta desconocida".to_string(),
+                };
+
+                {
                     let mut status = state.active_agent.lock().unwrap();
                     status.steps.push(crate::state::AuditStep {
                         step_type: "tool_result".to_string(),
