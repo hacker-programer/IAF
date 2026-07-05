@@ -41,8 +41,8 @@ pub struct AuditStep {
     pub detail: String,
     pub timestamp: u64,
 }
-
 #[derive(Clone, Default, Serialize, Deserialize)]
+pub struct ActiveAgentStatus {
 #[derive(Clone, Default, Serialize, Deserialize)]
 pub struct ActiveAgentStatus {
     pub running: bool,
