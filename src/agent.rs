@@ -297,7 +297,6 @@ pub async fn run_agent_loop(
             }
         }),
         json!({
-            "type": "function",
             "function": {
                 "name": "image_release",
                 "description": "Elimina una imagen del contexto del chat (deja de enviarla a la API en las siguientes iteraciones). El archivo permanece en disco. Úsalo cuando ya no necesites ver la imagen para reducir costos de tokens.",
