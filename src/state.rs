@@ -43,6 +43,8 @@ pub struct AuditStep {
 }
 #[derive(Clone, Default, Serialize, Deserialize)]
 pub struct ActiveAgentStatus {
+#[derive(Clone, Default, Serialize, Deserialize)]
+pub struct ActiveAgentStatus {
     pub running: bool,
     pub interrupted: bool,
     pub esperando_respuesta_usuario: bool,
@@ -52,11 +54,8 @@ pub struct ActiveAgentStatus {
     pub plan_propuesto: Option<String>,
     pub thinking_content: Vec<String>,
     pub steps: Vec<AuditStep>,
+    pub current_session_id: Option<String>,
 }
-
-#[derive(Clone, Serialize, Deserialize)]
-pub struct ContextEntry {
-    pub id: String,
     pub entry_type: String,
     pub summary: String,
     pub full_content: String,
