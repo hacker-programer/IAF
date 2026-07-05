@@ -738,11 +738,7 @@ pub async fn run_agent_loop(
                                             let pid_copy = pid;
                                             tokio::spawn(async move {
                                                 tokio::time::sleep(tokio::time::Duration::from_secs(seconds)).await;
-                                            tokio::spawn(async move {
-                                                tokio::time::sleep(tokio::time::Duration::from_secs(seconds)).await;
                                                 println!("Timer de {}s expiró para PID {}", seconds, pid_copy);
-                                            });
-                                                ));
                                             });
                                         }
 
