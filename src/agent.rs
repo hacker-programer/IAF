@@ -1089,11 +1089,6 @@ pub async fn run_agent_loop(
                             }
                         }
                     }
-                    _ => "Herramienta desconocida".to_string(),
-                };
-
-                        }
-                    }
                     "git_resolve_divergence" => {
                         let action = args["action"].as_str().unwrap_or("");
                         let proj_path = if let Some(ref proj_name) = project_name {
@@ -1248,6 +1243,22 @@ pub async fn run_agent_loop(
                     }
                     _ => "Herramienta desconocida".to_string(),
                 };
+
+                {
+                    let mut status = state.active_agent.lock().unwrap();
+                    status.steps.push(crate::state::AuditStep {
+                        step_type: "tool_result".to_string(),
+                        title: format!("Resultado de: {}", func_name),
+                        detail: if tool_result.len() > 300 {
+                            format!("{}... [Truncado]", safe_truncate(&tool_result, 300))
+                        } else {
+                            tool_result.clone()
+                        },
+                        timestamp: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs(),
+                    });
+                    save_chat_steps_to_disk(&state, &session_id, &status.steps);
+                }
+
                 let display_result = if tool_result.len() > 25000 {
                     format!(
                         "{}... [TRUNCADO POR EL SISTEMA. El resultado es demasiado grande ({} caracteres). Para leer archivos, utiliza parámetros start_line y end_line en 'read_file'. Para comandos de PowerShell, filtra la salida usando select, grep o head/tail.]",
@@ -1264,6 +1275,7 @@ pub async fn run_agent_loop(
                     "content": display_result
                 }));
             }
+
             for tr in tool_responses {
                 messages.push(tr);
             }
@@ -1278,13 +1290,12 @@ pub async fn run_agent_loop(
                 "content": "Has respondido con texto pero no has ejecutado ninguna herramienta. Si has finalizado la tarea por completo, llama obligatoriamente a la herramienta 'finalizar_tarea'. Si todavía necesitas realizar cambios, ejecutar comandos o leer archivos, hazlo llamando a la herramienta correspondiente."
             }));
         }
-    };
+    }
 }
 
 fn save_chat_steps_to_disk(state: &AppState, session_id_opt: &Option<String>, steps: &[crate::state::AuditStep]) {
-
-fn save_chat_steps_to_disk(state: &AppState, session_id_opt: &Option<String>, steps: &[crate::state::AuditStep]) {
     if let Some(ref session_id) = *session_id_opt {
+        let chat_file = state.base_workspace.join(".config").join("chats").join(format!("{}.json", session_id));
         if chat_file.exists() {
             if let Ok(content) = fs::read_to_string(&chat_file) {
                 if let Ok(mut session) = serde_json::from_str::<crate::state::ChatSession>(&content) {
