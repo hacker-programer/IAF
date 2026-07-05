@@ -347,8 +347,8 @@ pub async fn run_agent_loop(
             }
         })
     ];
-    ];
-    let client = reqwest::Client::builder()
+
+    let client
         .timeout(std::time::Duration::from_secs(600))
         .tcp_keepalive(std::time::Duration::from_secs(30))
         .build()?;
