@@ -1128,8 +1128,165 @@ pub async fn run_agent_loop(
                                 json!({
                                     "message": format!("No se encontró la imagen '{}' en el contexto activo. Es posible que ya haya sido liberada o comprimida.", id)
                                 }).to_string()
+                    "git_resolve_divergence" => {
+                        let action = args["action"].as_str().unwrap_or("");
+                        let proj_path = if let Some(ref proj_name) = project_name {
+                            get_project_path(&state, proj_name)
+                        } else {
+                            return json!({"error": "No hay proyecto activo"}).to_string();
+                        };
+                        if action.is_empty() {
+                            json!({"error": "Se requiere el parámetro 'action' (keep_local, keep_remote o merge_both)"}).to_string()
+                        } else {
+                            match action {
+                                "keep_local" => {
+                                    match Command::new("git")
+                                        .args(&["push", "origin", "master", "--force"])
+                                        .current_dir(&proj_path)
+                                        .env("GIT_TERMINAL_PROMPT", "0")
+                                        .output()
+                                    {
+                                        Ok(o) if o.status.success() => 
+                                            format!("✅ Push forzado exitoso.\n{}", String::from_utf8_lossy(&o.stdout).trim()),
+                                        Ok(o) => 
+                                            format!("❌ Error push: {}", String::from_utf8_lossy(&o.stderr).trim()),
+                                        Err(e) => format!("❌ Error: {}", e),
+                                    }
+                                }
+                                "keep_remote" => {
+                                    match Command::new("git")
+                                        .args(&["reset", "--hard", "origin/master"])
+                                        .current_dir(&proj_path)
+                                        .env("GIT_TERMINAL_PROMPT", "0")
+                                        .output()
+                                    {
+                                        Ok(o) if o.status.success() => 
+                                            "✅ Reset exitoso. Repositorio local coincide con origin/master.".to_string(),
+                                        Ok(o) => 
+                                            format!("❌ Error reset: {}", String::from_utf8_lossy(&o.stderr).trim()),
+                                        Err(e) => format!("❌ Error: {}", e),
+                                    }
+                                }
+                                "merge_both" => {
+                                    match Command::new("git")
+                                        .args(&["pull", "--rebase", "--autostash", "origin", "master"])
+                                        .current_dir(&proj_path)
+                                        .env("GIT_TERMINAL_PROMPT", "0")
+                                        .env("GIT_MERGE_AUTOEDIT", "no")
+                                        .output()
+                                    {
+                                        Ok(o) if o.status.success() => 
+                                            format!("✅ Merge/rebase exitoso.\n{}", String::from_utf8_lossy(&o.stdout).trim()),
+                                        Ok(o) => {
+                                            let stderr = String::from_utf8_lossy(&o.stderr).trim().to_string();
+                                            if stderr.contains("CONFLICT") || stderr.contains("conflict") {
+                                                let _ = Command::new("git")
+                                                    .args(&["rebase", "--abort"])
+                                                    .current_dir(&proj_path)
+                                                    .env("GIT_TERMINAL_PROMPT", "0")
+                                                    .status();
+                                                format!("⚠️ Conflictos detectados. Rebase abortado.\n{}", stderr)
+                                            } else {
+                                                format!("❌ Error merge: {}", stderr)
+                                            }
+                                        }
+                                        Err(e) => format!("❌ Error: {}", e),
+                                    }
+                                }
+                                _ => format!("❌ Acción desconocida: '{}'. Usa keep_local, keep_remote o merge_both.", action),
                             }
                         }
+                    }
+                    "analyze_images" => {
+                        let image_paths: Vec<String> = args.get("image_paths")
+                            .and_then(|v| v.as_array())
+                            .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+                            .unwrap_or_default();
+                        let query = args.get("query").and_then(|v| v.as_str()).unwrap_or("Describe esta imagen.");
+                        if image_paths.is_empty() {
+                            json!({"error": "Se requiere al menos una ruta de imagen."}).to_string()
+                        } else {
+                            let api_key = std::env::var("OPENROUTER_API_KEY").unwrap_or_default();
+                            if api_key.is_empty() {
+                                json!({"error": "OPENROUTER_API_KEY no configurada."}).to_string()
+                            } else {
+                                let mut content_parts: Vec<serde_json::Value> = Vec::new();
+                                content_parts.push(json!({"type": "text", "text": query}));
+                                let mut errors: Vec<String> = Vec::new();
+                                let mut processed = 0usize;
+                                for path_str in &image_paths {
+                                    let path = std::path::Path::new(path_str);
+                                    if !path.exists() {
+                                        errors.push(format!("Archivo no encontrado: {}", path_str));
+                                        continue;
+                                    }
+                                    match std::fs::read(path) {
+                                        Ok(bytes) => {
+                                            if bytes.len() > 4_500_000 {
+                                                errors.push(format!("Imagen >4.5MB: {}", path_str));
+                                                continue;
+                                            }
+                                            let mime = match path.extension().and_then(|e| e.to_str()) {
+                                                Some("jpg")|Some("jpeg") => "image/jpeg",
+                                                Some("png") => "image/png",
+                                                Some("gif") => "image/gif",
+                                                Some("webp") => "image/webp",
+                                                Some("bmp") => "image/bmp",
+                                                _ => "image/png",
+                                            };
+                                            let b64 = base64::engine::general_purpose::STANDARD.encode(&bytes);
+                                            content_parts.push(json!({
+                                                "type": "image_url",
+                                                "image_url": {"url": format!("data:{};base64,{}", mime, b64)}
+                                            }));
+                                            processed += 1;
+                                        }
+                                        Err(e) => errors.push(format!("Error leyendo {}: {}", path_str, e)),
+                                    }
+                                }
+                                if processed == 0 {
+                                    json!({"error": format!("No se pudo procesar ninguna imagen: {}", errors.join("; "))}).to_string()
+                                } else {
+                                    let mut result_text = String::new();
+                                    if !errors.is_empty() {
+                                        result_text.push_str(&format!("⚠️ {} error(es): {}\n\n", errors.len(), errors.join("; ")));
+                                    }
+                                    let body = json!({
+                                        "model": "qwen/qwen2.5-vl-72b-instruct",
+                                        "messages": [{"role": "user", "content": content_parts}]
+                                    });
+                                    match reqwest::blocking::Client::new()
+                                        .post("https://openrouter.ai/api/v1/chat/completions")
+                                        .header("Authorization", format!("Bearer {}", api_key))
+                                        .header("Content-Type", "application/json")
+                                        .header("HTTP-Referer", "https://github.com/iaf")
+                                        .header("X-Title", "IAF Image Analysis")
+                                        .json(&body)
+                                        .timeout(std::time::Duration::from_secs(120))
+                                        .send()
+                                    {
+                                        Ok(resp) => {
+                                            if resp.status().is_success() {
+                                                match resp.json::<serde_json::Value>() {
+                                                    Ok(json_resp) => {
+                                                        let content = json_resp["choices"][0]["message"]["content"]
+                                                            .as_str().unwrap_or("(Sin respuesta del modelo)");
+                                                        result_text.push_str(&format!("📷 Análisis de {} imagen(es):\n\n{}", processed, content));
+                                                    }
+                                                    Err(e) => result_text.push_str(&format!("❌ Error parseando respuesta: {}", e)),
+                                                }
+                                            } else {
+                                                result_text.push_str(&format!("❌ OpenRouter error {}: {}", resp.status(), resp.text().unwrap_or_default()));
+                                            }
+                                        }
+                                        Err(e) => result_text.push_str(&format!("❌ Error de red: {}", e)),
+                                    }
+                                    result_text
+                                }
+                            }
+                        }
+                    }
+                    _ => "Herramienta desconocida".to_string(),
                     }
                     _ => "Herramienta desconocida".to_string(),
                 };
