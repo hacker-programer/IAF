@@ -1245,6 +1245,7 @@ pub async fn run_agent_loop(
                                 }
                             }
                         }
+                    }
                     _ => "Herramienta desconocida".to_string(),
                 };
                 let display_result = if tool_result.len() > 25000 {
