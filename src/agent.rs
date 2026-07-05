@@ -306,6 +306,9 @@ pub async fn run_agent_loop(
                         "id": { "type": "string", "description": "UUID de la imagen a liberar del contexto" }
                     },
                     "required": ["id"]
+                    "required": ["id"]
+                }
+            }
         }),
         json!({
             "type": "function",
@@ -348,13 +351,6 @@ pub async fn run_agent_loop(
             }
         })
     ];
-        })
-    ];
-
-    let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(600))
-        .tcp_keepalive(std::time::Duration::from_secs(30))
-        .build()?;
     let mut iteration = {
         let status = state.active_agent.lock().unwrap();
         status.steps.iter().filter(|s| s.step_type == "thinking").count()
