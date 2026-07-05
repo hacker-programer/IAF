@@ -44,8 +44,8 @@ pub struct AuditStep {
 #[derive(Clone, Default, Serialize, Deserialize)]
 pub struct ActiveAgentStatus {
     pub running: bool,
-pub struct ActiveAgentStatus {
     pub running: bool,
+    pub interrupted: bool,
     pub interrupted: bool,
     pub esperando_respuesta_usuario: bool,
     pub pregunta_usuario: Option<String>,
