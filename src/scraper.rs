@@ -27,9 +27,9 @@ pub async fn perform_search(
                 url: url.clone(),
                 solved_content: None,
             });
+        }
 
         // Wait up to 60 seconds for user to solve captcha in browser
-        for _ in 0..120 {
             tokio::time::sleep(Duration::from_millis(500)).await;
             let current = pending_captcha.lock().unwrap();
             if let Some(ref req) = *current {
