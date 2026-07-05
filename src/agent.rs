@@ -305,12 +305,50 @@ pub async fn run_agent_loop(
                     },
                     "required": ["id"]
         }),
+                    "required": ["id"]
+                }
+            }
+        }),
         json!({
             "type": "function",
             "function": {
                 "name": "git_resolve_divergence",
                 "description": "Resuelve divergencia entre local y remoto. keep_local: push --force. keep_remote: reset --hard. merge_both: pull --rebase.",
                 "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "action": {
+                            "type": "string",
+                            "enum": ["keep_local", "keep_remote", "merge_both"]
+                        }
+                    },
+                    "required": ["action"]
+                }
+            }
+        }),
+        json!({
+            "type": "function",
+            "function": {
+                "name": "analyze_images",
+                "description": "Analiza imágenes locales con modelo multimodal Qwen2.5-VL vía OpenRouter. Para comparar estilos visuales, detectar objetos, etc.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "image_paths": {
+                            "type": "array",
+                            "items": { "type": "string" },
+                            "description": "Rutas de archivos de imagen locales"
+                        },
+                        "query": {
+                            "type": "string",
+                            "description": "Pregunta sobre las imágenes"
+                        }
+                    },
+                    "required": ["image_paths", "query"]
+                }
+            }
+        })
+    ];
                     "type": "object",
                     "properties": {
                         "action": {
