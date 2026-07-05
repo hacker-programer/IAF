@@ -981,8 +981,8 @@ async fn main() {
         abort_handle: Arc::new(Mutex::new(None)),
         desktop: Arc::new(Mutex::new(DesktopController::new())),
         image_store: Arc::new(Mutex::new(HashMap::new())),
+        context_store: Arc::new(Mutex::new(HashMap::new())),
     };
-
     // Auto-descubrir proyectos locales por defecto
     discover_projects(&state);
 
