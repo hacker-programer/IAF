@@ -1328,7 +1328,6 @@ pub async fn run_agent_loop(
         }
     }
 }
-}
 
 fn save_chat_steps_to_disk
     if let Some(ref session_id) = *session_id_opt {
