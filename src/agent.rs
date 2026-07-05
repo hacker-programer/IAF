@@ -780,10 +780,10 @@ pub async fn run_agent_loop(
                                                 tokio::time::sleep(tokio::time::Duration::from_secs(seconds)).await;
                                                 println!("Timer de {}s expiró para PID {}", seconds, pid_copy);
                                             });
+                                            });
+                                        }
 
                                         if is_long_running {
-                                            json!({
-                                                "message": "Comando de larga duración iniciado en background.",
                                                 "pid": pid
                                             }).to_string()
                                         } else {
