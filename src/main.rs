@@ -769,6 +769,7 @@ async fn chat_endpoint(State(state): State<AppState>, Json(payload): Json<ChatIn
             state_clone.clone(),
             deepseek_key(),
             voyage_key(),
+            openrouter_key(),
             Some(session_id_clone.clone()),
         ));
 
