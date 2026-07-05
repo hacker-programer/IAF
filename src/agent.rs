@@ -306,8 +306,48 @@ pub async fn run_agent_loop(
                         "id": { "type": "string", "description": "UUID de la imagen a liberar del contexto" }
                     },
                     "required": ["id"]
+        }),
+        json!({
+            "type": "function",
+            "function": {
+                "name": "git_resolve_divergence",
+                "description": "Resuelve una divergencia entre repositorio local y remoto. Usa 'keep_local' para sobrescribir remoto con local (push --force), 'keep_remote' para descartar local y usar remoto (reset --hard), 'merge_both' para fusionar ambos (pull --rebase --autostash).",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "action": {
+                            "type": "string",
+                            "enum": ["keep_local", "keep_remote", "merge_both"],
+                            "description": "Acción para resolver la divergencia."
+                        }
+                    },
+                    "required": ["action"]
                 }
             }
+        }),
+        json!({
+            "type": "function",
+            "function": {
+                "name": "analyze_images",
+                "description": "Analiza una o varias imágenes locales con un modelo multimodal (Qwen2.5-VL) vía OpenRouter. Permite preguntar sobre el contenido visual, estilo, comparar imágenes, etc. Las rutas deben ser accesibles desde el sistema de archivos local.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "image_paths": {
+                            "type": "array",
+                            "items": { "type": "string" },
+                            "description": "Rutas a archivos de imagen locales."
+                        },
+                        "query": {
+                            "type": "string",
+                            "description": "Pregunta sobre las imágenes."
+                        }
+                    },
+                    "required": ["image_paths", "query"]
+                }
+            }
+        })
+    ];
         })
     ];
 
