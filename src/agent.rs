@@ -672,11 +672,11 @@ pub async fn run_agent_loop(
                                     let _ = fs::remove_file(&index_lock_path);
                                 }
 
-                                // 3. Alinear el historial local con el remoto (fetch + reset --hard)
-                                //    NOTA: NO usamos 'git clean -fd' porque es demasiado destructivo.
-                                //    Solo descartamos cambios tracked, no borramos archivos nuevos no commiteados.
-                                println!("Ejecutando git fetch + git reset --hard origin/master para alinear historial...");
-                                
+                                // 3. Forzar push local al remoto para preservar el trabajo realizado
+                                //    En lugar de descartar cambios con reset --hard (que perdería trabajo),
+                                //    forzamos que nuestro estado local prevalezca sobre el remoto.
+                                println!("Ejecutando git push --force para preservar trabajo local...");
+
                                 // Fetch para asegurar que tenemos la referencia remota más reciente
                                 let _ = Command::new("git")
                                     .args(&["fetch", "origin", "master"])
@@ -686,10 +686,10 @@ pub async fn run_agent_loop(
                                     .stderr(std::process::Stdio::null())
                                     .env("GIT_TERMINAL_PROMPT", "0")
                                     .status();
-                                
-                                // Reset al estado del remoto
+
+                                // Push forzado: el trabajo local prevalece sobre el remoto
                                 let _ = Command::new("git")
-                                    .args(&["reset", "--hard", "origin/master"])
+                                    .args(&["push", "origin", "master", "--force"])
                                     .current_dir(&proj_path)
                                     .stdin(std::process::Stdio::null())
                                     .stdout(std::process::Stdio::null())
@@ -697,7 +697,7 @@ pub async fn run_agent_loop(
                                     .env("GIT_TERMINAL_PROMPT", "0")
                                     .status();
 
-                                // 4. Reintentar pull final
+                                // 4. Pull final para sincronizar (ahora debería ser fast-forward limpio)
                                 status_pull = Command::new("git")
                                     .args(&["pull", "--rebase", "--autostash", "origin", "master"])
                                     .current_dir(&proj_path)
@@ -706,6 +706,7 @@ pub async fn run_agent_loop(
                                     .stderr(std::process::Stdio::null())
                                     .env("GIT_TERMINAL_PROMPT", "0")
                                     .status();
+                            }
                             }
 
                             let pull_success = status_pull.as_ref().map(|s| s.success()).unwrap_or(false);
