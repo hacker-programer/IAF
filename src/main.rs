@@ -965,9 +965,6 @@ async fn main() {
             if let Ok(parsed) = serde_json::from_str::<Vec<Project>>(&content) {
                 initial_projects = parsed;
             }
-        }
-    }
-
     let state = AppState {
         config_path,
         prompts: Arc::new(Mutex::new(prompts)),
@@ -977,6 +974,9 @@ async fn main() {
         active_agent: Arc::new(Mutex::new(ActiveAgentStatus::default())),
         abort_handle: Arc::new(Mutex::new(None)),
         desktop: Arc::new(Mutex::new(DesktopController::new())),
+        image_store: Arc::new(Mutex::new(HashMap::new())),
+        context_store: Arc::new(Mutex::new(HashMap::new())),
+    };
         image_store: Arc::new(Mutex::new(HashMap::new())),
     };
 
