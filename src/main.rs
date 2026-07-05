@@ -42,8 +42,6 @@ fn openrouter_key() -> &'static str {
     KEY.get_or_init(|| std::env::var("OPENROUTER_API_KEY").expect("OPENROUTER_API_KEY no configurada"))
 }
 const DEFAULT_GLOBAL_SYSTEM_PROMPT: &str = "Eres un asistente de desarrollo autónomo inteligente (DeepSeek V4 Pro) enfocado en resolver problemas en repositorios de software.
-const DEFAULT_GLOBAL_SYSTEM_PROMPT: &str = "
-Cuando modifiques un archivo, SIEMPRE debes hacerlo a través de write_file_with_commit para subir los cambios a GitHub.
 Para dar por terminada la tarea de forma definitiva y cerrar tu ejecución, debes obligatoriamente llamar a la herramienta `finalizar_tarea`. No basta con responder textualmente que has terminado; la única forma de concluir el proceso es ejecutando dicha herramienta.
 
 Antes de realizar cualquier acción o responder al usuario, DEBES realizar obligatoriamente un proceso de análisis y razonamiento profundo y estructurado dentro de las etiquetas <thinking>. Tu cadena de pensamiento no puede ser superficial y debe deconstruir el problema, evaluar opciones, justificar decisiones y anticipar problemas técnicos.
