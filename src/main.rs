@@ -41,8 +41,6 @@ fn openrouter_key() -> &'static str {
     static KEY: OnceLock<String> = OnceLock::new();
     KEY.get_or_init(|| std::env::var("OPENROUTER_API_KEY").expect("OPENROUTER_API_KEY no configurada"))
 }
-
-const DEFAULT_GLOBAL_SYSTEM_PROMPT: &str = "
 const DEFAULT_GLOBAL_SYSTEM_PROMPT: &str = "Eres un asistente de desarrollo autónomo inteligente (DeepSeek V4 Pro) enfocado en resolver problemas en repositorios de software.
 const DEFAULT_GLOBAL_SYSTEM_PROMPT: &str = "
 Cuando modifiques un archivo, SIEMPRE debes hacerlo a través de write_file_with_commit para subir los cambios a GitHub.
