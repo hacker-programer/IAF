@@ -1181,14 +1181,18 @@ pub async fn run_agent_loop(
                     }
                     "git_resolve_divergence" => {
                         let action = args["action"].as_str().unwrap_or("");
+                    "git_resolve_divergence" => {
+                        let action = args["action"].as_str().unwrap_or("");
                         let proj_path = if let Some(ref proj_name) = project_name {
                             get_project_path(&state, proj_name)
                         } else {
                             return json!({"error": "No hay proyecto activo"}).to_string();
                         };
-                        };
-                        match action {
-                            "keep_local" => {
+                        if action.is_empty() {
+                            json!({"error": "Se requiere el parámetro 'action' (keep_local, keep_remote o merge_both)"}).to_string()
+                        } else {
+                            match action {
+                                "keep_local" => {
                                     match Command::new("git")
                                         .args(&["push", "origin", "master", "--force"])
                                         .current_dir(&proj_path)
@@ -1209,9 +1213,9 @@ pub async fn run_agent_loop(
                                         .env("GIT_TERMINAL_PROMPT", "0")
                                         .output()
                                     {
-                                        Ok(o) if o.status.success() => 
-                                            "✅ Reset exitoso. Repositorio local coincide con origin/master.".to_string(),
-                                        Ok(o) => 
+                                        Ok(o) if o.status.success() =>
+                                            "✅ Reset exitoso. Local coincide con origin/master.".to_string(),
+                                        Ok(o) =>
                                             format!("❌ Error reset: {}", String::from_utf8_lossy(&o.stderr).trim()),
                                         Err(e) => format!("❌ Error: {}", e),
                                     }
@@ -1224,7 +1228,7 @@ pub async fn run_agent_loop(
                                         .env("GIT_MERGE_AUTOEDIT", "no")
                                         .output()
                                     {
-                                        Ok(o) if o.status.success() => 
+                                        Ok(o) if o.status.success() =>
                                             format!("✅ Merge/rebase exitoso.\n{}", String::from_utf8_lossy(&o.stdout).trim()),
                                         Ok(o) => {
                                             let stderr = String::from_utf8_lossy(&o.stderr).trim().to_string();
@@ -1234,7 +1238,7 @@ pub async fn run_agent_loop(
                                                     .current_dir(&proj_path)
                                                     .env("GIT_TERMINAL_PROMPT", "0")
                                                     .status();
-                                                format!("⚠️ Conflictos detectados. Rebase abortado.\n{}", stderr)
+                                                format!("⚠️ Conflictos. Rebase abortado.\n{}", stderr)
                                             } else {
                                                 format!("❌ Error merge: {}", stderr)
                                             }
@@ -1242,7 +1246,7 @@ pub async fn run_agent_loop(
                                         Err(e) => format!("❌ Error: {}", e),
                                     }
                                 }
-                                _ => format!("❌ Acción desconocida: '{}'. Usa keep_local, keep_remote o merge_both.", action),
+                                _ => format!("❌ Acción desconocida: '{}'. Usa 'keep_local', 'keep_remote' o 'merge_both'.", action),
                             }
                         }
                     }
@@ -1253,11 +1257,11 @@ pub async fn run_agent_loop(
                             .unwrap_or_default();
                         let query = args.get("query").and_then(|v| v.as_str()).unwrap_or("Describe esta imagen.");
                         if image_paths.is_empty() {
-                            json!({"error": "Se requiere al menos una ruta de imagen."}).to_string()
+                            json!({"error": "Se requiere al menos una imagen"}).to_string()
                         } else {
                             let api_key = std::env::var("OPENROUTER_API_KEY").unwrap_or_default();
                             if api_key.is_empty() {
-                                json!({"error": "OPENROUTER_API_KEY no configurada."}).to_string()
+                                json!({"error": "OPENROUTER_API_KEY no configurada"}).to_string()
                             } else {
                                 let mut content_parts: Vec<serde_json::Value> = Vec::new();
                                 content_parts.push(json!({"type": "text", "text": query}));
@@ -1266,7 +1270,7 @@ pub async fn run_agent_loop(
                                 for path_str in &image_paths {
                                     let path = std::path::Path::new(path_str);
                                     if !path.exists() {
-                                        errors.push(format!("Archivo no encontrado: {}", path_str));
+                                        errors.push(format!("No encontrado: {}", path_str));
                                         continue;
                                     }
                                     match std::fs::read(path) {
@@ -1276,7 +1280,7 @@ pub async fn run_agent_loop(
                                                 continue;
                                             }
                                             let mime = match path.extension().and_then(|e| e.to_str()) {
-                                                Some("jpg")|Some("jpeg") => "image/jpeg",
+                                                Some("jpg") | Some("jpeg") => "image/jpeg",
                                                 Some("png") => "image/png",
                                                 Some("gif") => "image/gif",
                                                 Some("webp") => "image/webp",
@@ -1284,26 +1288,21 @@ pub async fn run_agent_loop(
                                                 _ => "image/png",
                                             };
                                             let b64 = base64::engine::general_purpose::STANDARD.encode(&bytes);
-                                            content_parts.push(json!({
-                                                "type": "image_url",
-                                                "image_url": {"url": format!("data:{};base64,{}", mime, b64)}
-                                            }));
+                                            let data_uri = format!("data:{};base64,{}", mime, b64);
+                                            content_parts.push(json!({"type": "image_url", "image_url": {"url": data_uri}}));
                                             processed += 1;
                                         }
-                                        Err(e) => errors.push(format!("Error leyendo {}: {}", path_str, e)),
+                                        Err(e) => errors.push(format!("Error {}: {}", path_str, e)),
                                     }
                                 }
                                 if processed == 0 {
-                                    json!({"error": format!("No se pudo procesar ninguna imagen: {}", errors.join("; "))}).to_string()
+                                    json!({"error": format!("No se procesaron imágenes: {}", errors.join("; "))}).to_string()
                                 } else {
                                     let mut result_text = String::new();
                                     if !errors.is_empty() {
-                                        result_text.push_str(&format!("⚠️ {} error(es): {}\n\n", errors.len(), errors.join("; ")));
+                                        result_text.push_str(&format!("⚠️ {} errores: {}\n\n", errors.len(), errors.join("; ")));
                                     }
-                                    let body = json!({
-                                        "model": "qwen/qwen2.5-vl-72b-instruct",
-                                        "messages": [{"role": "user", "content": content_parts}]
-                                    });
+                                    let body = json!({"model": "qwen/qwen2.5-vl-72b-instruct", "messages": [{"role": "user", "content": content_parts}]});
                                     match reqwest::blocking::Client::new()
                                         .post("https://openrouter.ai/api/v1/chat/completions")
                                         .header("Authorization", format!("Bearer {}", api_key))
@@ -1318,11 +1317,10 @@ pub async fn run_agent_loop(
                                             if resp.status().is_success() {
                                                 match resp.json::<serde_json::Value>() {
                                                     Ok(json_resp) => {
-                                                        let content = json_resp["choices"][0]["message"]["content"]
-                                                            .as_str().unwrap_or("(Sin respuesta del modelo)");
+                                                        let content = json_resp["choices"][0]["message"]["content"].as_str().unwrap_or("(Sin respuesta)");
                                                         result_text.push_str(&format!("📷 Análisis de {} imagen(es):\n\n{}", processed, content));
                                                     }
-                                                    Err(e) => result_text.push_str(&format!("❌ Error parseando respuesta: {}", e)),
+                                                    Err(e) => result_text.push_str(&format!("❌ Error parseando: {}", e)),
                                                 }
                                             } else {
                                                 result_text.push_str(&format!("❌ OpenRouter error {}: {}", resp.status(), resp.text().unwrap_or_default()));
@@ -1336,61 +1334,7 @@ pub async fn run_agent_loop(
                         }
                     }
                     _ => "Herramienta desconocida".to_string(),
-                    _ => "Herramienta desconocida".to_string(),
                 };
-
-                {
-                    let mut status = state.active_agent.lock().unwrap();
-                    status.steps.push(crate::state::AuditStep {
-                        step_type: "tool_result".to_string(),
-                        title: format!("Resultado de: {}", func_name),
-                        detail: if tool_result.len() > 300 {
-                            format!("{}... [Truncado]", safe_truncate(&tool_result, 300))
-                        } else {
-                            tool_result.clone()
-                        },
-                        timestamp: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs(),
-                    });
-                    save_chat_steps_to_disk(&state, &session_id, &status.steps);
-                }
-
-                let display_result = if tool_result.len() > 25000 {
-                    format!(
-                        "{}... [TRUNCADO POR EL SISTEMA. El resultado es demasiado grande ({} caracteres). Para leer archivos, utiliza parámetros start_line y end_line en 'read_file'. Para comandos de PowerShell, filtra la salida usando select, grep o head/tail.]",
-                        safe_truncate(&tool_result, 20000),
-                        tool_result.len()
-                    )
-                } else {
-                    tool_result.clone()
-                };
-
-                tool_responses.push(json!({
-                    "role": "tool",
-                    "tool_call_id": call_id,
-                    "content": display_result
-                }));
-            }
-
-            for tr in tool_responses {
-                messages.push(tr);
-            }
-
-            if let Some(msg) = final_message {
-                return Ok(msg);
-            }
-        } else {
-            messages.push(message_val.clone());
-            messages.push(json!({
-                "role": "user",
-                "content": "Has respondido con texto pero no has ejecutado ninguna herramienta. Si has finalizado la tarea por completo, llama obligatoriamente a la herramienta 'finalizar_tarea'. Si todavía necesitas realizar cambios, ejecutar comandos o leer archivos, hazlo llamando a la herramienta correspondiente."
-            }));
-        }
-    }
-}
-
-fn save_chat_steps_to_disk(state: &AppState, session_id_opt: &Option<String>, steps: &[crate::state::AuditStep]) {
-    if let Some(ref session_id) = *session_id_opt {
-        let chat_file = state.base_workspace.join(".config").join("chats").join(format!("{}.json", session_id));
         if chat_file.exists() {
             if let Ok(content) = fs::read_to_string(&chat_file) {
                 if let Ok(mut session) = serde_json::from_str::<crate::state::ChatSession>(&content) {
