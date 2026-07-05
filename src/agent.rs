@@ -292,6 +292,10 @@ pub async fn run_agent_loop(
                     },
                     "required": ["id"]
                 }
+                    "required": ["id"]
+                }
+            }
+        }),
         json!({
             "type": "function",
             "function": {
