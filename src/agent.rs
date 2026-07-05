@@ -17,7 +17,6 @@ pub async fn run_agent_loop(
     state: AppState,
     deepseek_key: &str,
     voyage_key: &str,
-    openrouter_key: &str,
     session_id: Option<String>,
 ) -> Result<String, Box<dyn Error + Send + Sync>> {
     let global_prompt = {
@@ -307,48 +306,13 @@ pub async fn run_agent_loop(
                     "required": ["id"]
                 }
             }
-        }),
-        json!({
-            "type": "function",
-            "function": {
-                "name": "git_resolve_divergence",
-                "description": "Resuelve una divergencia entre repositorio local y remoto. Usa 'keep_local' para sobrescribir remoto con local (push --force), 'keep_remote' para descartar local y usar remoto (reset --hard), 'merge_both' para fusionar ambos (pull --rebase --autostash).",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "action": {
-                            "type": "string",
-                            "enum": ["keep_local", "keep_remote", "merge_both"],
-                            "description": "Acción para resolver la divergencia."
-                        }
-                    },
-                    "required": ["action"]
-                }
-            }
-        }),
-        json!({
-            "type": "function",
-            "function": {
-                "name": "analyze_images",
-                "description": "Analiza una o varias imágenes locales con un modelo multimodal (Qwen2.5-VL) vía OpenRouter. Permite preguntar sobre el contenido visual, estilo, comparar imágenes, etc. Las rutas deben ser accesibles desde el sistema de archivos local.",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "image_paths": {
-                            "type": "array",
-                            "items": { "type": "string" },
-                            "description": "Rutas a archivos de imagen locales."
-                        },
-                        "query": {
-                            "type": "string",
-                            "description": "Pregunta sobre las imágenes."
-                        }
-                    },
-                    "required": ["image_paths", "query"]
-                }
-            }
         })
     ];
+
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(600))
+        .tcp_keepalive(std::time::Duration::from_secs(30))
+        .build()?;
     let mut iteration = {
         let status = state.active_agent.lock().unwrap();
         status.steps.iter().filter(|s| s.step_type == "thinking").count()
@@ -641,69 +605,17 @@ pub async fn run_agent_loop(
                                 }
 
                                 // 4. Alinear el historial local forzadamente con el repositorio remoto
-                                // 4. En lugar de reset --hard ciegamente, recopilar diferencias para el agente
-                                println!("INFO: Divergencia detectada. Recopilando diferencias para decisión del agente...");
-                                
-                                // Fetch para tener referencia remota actualizada
+                                println!("Ejecutando git reset --hard origin/master para alinear el historial local con el remoto...");
                                 let _ = Command::new("git")
-                                    .args(&["fetch", "origin", "master"])
+                                    .args(&["reset", "--hard", "origin/master"])
                                     .current_dir(&proj_path)
+                                    .stdin(std::process::Stdio::null())
                                     .stdout(std::process::Stdio::null())
                                     .stderr(std::process::Stdio::null())
                                     .env("GIT_TERMINAL_PROMPT", "0")
                                     .status();
 
-                                let mut divergence_info = String::from(
-                                    "⚠️ **DIVERGENCIA DETECTADA** entre repositorio local y remoto.\n\n"
-                                );
-
-                                // Commits remotos no presentes localmente
-                                if let Ok(o) = Command::new("git")
-                                    .args(&["log", "HEAD..origin/master", "--oneline", "--no-merges", "-20"])
-                                    .current_dir(&proj_path)
-                                    .output()
-                                {
-                                    let s = String::from_utf8_lossy(&o.stdout).trim().to_string();
-                                    if !s.is_empty() {
-                                        divergence_info.push_str(&format!("📥 **Commits en remoto que NO tienes localmente:**\n```\n{}\n```\n\n", s));
-                                    } else {
-                                        divergence_info.push_str("📥 No hay commits nuevos en remoto.\n\n");
-                                    }
-                                }
-
-                                // Commits locales no presentes en remoto
-                                if let Ok(o) = Command::new("git")
-                                    .args(&["log", "origin/master..HEAD", "--oneline", "--no-merges", "-20"])
-                                    .current_dir(&proj_path)
-                                    .output()
-                                {
-                                    let s = String::from_utf8_lossy(&o.stdout).trim().to_string();
-                                    if !s.is_empty() {
-                                        divergence_info.push_str(&format!("📤 **Commits locales NO presentes en remoto:**\n```\n{}\n```\n\n", s));
-                                    } else {
-                                        divergence_info.push_str("📤 No hay commits locales sin enviar.\n\n");
-                                    }
-                                }
-
-                                // Resumen de archivos modificados
-                                if let Ok(o) = Command::new("git")
-                                    .args(&["diff", "origin/master", "--stat"])
-                                    .current_dir(&proj_path)
-                                    .output()
-                                {
-                                    let s = String::from_utf8_lossy(&o.stdout).trim().to_string();
-                                    if !s.is_empty() {
-                                        divergence_info.push_str(&format!("📊 **Archivos con diferencias:**\n```\n{}\n```\n\n", s));
-                                    }
-                                }
-
-                                divergence_info.push_str("---\n**Resolución requerida**: Usa la herramienta `git_resolve_divergence` con una de estas acciones:\n");
-                                divergence_info.push_str("- `keep_local`: Sobrescribir el remoto con tu trabajo local (push --force)\n");
-                                divergence_info.push_str("- `keep_remote`: Descartar cambios locales y adoptar el estado remoto (reset --hard)\n");
-                                divergence_info.push_str("- `merge_both`: Intentar fusionar ambos historiales (pull --rebase --autostash)\n");
-                                divergence_info.push_str("\nAnaliza las diferencias mostradas arriba y decide cuál es la mejor opción.");
-
-                                // Reintentar pull final para ver si ahora funciona
+                                // 5. Reintentar pull final
                                 status_pull = Command::new("git")
                                     .args(&["pull", "--rebase", "--autostash", "origin", "master"])
                                     .current_dir(&proj_path)
@@ -711,11 +623,9 @@ pub async fn run_agent_loop(
                                     .stdout(std::process::Stdio::null())
                                     .stderr(std::process::Stdio::null())
                                     .env("GIT_TERMINAL_PROMPT", "0")
-                                    .env("GIT_TERMINAL_PROMPT", "0")
                                     .status();
                             }
 
-                            let pull_success = status_pull.as_ref().map(|s| s.success()).unwrap_or(false);
                             let pull_success = status_pull.as_ref().map(|s| s.success()).unwrap_or(false);
                             if !pull_success {
                                 play_error_beep();
@@ -1179,8 +1089,11 @@ pub async fn run_agent_loop(
                             }
                         }
                     }
-                    "git_resolve_divergence" => {
-                        let action = args["action"].as_str().unwrap_or("");
+                    _ => "Herramienta desconocida".to_string(),
+                };
+
+                        }
+                    }
                     "git_resolve_divergence" => {
                         let action = args["action"].as_str().unwrap_or("");
                         let proj_path = if let Some(ref proj_name) = project_name {
@@ -1189,7 +1102,7 @@ pub async fn run_agent_loop(
                             return json!({"error": "No hay proyecto activo"}).to_string();
                         };
                         if action.is_empty() {
-                            json!({"error": "Se requiere el parámetro 'action' (keep_local, keep_remote o merge_both)"}).to_string()
+                            json!({"error": "Se requiere 'action': keep_local, keep_remote o merge_both"}).to_string()
                         } else {
                             match action {
                                 "keep_local" => {
@@ -1246,7 +1159,7 @@ pub async fn run_agent_loop(
                                         Err(e) => format!("❌ Error: {}", e),
                                     }
                                 }
-                                _ => format!("❌ Acción desconocida: '{}'. Usa 'keep_local', 'keep_remote' o 'merge_both'.", action),
+                                _ => format!("❌ Acción desconocida: '{}'. Usa keep_local, keep_remote o merge_both.", action),
                             }
                         }
                     }
@@ -1335,6 +1248,51 @@ pub async fn run_agent_loop(
                     }
                     _ => "Herramienta desconocida".to_string(),
                 };
+                        } else {
+                            tool_result.clone()
+                        },
+                        timestamp: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs(),
+                    });
+                    save_chat_steps_to_disk(&state, &session_id, &status.steps);
+                }
+
+                let display_result = if tool_result.len() > 25000 {
+                    format!(
+                        "{}... [TRUNCADO POR EL SISTEMA. El resultado es demasiado grande ({} caracteres). Para leer archivos, utiliza parámetros start_line y end_line en 'read_file'. Para comandos de PowerShell, filtra la salida usando select, grep o head/tail.]",
+                        safe_truncate(&tool_result, 20000),
+                        tool_result.len()
+                    )
+                } else {
+                    tool_result.clone()
+                };
+
+                tool_responses.push(json!({
+                    "role": "tool",
+                    "tool_call_id": call_id,
+                    "content": display_result
+                }));
+            }
+
+            for tr in tool_responses {
+                messages.push(tr);
+            }
+
+            if let Some(msg) = final_message {
+                return Ok(msg);
+            }
+        } else {
+            messages.push(message_val.clone());
+            messages.push(json!({
+                "role": "user",
+                "content": "Has respondido con texto pero no has ejecutado ninguna herramienta. Si has finalizado la tarea por completo, llama obligatoriamente a la herramienta 'finalizar_tarea'. Si todavía necesitas realizar cambios, ejecutar comandos o leer archivos, hazlo llamando a la herramienta correspondiente."
+            }));
+        }
+    }
+}
+
+fn save_chat_steps_to_disk(state: &AppState, session_id_opt: &Option<String>, steps: &[crate::state::AuditStep]) {
+    if let Some(ref session_id) = *session_id_opt {
+        let chat_file = state.base_workspace.join(".config").join("chats").join(format!("{}.json", session_id));
         if chat_file.exists() {
             if let Ok(content) = fs::read_to_string(&chat_file) {
                 if let Ok(mut session) = serde_json::from_str::<crate::state::ChatSession>(&content) {
