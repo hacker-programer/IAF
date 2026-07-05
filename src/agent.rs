@@ -1051,6 +1051,9 @@ pub async fn run_agent_loop(
                     "image_view" => {
                         let id = args["id"].as_str().unwrap_or("");
                         if id.is_empty() {
+                    "image_view" => {
+                        let id = args["id"].as_str().unwrap_or("");
+                        if id.is_empty() {
                             json!({"error": "No se proporcionó ID de imagen"}).to_string()
                         } else {
                             let path_opt = {
@@ -1061,34 +1064,62 @@ pub async fn run_agent_loop(
                                 Some(img_path) => {
                                     match fs::read(&img_path) {
                                         Ok(bytes) => {
-                                            // Codificar en Base64
                                             let b64 = general_purpose::STANDARD.encode(&bytes);
-                                            // Determinar tipo MIME por extensión
                                             let mime_type = mime_guess::from_path(&img_path)
                                                 .first_or_octet_stream()
                                                 .to_string();
                                             let data_url = format!("data:{};base64,{}", mime_type, b64);
-                                            // Inyectar mensaje multimodal en el array messages
-                                            messages.push(json!({
-                                                "role": "user",
-                                                "content": [
-                                                    {
-                                                        "type": "text",
-                                                        "text": format!("[Sistema] Imagen inyectada en contexto (id: {}). Cuando ya no la necesites, llama a image_release con este id para ahorrar tokens.", id)
-                                                    },
-                                                    {
-                                                        "type": "image_url",
-                                                        "image_url": {
-                                                            "url": data_url
+
+                                            // Llamar a Qwen2.5-VL (DeepSeek no soporta vision)
+                                            let api_key = openrouter_key;
+                                            let body = json!({
+                                                "model": "qwen/qwen2.5-vl-72b-instruct",
+                                                "messages": [{
+                                                    "role": "user",
+                                                    "content": [
+                                                        {"type": "text", "text": "Describe detalladamente esta imagen. Incluye elementos visuales, colores, composición, estilo y cualquier texto visible."},
+                                                        {"type": "image_url", "image_url": {"url": data_url}}
+                                                    ]
+                                                }]
+                                            });
+
+                                            let client = reqwest::blocking::Client::new();
+                                            match client
+                                                .post("https://openrouter.ai/api/v1/chat/completions")
+                                                .header("Authorization", format!("Bearer {}", api_key))
+                                                .header("Content-Type", "application/json")
+                                                .header("HTTP-Referer", "https://github.com/iaf")
+                                                .json(&body)
+                                                .timeout(std::time::Duration::from_secs(120))
+                                                .send()
+                                            {
+                                                Ok(resp) if resp.status().is_success() => {
+                                                    match resp.json::<serde_json::Value>() {
+                                                        Ok(json_resp) => {
+                                                            let description = json_resp["choices"][0]["message"]["content"]
+                                                                .as_str().unwrap_or("(Sin respuesta del modelo)")
+                                                                .to_string();
+                                                            // Inyectar SOLO texto en el contexto (DeepSeek puede leer texto)
+                                                            messages.push(json!({
+                                                                "role": "user",
+                                                                "content": format!("[Sistema] Imagen analizada (id: {}). Descripción:\n\n{}", id, description)
+                                                            }));
+                                                            json!({
+                                                                "message": format!("Imagen '{}' analizada e inyectada en el contexto (solo texto, sin imagen). Usa image_release('{}') cuando no la necesites.", id, id)
+                                                            }).to_string()
                                                         }
+                                                        Err(e) => json!({"error": format!("Error parseando respuesta: {}", e)}).to_string(),
                                                     }
-                                                ]
-                                            }));
-                                            json!({
-                                                "message": format!("Imagen '{}' inyectada en el contexto. La verás en tu próxima respuesta. Recuerda llamar image_release('{}') cuando ya no la necesites.", id, id)
-                                            }).to_string()
+                                                }
+                                                Ok(resp) => {
+                                                    let st = resp.status();
+                                                    let err = resp.text().unwrap_or_default();
+                                                    json!({"error": format!("OpenRouter error {}: {}", st, err)}).to_string()
+                                                }
+                                                Err(e) => json!({"error": format!("Error de red: {}", e)}).to_string(),
+                                            }
                                         }
-                                        Err(e) => json!({"error": format!("Error leyendo archivo de imagen: {}", e)}).to_string(),
+                                        Err(e) => json!({"error": format!("Error leyendo archivo: {}", e)}).to_string(),
                                     }
                                 }
                                 None => json!({"error": format!("No se encontró imagen con id '{}'", id)}).to_string(),
@@ -1100,31 +1131,138 @@ pub async fn run_agent_loop(
                         if id.is_empty() {
                             json!({"error": "No se proporcionó ID de imagen"}).to_string()
                         } else {
-                            // Buscar y eliminar del array messages cualquier mensaje que contenga esta imagen
                             let marker = format!("(id: {})", id);
                             let before_len = messages.len();
                             messages.retain(|msg| {
-                                // Si el content es un array (mensaje multimodal), buscar el marcador en las partes de texto
+                                // Formato texto plano (nuevo)
+                                if let Some(text) = msg["content"].as_str() {
+                                    if text.contains(&marker) {
+                                        return false;
+                                    }
+                                }
+                                // Formato array multimodal (antiguo)
                                 if let Some(content_arr) = msg["content"].as_array() {
                                     for part in content_arr {
                                         if let Some(text) = part["text"].as_str() {
                                             if text.contains(&marker) {
-                                                return false; // Eliminar este mensaje
+                                                return false;
                                             }
                                         }
                                     }
                                 }
-                                true // Mantener los demás mensajes
+                                true
                             });
                             let removed = before_len - messages.len();
                             if removed > 0 {
-                                json!({
-                                    "message": format!("Imagen '{}' eliminada del contexto. Ya no consumirá tokens en las siguientes iteraciones.", id)
-                                }).to_string()
+                                json!({"message": format!("Imagen '{}' eliminada del contexto.", id)}).to_string()
                             } else {
-                                json!({
-                                    "message": format!("No se encontró la imagen '{}' en el contexto activo. Es posible que ya haya sido liberada o comprimida.", id)
-                                }).to_string()
+                                json!({"message": format!("Imagen '{}' no encontrada en contexto.", id)}).to_string()
+                            }
+                        }
+                    }
+                    "git_resolve_divergence" => {
+                        let action = args["action"].as_str().unwrap_or("");
+                        let proj_path = if let Some(ref proj_name) = project_name {
+                            get_project_path(&state, proj_name)
+                        } else {
+                            return json!({"error": "No hay proyecto activo"}).to_string();
+                        };
+                        if action.is_empty() {
+                            json!({"error": "Se requiere 'action': keep_local, keep_remote o merge_both"}).to_string()
+                        } else {
+                            match action {
+                                "keep_local" => {
+                                    match Command::new("git").args(&["push","origin","master","--force"]).current_dir(&proj_path).env("GIT_TERMINAL_PROMPT","0").output() {
+                                        Ok(o) if o.status.success() => format!("✅ Push forzado exitoso.\n{}", String::from_utf8_lossy(&o.stdout).trim()),
+                                        Ok(o) => format!("❌ Error push: {}", String::from_utf8_lossy(&o.stderr).trim()),
+                                        Err(e) => format!("❌ Error: {}", e),
+                                    }
+                                }
+                                "keep_remote" => {
+                                    match Command::new("git").args(&["reset","--hard","origin/master"]).current_dir(&proj_path).env("GIT_TERMINAL_PROMPT","0").output() {
+                                        Ok(o) if o.status.success() => "✅ Reset exitoso. Local coincide con origin/master.".to_string(),
+                                        Ok(o) => format!("❌ Error reset: {}", String::from_utf8_lossy(&o.stderr).trim()),
+                                        Err(e) => format!("❌ Error: {}", e),
+                                    }
+                                }
+                                "merge_both" => {
+                                    match Command::new("git").args(&["pull","--rebase","--autostash","origin","master"]).current_dir(&proj_path).env("GIT_TERMINAL_PROMPT","0").env("GIT_MERGE_AUTOEDIT","no").output() {
+                                        Ok(o) if o.status.success() => format!("✅ Merge/rebase exitoso.\n{}", String::from_utf8_lossy(&o.stdout).trim()),
+                                        Ok(o) => {
+                                            let stderr = String::from_utf8_lossy(&o.stderr).trim().to_string();
+                                            if stderr.contains("CONFLICT") || stderr.contains("conflict") {
+                                                let _ = Command::new("git").args(&["rebase","--abort"]).current_dir(&proj_path).env("GIT_TERMINAL_PROMPT","0").status();
+                                                format!("⚠️ Conflictos. Rebase abortado.\n{}", stderr)
+                                            } else { format!("❌ Error merge: {}", stderr) }
+                                        }
+                                        Err(e) => format!("❌ Error: {}", e),
+                                    }
+                                }
+                                _ => format!("❌ Acción desconocida: '{}'. Usa keep_local, keep_remote o merge_both.", action),
+                            }
+                        }
+                    }
+                    "analyze_images" => {
+                        let image_paths: Vec<String> = args.get("image_paths")
+                            .and_then(|v| v.as_array())
+                            .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+                            .unwrap_or_default();
+                        let query = args.get("query").and_then(|v| v.as_str()).unwrap_or("Describe estas imágenes.");
+                        if image_paths.is_empty() {
+                            json!({"error": "Se requiere al menos una imagen"}).to_string()
+                        } else {
+                            let api_key = openrouter_key;
+                            let mut content_parts: Vec<serde_json::Value> = Vec::new();
+                            content_parts.push(json!({"type": "text", "text": query}));
+                            let mut errors: Vec<String> = Vec::new();
+                            let mut processed = 0usize;
+                            for path_str in &image_paths {
+                                let path = std::path::Path::new(path_str);
+                                if !path.exists() { errors.push(format!("No encontrado: {}", path_str)); continue; }
+                                match fs::read(path) {
+                                    Ok(bytes) => {
+                                        if bytes.len() > 4_500_000 { errors.push(format!(">4.5MB: {}", path_str)); continue; }
+                                        let mime = match path.extension().and_then(|e| e.to_str()) {
+                                            Some("jpg")|Some("jpeg") => "image/jpeg",
+                                            Some("png") => "image/png",
+                                            Some("gif") => "image/gif",
+                                            Some("webp") => "image/webp",
+                                            Some("bmp") => "image/bmp",
+                                            _ => "image/png",
+                                        };
+                                        let b64 = general_purpose::STANDARD.encode(&bytes);
+                                        content_parts.push(json!({"type": "image_url", "image_url": {"url": format!("data:{};base64,{}", mime, b64)}}));
+                                        processed += 1;
+                                    }
+                                    Err(e) => errors.push(format!("Error {}: {}", path_str, e)),
+                                }
+                            }
+                            if processed == 0 {
+                                json!({"error": format!("No procesadas: {}", errors.join("; "))}).to_string()
+                            } else {
+                                let mut result_text = String::new();
+                                if !errors.is_empty() { result_text.push_str(&format!("⚠️ {} errores: {}\n\n", errors.len(), errors.join("; "))); }
+                                let body = json!({"model": "qwen/qwen2.5-vl-72b-instruct", "messages": [{"role": "user", "content": content_parts}]});
+                                match reqwest::blocking::Client::new()
+                                    .post("https://openrouter.ai/api/v1/chat/completions")
+                                    .header("Authorization", format!("Bearer {}", api_key))
+                                    .header("Content-Type", "application/json")
+                                    .header("HTTP-Referer", "https://github.com/iaf")
+                                    .json(&body).timeout(std::time::Duration::from_secs(120)).send()
+                                {
+                                    Ok(resp) if resp.status().is_success() => {
+                                        match resp.json::<serde_json::Value>() {
+                                            Ok(j) => {
+                                                let c = j["choices"][0]["message"]["content"].as_str().unwrap_or("(Sin respuesta)");
+                                                result_text.push_str(&format!("📷 Análisis de {} imagen(es):\n\n{}", processed, c));
+                                            }
+                                            Err(e) => result_text.push_str(&format!("❌ Error parseando: {}", e)),
+                                        }
+                                    }
+                                    Ok(resp) => { result_text.push_str(&format!("❌ OpenRouter error {}: {}", resp.status(), resp.text().unwrap_or_default())); }
+                                    Err(e) => result_text.push_str(&format!("❌ Error de red: {}", e)),
+                                }
+                                result_text
                             }
                         }
                     }
