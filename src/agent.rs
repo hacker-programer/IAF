@@ -21,7 +21,6 @@ pub async fn run_agent_loop(
     session_id: Option<String>,
 ) -> Result<String, Box<dyn Error + Send + Sync>> {
     let global_prompt = {
-    let global_prompt = {
         let prompts = state.prompts.lock().unwrap();
         prompts.global_current.clone()
     };
