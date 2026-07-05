@@ -56,6 +56,15 @@ pub struct ActiveAgentStatus {
     pub current_session_id: Option<String>,
 }
 
+#[derive(Clone, Serialize, Deserialize)]
+pub struct ContextEntry {
+    pub id: String,
+    pub entry_type: String,      // "file_read", "command_exec", "file_write"
+    pub summary: String,         // Resumen corto (1-2 líneas)
+    pub full_content: String,    // Contenido completo
+    pub created_at: u64,         // Timestamp Unix
+}
+
 #[derive(Clone)]
 pub struct AppState {
     pub config_path: PathBuf,
@@ -65,15 +74,10 @@ pub struct AppState {
     pub pending_captcha: Arc<Mutex<Option<CaptchaRequest>>>,
     pub active_agent: Arc<Mutex<ActiveAgentStatus>>,
     pub abort_handle: Arc<Mutex<Option<tokio::task::AbortHandle>>>,
-    pub desktop: Arc<Mutex<DesktopController>>, // nuevo controlador de escritorio
-    pub image_store: Arc<Mutex<HashMap<String, String>>>, // uuid -> ruta absoluta de imagen
+    pub desktop: Arc<Mutex<DesktopController>>,
+    pub image_store: Arc<Mutex<HashMap<String, String>>>,
+    pub context_store: Arc<Mutex<HashMap<String, ContextEntry>>>,
 }
-
-#[derive(Clone, Serialize, Deserialize)]
-pub struct CaptchaRequest {
-    pub id: String,
-    pub url: String,
-    pub solved_content: Option<String>,
 }
 
 
