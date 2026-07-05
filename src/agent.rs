@@ -1256,12 +1256,13 @@ pub async fn run_agent_loop(
                 } else {
                     tool_result.clone()
                 };
+
+                tool_responses.push(json!({
                     "role": "tool",
                     "tool_call_id": call_id,
                     "content": display_result
                 }));
             }
-
             for tr in tool_responses {
                 messages.push(tr);
             }
