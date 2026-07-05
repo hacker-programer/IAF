@@ -1247,9 +1247,7 @@ pub async fn run_agent_loop(
                         }
                     _ => "Herramienta desconocida".to_string(),
                 };
-
                 let display_result = if tool_result.len() > 25000 {
-                    format!(
                     format!(
                         "{}... [TRUNCADO POR EL SISTEMA. El resultado es demasiado grande ({} caracteres). Para leer archivos, utiliza parámetros start_line y end_line en 'read_file'. Para comandos de PowerShell, filtra la salida usando select, grep o head/tail.]",
                         safe_truncate(&tool_result, 20000),
@@ -1258,8 +1256,6 @@ pub async fn run_agent_loop(
                 } else {
                     tool_result.clone()
                 };
-
-                tool_responses.push(json!({
                     "role": "tool",
                     "tool_call_id": call_id,
                     "content": display_result
