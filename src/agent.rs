@@ -294,7 +294,7 @@ pub async fn run_agent_loop(
                 }
             }
         }),
-        json!({
+        }),
         json!({
             "type": "function",
             "function": {
@@ -352,7 +352,6 @@ pub async fn run_agent_loop(
     ];
 
     let client = reqwest::Client::builder()
-        .build()?;
     let mut iteration = {
         let status = state.active_agent.lock().unwrap();
         status.steps.iter().filter(|s| s.step_type == "thinking").count()
