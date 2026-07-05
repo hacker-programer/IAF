@@ -1249,8 +1249,7 @@ pub async fn run_agent_loop(
                 };
 
                 let display_result = if tool_result.len() > 25000 {
-
-                let display_result = if tool_result.len() > 25000 {
+                    format!(
                     format!(
                         "{}... [TRUNCADO POR EL SISTEMA. El resultado es demasiado grande ({} caracteres). Para leer archivos, utiliza parámetros start_line y end_line en 'read_file'. Para comandos de PowerShell, filtra la salida usando select, grep o head/tail.]",
                         safe_truncate(&tool_result, 20000),
