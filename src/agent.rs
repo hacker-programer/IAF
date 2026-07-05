@@ -1172,9 +1172,10 @@ pub async fn run_agent_loop(
                             if removed > 0 {
                                 json!({
                                     "message": format!("Imagen '{}' eliminada del contexto. Ya no consumirá tokens en las siguientes iteraciones.", id)
-                                }).to_string()
-                            } else {
+                            if removed > 0 {
                                 json!({
+                                    "message": format!("Imagen '{}' eliminada del contexto. Ya no consumirá tokens en las siguientes iteraciones.", id)
+                                }).to_string()
                             } else {
                                 json!({
                                     "message": format!("No se encontró la imagen '{}' en el contexto activo. Es posible que ya haya sido liberada o comprimida.", id)
@@ -1183,13 +1184,12 @@ pub async fn run_agent_loop(
                         }
                     }
                     "git_resolve_divergence" => {
+                        let action = args["action"].as_str().unwrap_or("");
+                        let proj_path = if let Some(ref proj_name) = project_name {
                             get_project_path(&state, proj_name)
                         } else {
                             return json!({"error": "No hay proyecto activo"}).to_string();
                         };
-                        if action.is_empty() {
-                            json!({"error": "Se requiere el parámetro 'action' (keep_local, keep_remote o merge_both)"}).to_string()
-                        } else {
                             match action {
                                 "keep_local" => {
                                     match Command::new("git")
