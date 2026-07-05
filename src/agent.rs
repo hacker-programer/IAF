@@ -1128,11 +1128,10 @@ pub async fn run_agent_loop(
                             // Buscar y eliminar del array messages cualquier mensaje que contenga esta imagen
                             let marker = format!("(id: {})", id);
                             let before_len = messages.len();
-                            messages.retain(|msg| {
-                                // Si el content es un array (mensaje multimodal), buscar el marcador en las partes de texto
+                            let marker = format!("(id: {})", id);
+                            let before_len = messages.len();
                             messages.retain(|msg| {
                                 // Nuevo formato: content string (texto plano de image_view)
-                                if let Some(text) = msg["content"].as_str() {
                                     if text.contains(&marker) { return false; }
                                 }
                                 // Formato antiguo: content array (multimodal con image_url)
