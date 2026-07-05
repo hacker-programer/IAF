@@ -1249,8 +1249,6 @@ pub async fn run_agent_loop(
                 };
 
                 let display_result = if tool_result.len() > 25000 {
-                    save_chat_steps_to_disk(&state, &session_id, &status.steps);
-                }
 
                 let display_result = if tool_result.len() > 25000 {
                     format!(
