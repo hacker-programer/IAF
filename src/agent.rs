@@ -1187,9 +1187,9 @@ pub async fn run_agent_loop(
                         } else {
                             return json!({"error": "No hay proyecto activo"}).to_string();
                         };
+                        };
                         match action {
-                            match action {
-                                "keep_local" => {
+                            "keep_local" => {
                                     match Command::new("git")
                                         .args(&["push", "origin", "master", "--force"])
                                         .current_dir(&proj_path)
