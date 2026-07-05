@@ -1094,7 +1094,7 @@ pub async fn run_agent_loop(
                         let proj_path = if let Some(ref proj_name) = project_name {
                             get_project_path(&state, proj_name)
                         } else {
-                            return json!({"error": "No hay proyecto activo"}).to_string();
+                            return Ok(json!({"error": "No hay proyecto activo"}).to_string());
                         };
                         if action.is_empty() {
                             json!({"error": "Se requiere 'action': keep_local, keep_remote o merge_both"}).to_string()
