@@ -1277,12 +1277,10 @@ pub async fn run_agent_loop(
                             }
                         }
                     }
-                    _ => "Herramienta desconocida".to_string(),
-                };
-                    }
-                    _ => "Herramienta desconocida".to_string(),
                 };
 
+                {
+                    let mut status
                 {
                     let mut status = state.active_agent.lock().unwrap();
                     status.steps.push(crate::state::AuditStep {
