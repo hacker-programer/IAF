@@ -23,10 +23,10 @@ pub async fn perform_search(
             let mut cap = pending_captcha.lock().unwrap();
             *cap = Some(CaptchaRequest {
                 id: id.clone(),
+                sitekey: String::new(),
                 url: url.clone(),
                 solved_content: None,
             });
-        }
 
         // Wait up to 60 seconds for user to solve captcha in browser
         for _ in 0..120 {
