@@ -1090,21 +1090,17 @@ pub async fn run_agent_loop(
                     }
                     "image_release" => {
                         let id = args["id"].as_str().unwrap_or("");
-                    "image_release" => {
-                        let id = args["id"].as_str().unwrap_or("");
                         if id.is_empty() {
                             json!({"error": "No se proporcionó ID de imagen"}).to_string()
                         } else {
                             let marker = format!("(id: {})", id);
                             let before_len = messages.len();
                             messages.retain(|msg| {
-                                // Nuevo formato: content es string (texto plano con descripción)
                                 if let Some(text) = msg["content"].as_str() {
                                     if text.contains(&marker) {
                                         return false;
                                     }
                                 }
-                                // Formato antiguo: content es array (multimodal con image_url)
                                 if let Some(content_arr) = msg["content"].as_array() {
                                     for part in content_arr {
                                         if let Some(text) = part["text"].as_str() {
@@ -1118,11 +1114,13 @@ pub async fn run_agent_loop(
                             });
                             let removed = before_len - messages.len();
                             if removed > 0 {
-                                json!({
-                                    "message": format!("Imagen '{}' eliminada del contexto. Ya no consumirá tokens.", id)
-                                }).to_string()
+                                json!({"message": format!("Imagen '{}' eliminada del contexto.", id)}).to_string()
                             } else {
-                                json!({
+                                json!({"message": format!("Imagen '{}' no encontrada en contexto.", id)}).to_string()
+                            }
+                        }
+                    }
+                    "git_resolve_divergence" => {
                                     "message": format!("No se encontró la imagen '{}' en el contexto activo.", id)
                                 }).to_string()
                             }
