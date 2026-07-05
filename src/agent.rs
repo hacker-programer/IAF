@@ -658,8 +658,6 @@ pub async fn run_agent_loop(
 
                                 return Ok(divergence_info);
                             }
-
-                            let pull_success
                             let pull_success = status_pull.as_ref().map(|s| s.success()).unwrap_or(false);
                             if !pull_success {
                                 play_error_beep();
