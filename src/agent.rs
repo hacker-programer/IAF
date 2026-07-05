@@ -1010,6 +1010,9 @@ pub async fn run_agent_loop(
                     "image_view" => {
                         let id = args["id"].as_str().unwrap_or("");
                         if id.is_empty() {
+                    "image_view" => {
+                        let id = args["id"].as_str().unwrap_or("");
+                        if id.is_empty() {
                             json!({"error": "No se proporcionó ID de imagen"}).to_string()
                         } else {
                             let path_opt = {
@@ -1022,29 +1025,59 @@ pub async fn run_agent_loop(
                                         Ok(bytes) => {
                                             // Codificar en Base64
                                             let b64 = general_purpose::STANDARD.encode(&bytes);
-                                            // Determinar tipo MIME por extensión
                                             let mime_type = mime_guess::from_path(&img_path)
                                                 .first_or_octet_stream()
                                                 .to_string();
                                             let data_url = format!("data:{};base64,{}", mime_type, b64);
-                                            // Inyectar mensaje multimodal en el array messages
+
+                                            // Llamar a Qwen2.5-VL para describir la imagen (DeepSeek no soporta vision)
+                                            let api_key = openrouter_key;
+                                            let body = json!({
+                                                "model": "qwen/qwen2.5-vl-72b-instruct",
+                                                "messages": [{
+                                                    "role": "user",
+                                                    "content": [
+                                                        {"type": "text", "text": "Describe detalladamente esta imagen. Incluye todos los elementos visuales relevantes, colores, composición, estilo y cualquier texto visible."},
+                                                        {"type": "image_url", "image_url": {"url": data_url}}
+                                                    ]
+                                                }]
+                                            });
+
+                                            let description = match reqwest::blocking::Client::new()
+                                                .post("https://openrouter.ai/api/v1/chat/completions")
+                                                .header("Authorization", format!("Bearer {}", api_key))
+                                                .header("Content-Type", "application/json")
+                                                .header("HTTP-Referer", "https://github.com/iaf")
+                                                .header("X-Title", "IAF Image View")
+                                                .json(&body)
+                                                .timeout(std::time::Duration::from_secs(120))
+                                                .send()
+                                            {
+                                                Ok(resp) if resp.status().is_success() => {
+                                                    match resp.json::<serde_json::Value>() {
+                                                        Ok(json_resp) => {
+                                                            json_resp["choices"][0]["message"]["content"]
+                                                                .as_str()
+                                                                .unwrap_or("(Sin respuesta)")
+                                                                .to_string()
+                                                        }
+                                                        Err(_) => "(Error al parsear respuesta del modelo de visión)".to_string()
+                                                    }
+                                                }
+                                                _ => "(No se pudo obtener descripción de la imagen)".to_string()
+                                            };
+
+                                            // Inyectar SOLO la descripción textual en el historial de DeepSeek (no la imagen)
                                             messages.push(json!({
                                                 "role": "user",
-                                                "content": [
-                                                    {
-                                                        "type": "text",
-                                                        "text": format!("[Sistema] Imagen inyectada en contexto (id: {}). Cuando ya no la necesites, llama a image_release con este id para ahorrar tokens.", id)
-                                                    },
-                                                    {
-                                                        "type": "image_url",
-                                                        "image_url": {
-                                                            "url": data_url
-                                                        }
-                                                    }
-                                                ]
+                                                "content": format!(
+                                                    "[Sistema] Imagen inyectada en contexto (id: {}). Descripción obtenida con Qwen2.5-VL:\n\n{}\n\nCuando ya no necesites esta imagen, llama a image_release con este id para ahorrar tokens.",
+                                                    id, description
+                                                )
                                             }));
+
                                             json!({
-                                                "message": format!("Imagen '{}' inyectada en el contexto. La verás en tu próxima respuesta. Recuerda llamar image_release('{}') cuando ya no la necesites.", id, id)
+                                                "message": format!("Imagen '{}' analizada e inyectada en el contexto (solo texto, sin imagen). Recuerda llamar image_release('{}') cuando ya no la necesites.", id, id)
                                             }).to_string()
                                         }
                                         Err(e) => json!({"error": format!("Error leyendo archivo de imagen: {}", e)}).to_string(),
@@ -1053,6 +1086,7 @@ pub async fn run_agent_loop(
                                 None => json!({"error": format!("No se encontró imagen con id '{}'", id)}).to_string(),
                             }
                         }
+                    }
                     }
                     "image_release" => {
                         let id = args["id"].as_str().unwrap_or("");
