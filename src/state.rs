@@ -59,16 +59,13 @@ pub struct ActiveAgentStatus {
 #[derive(Clone, Serialize, Deserialize)]
 pub struct ContextEntry {
     pub id: String,
-    pub entry_type: String,      // "file_read", "command_exec", "file_write"
-    pub summary: String,         // Resumen corto (1-2 líneas)
-    pub full_content: String,    // Contenido completo
-    pub created_at: u64,         // Timestamp Unix
+    pub entry_type: String,
+    pub summary: String,
+    pub full_content: String,
+    pub created_at: u64,
 }
 
-#[derive(Clone)]
-pub struct AppState {
-    pub config_path: PathBuf,
-    pub prompts: Arc<Mutex<PromptConfig>>,
+#[derive(Clone, Serialize, Deserialize)]
 pub struct CaptchaRequest {
     pub sitekey: String,
     pub url: String,
