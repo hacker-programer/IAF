@@ -37,12 +37,9 @@ fn voyage_key() -> &'static str {
     KEY.get_or_init(|| std::env::var("VOYAGE_API_KEY").expect("VOYAGE_API_KEY no configurada"))
 }
 
-fn openrouter_key() -> &'static str {
-    static KEY: OnceLock<String> = OnceLock::new();
-    KEY.get_or_init(|| std::env::var("OPENROUTER_API_KEY").expect("OPENROUTER_API_KEY no configurada"))
-}
-
-const DEFAULT_GLOBAL_SYSTEM_PROMPT: &str = "
+const DEFAULT_GLOBAL_SYSTEM_PROMPT: &str = "Eres un asistente de desarrollo autónomo inteligente (DeepSeek V4 Pro) enfocado en resolver problemas en repositorios de software.
+Tienes acceso a buscar en Google, ejecutar comandos de PowerShell, buscar código semánticamente, leer y modificar archivos haciendo commit en GitHub.
+Cuando modifiques un archivo, SIEMPRE debes hacerlo a través de write_file_with_commit para subir los cambios a GitHub.
 Para dar por terminada la tarea de forma definitiva y cerrar tu ejecución, debes obligatoriamente llamar a la herramienta `finalizar_tarea`. No basta con responder textualmente que has terminado; la única forma de concluir el proceso es ejecutando dicha herramienta.
 
 Antes de realizar cualquier acción o responder al usuario, DEBES realizar obligatoriamente un proceso de análisis y razonamiento profundo y estructurado dentro de las etiquetas <thinking>. Tu cadena de pensamiento no puede ser superficial y debe deconstruir el problema, evaluar opciones, justificar decisiones y anticipar problemas técnicos.
@@ -765,15 +762,15 @@ async fn chat_endpoint(State(state): State<AppState>, Json(payload): Json<ChatIn
             session_messages_clone,
             project_name_clone,
             state_clone.clone(),
-        let agent_task = tokio::spawn(run_agent_loop(
-            session_messages_clone,
-            project_name_clone,
-            state_clone.clone(),
             deepseek_key(),
             voyage_key(),
-            openrouter_key(),
             Some(session_id_clone.clone()),
         ));
+
+        let run_result = match agent_task.await {
+            Ok(Ok(reply)) => Ok(reply),
+            Ok(Err(e)) => Err(format!("Error de ejecución: {}", e)),
+            Err(join_err) => {
                 if join_err.is_panic() {
                     // Obtener el payload del pánico
                     let panic_any = join_err.into_panic();
@@ -965,6 +962,9 @@ async fn main() {
             if let Ok(parsed) = serde_json::from_str::<Vec<Project>>(&content) {
                 initial_projects = parsed;
             }
+        }
+    }
+
     let state = AppState {
         config_path,
         prompts: Arc::new(Mutex::new(prompts)),
@@ -974,9 +974,6 @@ async fn main() {
         active_agent: Arc::new(Mutex::new(ActiveAgentStatus::default())),
         abort_handle: Arc::new(Mutex::new(None)),
         desktop: Arc::new(Mutex::new(DesktopController::new())),
-        image_store: Arc::new(Mutex::new(HashMap::new())),
-        context_store: Arc::new(Mutex::new(HashMap::new())),
-    };
         image_store: Arc::new(Mutex::new(HashMap::new())),
     };
 

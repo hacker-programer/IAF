@@ -41,8 +41,7 @@ pub struct AuditStep {
     pub detail: String,
     pub timestamp: u64,
 }
-#[derive(Clone, Default, Serialize, Deserialize)]
-pub struct ActiveAgentStatus {
+
 #[derive(Clone, Default, Serialize, Deserialize)]
 pub struct ActiveAgentStatus {
     pub running: bool,
@@ -56,17 +55,6 @@ pub struct ActiveAgentStatus {
     pub steps: Vec<AuditStep>,
     pub current_session_id: Option<String>,
 }
-    pub entry_type: String,
-    pub summary: String,
-    pub full_content: String,
-    pub created_at: u64,
-}
-
-#[derive(Clone, Serialize, Deserialize)]
-pub struct CaptchaRequest {
-    pub sitekey: String,
-    pub url: String,
-}
 
 #[derive(Clone)]
 pub struct AppState {
@@ -77,7 +65,19 @@ pub struct AppState {
     pub pending_captcha: Arc<Mutex<Option<CaptchaRequest>>>,
     pub active_agent: Arc<Mutex<ActiveAgentStatus>>,
     pub abort_handle: Arc<Mutex<Option<tokio::task::AbortHandle>>>,
-    pub desktop: Arc<Mutex<DesktopController>>,
-    pub image_store: Arc<Mutex<HashMap<String, String>>>,
-    pub context_store: Arc<Mutex<HashMap<String, ContextEntry>>>,
+    pub desktop: Arc<Mutex<DesktopController>>, // nuevo controlador de escritorio
+    pub image_store: Arc<Mutex<HashMap<String, String>>>, // uuid -> ruta absoluta de imagen
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+pub struct CaptchaRequest {
+    pub id: String,
+    pub url: String,
+    pub solved_content: Option<String>,
+}
+
+
+pub fn log_info(message: &str) {
+    // Simple logger with timestamp
+    println!("[{}] INFO: {}", chrono::Utc::now().to_rfc3339(), message);
 }
