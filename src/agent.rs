@@ -713,9 +713,10 @@ pub async fn run_agent_loop(
                                     .stderr(std::process::Stdio::null())
                                     .env("GIT_TERMINAL_PROMPT", "0")
                                     .status();
-                            }
+                                    .status();
                             }
 
+                            let pull_success = status_pull.as_ref().map(|s| s.success()).unwrap_or(false);
                             let pull_success = status_pull.as_ref().map(|s| s.success()).unwrap_or(false);
                             if !pull_success {
                                 play_error_beep();
