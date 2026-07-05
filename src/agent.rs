@@ -305,7 +305,6 @@ pub async fn run_agent_loop(
                         "id": { "type": "string", "description": "UUID de la imagen a liberar del contexto" }
                     },
                     "required": ["id"]
-                    "required": ["id"]
                 }
             }
         }),
