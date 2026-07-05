@@ -387,39 +387,6 @@ pub async fn run_agent_loop(
             }
         })
     ];
-                    "type": "object",
-                    "properties": {
-                        "action": {
-                            "type": "string",
-                            "enum": ["keep_local", "keep_remote", "merge_both"]
-                        }
-                    },
-                    "required": ["action"]
-                }
-            }
-        }),
-        json!({
-            "type": "function",
-            "function": {
-                "name": "analyze_images",
-                "description": "Analiza imágenes locales con modelo multimodal Qwen2.5-VL vía OpenRouter. Para comparar estilos visuales, detectar objetos, etc.",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "image_paths": {
-                            "type": "array",
-                            "items": { "type": "string" },
-                            "description": "Rutas de archivos de imagen locales"
-                        },
-                        "query": {
-                            "type": "string",
-                            "description": "Pregunta sobre las imágenes"
-                        }
-                    },
-                    "required": ["image_paths", "query"]
-                }
-            }
-        })
     ];
 
     let client = reqwest::Client::builder()
