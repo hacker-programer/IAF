@@ -1062,36 +1062,62 @@ pub async fn run_agent_loop(
                                 Some(img_path) => {
                                     match fs::read(&img_path) {
                                         Ok(bytes) => {
-                                            // Codificar en Base64
                                             let b64 = general_purpose::STANDARD.encode(&bytes);
-                                            // Determinar tipo MIME por extensión
                                             let mime_type = mime_guess::from_path(&img_path)
                                                 .first_or_octet_stream()
                                                 .to_string();
                                             let data_url = format!("data:{};base64,{}", mime_type, b64);
-                                            // Inyectar mensaje multimodal en el array messages
+
+                                            // Llamar a Qwen2.5-VL para describir la imagen (DeepSeek no soporta vision)
+                                            let api_key = openrouter_key;
+                                            let body = json!({
+                                                "model": "qwen/qwen2.5-vl-72b-instruct",
+                                                "messages": [{
+                                                    "role": "user",
+                                                    "content": [
+                                                        {"type": "text", "text": "Describe detalladamente esta imagen. Incluye todos los elementos visuales relevantes, colores, composición, estilo y cualquier texto visible."},
+                                                        {"type": "image_url", "image_url": {"url": data_url}}
+                                                    ]
+                                                }]
+                                            });
+
+                                            let description = match reqwest::blocking::Client::new()
+                                                .post("https://openrouter.ai/api/v1/chat/completions")
+                                                .header("Authorization", format!("Bearer {}", api_key))
+                                                .header("Content-Type", "application/json")
+                                                .header("HTTP-Referer", "https://github.com/iaf")
+                                                .header("X-Title", "IAF Image View")
+                                                .json(&body)
+                                                .timeout(std::time::Duration::from_secs(120))
+                                                .send()
+                                            {
+                                                Ok(resp) if resp.status().is_success() => {
+                                                    match resp.json::<serde_json::Value>() {
+                                                        Ok(json_resp) => {
+                                                            json_resp["choices"][0]["message"]["content"]
+                                                                .as_str()
+                                                                .unwrap_or("(Sin respuesta)")
+                                                                .to_string()
+                                                        }
+                                                        Err(_) => "(Error al parsear respuesta)".to_string()
+                                                    }
+                                                }
+                                                _ => "(No se pudo obtener descripción)".to_string()
+                                            };
+
+                                            // Inyectar SOLO texto en el historial de DeepSeek (no la imagen)
                                             messages.push(json!({
                                                 "role": "user",
-                                                "content": [
-                                                    {
-                                                        "type": "text",
-                                                        "text": format!("[Sistema] Imagen inyectada en contexto (id: {}). Cuando ya no la necesites, llama a image_release con este id para ahorrar tokens.", id)
-                                                    },
-                                                    {
-                                                        "type": "image_url",
-                                                        "image_url": {
-                                                            "url": data_url
-                                                        }
-                                                    }
-                                                ]
+                                                "content": format!(
+                                                    "[Sistema] Imagen inyectada (id: {}). Descripción con Qwen2.5-VL:\n\n{}\n\nUsa image_release('{}') cuando ya no la necesites.",
+                                                    id, description, id
+                                                )
                                             }));
+
                                             json!({
-                                                "message": format!("Imagen '{}' inyectada en el contexto. La verás en tu próxima respuesta. Recuerda llamar image_release('{}') cuando ya no la necesites.", id, id)
+                                                "message": format!("Imagen '{}' analizada e inyectada (solo texto). Usa image_release('{}') para liberarla.", id, id)
                                             }).to_string()
                                         }
-                                        Err(e) => json!({"error": format!("Error leyendo archivo de imagen: {}", e)}).to_string(),
-                                    }
-                                }
                                 None => json!({"error": format!("No se encontró imagen con id '{}'", id)}).to_string(),
                             }
                         }
