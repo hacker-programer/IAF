@@ -1339,7 +1339,6 @@ pub async fn run_agent_loop(
                         }
                     }
                     _ => "Herramienta desconocida".to_string(),
-                    }
                     _ => "Herramienta desconocida".to_string(),
                 };
 
