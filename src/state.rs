@@ -44,8 +44,6 @@ pub struct AuditStep {
 #[derive(Clone, Default, Serialize, Deserialize)]
 pub struct ActiveAgentStatus {
     pub running: bool,
-    pub running: bool,
-    pub interrupted: bool,
     pub interrupted: bool,
     pub esperando_respuesta_usuario: bool,
     pub pregunta_usuario: Option<String>,
@@ -65,6 +63,12 @@ pub struct ContextEntry {
     pub created_at: u64,
 }
 
+#[derive(Clone, Serialize, Deserialize)]
+pub struct CaptchaRequest {
+    pub sitekey: String,
+    pub url: String,
+}
+
 #[derive(Clone)]
 pub struct AppState {
     pub config_path: PathBuf,
@@ -76,5 +80,5 @@ pub struct AppState {
     pub abort_handle: Arc<Mutex<Option<tokio::task::AbortHandle>>>,
     pub desktop: Arc<Mutex<DesktopController>>,
     pub image_store: Arc<Mutex<HashMap<String, String>>>,
-    pub context_store: Arc<Mutex<HashMap<String, ContextEntry>>>,  // ID -> contenido para gestion de contexto
+    pub context_store: Arc<Mutex<HashMap<String, ContextEntry>>>,
 }
