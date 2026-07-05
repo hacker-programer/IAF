@@ -292,8 +292,6 @@ pub async fn run_agent_loop(
                     },
                     "required": ["id"]
                 }
-            }
-        }),
         json!({
             "type": "function",
             "function": {
@@ -306,12 +304,11 @@ pub async fn run_agent_loop(
                     },
                     "required": ["id"]
                 }
-                    "required": ["id"]
-                }
             }
         }),
         json!({
-                "name": "git_resolve_divergence",
+            "type": "function",
+            "function": {
                 "name": "git_resolve_divergence",
                 "description": "Resuelve una divergencia entre repositorio local y remoto. Usa 'keep_local' para sobrescribir remoto con local (push --force), 'keep_remote' para descartar local y usar remoto (reset --hard), 'merge_both' para fusionar ambos (pull --rebase --autostash).",
                 "parameters": {
@@ -349,6 +346,7 @@ pub async fn run_agent_loop(
                 }
             }
         })
+    ];
     ];
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(600))
