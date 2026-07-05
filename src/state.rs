@@ -69,6 +69,15 @@ pub struct ContextEntry {
 pub struct AppState {
     pub config_path: PathBuf,
     pub prompts: Arc<Mutex<PromptConfig>>,
+pub struct CaptchaRequest {
+    pub sitekey: String,
+    pub url: String,
+}
+
+#[derive(Clone)]
+pub struct AppState {
+    pub config_path: PathBuf,
+    pub prompts: Arc<Mutex<PromptConfig>>,
     pub projects: Arc<Mutex<Vec<Project>>>,
     pub base_workspace: PathBuf,
     pub pending_captcha: Arc<Mutex<Option<CaptchaRequest>>>,
@@ -77,11 +86,4 @@ pub struct AppState {
     pub desktop: Arc<Mutex<DesktopController>>,
     pub image_store: Arc<Mutex<HashMap<String, String>>>,
     pub context_store: Arc<Mutex<HashMap<String, ContextEntry>>>,
-    pub context_store: Arc<Mutex<HashMap<String, ContextEntry>>>,
-}
-
-
-pub fn log_info(message: &str) {
-    // Simple logger with timestamp
-    println!("[{}] INFO: {}", chrono::Utc::now().to_rfc3339(), message);
 }
