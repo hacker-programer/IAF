@@ -768,9 +768,9 @@ async fn chat_endpoint(State(state): State<AppState>, Json(payload): Json<ChatIn
             state_clone.clone(),
             deepseek_key(),
             voyage_key(),
+            openrouter_key(),
             Some(session_id_clone.clone()),
         ));
-
         let run_result = match agent_task.await {
             Ok(Ok(reply)) => Ok(reply),
             Ok(Err(e)) => Err(format!("Error de ejecución: {}", e)),
