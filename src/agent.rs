@@ -1121,6 +1121,7 @@ pub async fn run_agent_loop(
                                 }
                                 None => json!({"error": format!("No se encontró imagen con id '{}'", id)}).to_string(),
                             }
+                        }
                     }
                     "image_release" => {
                         let id = args["id"].as_str().unwrap_or("");
