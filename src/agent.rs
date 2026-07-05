@@ -306,89 +306,9 @@ pub async fn run_agent_loop(
                     "required": ["id"]
                 }
             }
-        }),
-        json!({
-            "type": "function",
-            "function": {
-                "name": "git_resolve_divergence",
-                "description": "Resuelve divergencia entre local y remoto. keep_local: push --force. keep_remote: reset --hard. merge_both: pull --rebase.",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "action": {
-                            "type": "string",
-                            "enum": ["keep_local", "keep_remote", "merge_both"]
-                        }
-                    },
-                    "required": ["action"]
-                }
-            }
-        }),
-        json!({
-            "type": "function",
-            "function": {
-                "name": "analyze_images",
-                "description": "Analiza imágenes locales con modelo multimodal Qwen2.5-VL vía OpenRouter. Para comparar estilos visuales, detectar objetos, etc.",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "image_paths": {
-                            "type": "array",
-                            "items": { "type": "string" },
-                            "description": "Rutas de archivos de imagen locales"
-                        },
-                        "query": {
-                            "type": "string",
-                            "description": "Pregunta sobre las imágenes"
-                        }
-                    },
-                    "required": ["image_paths", "query"]
-                }
-            }
-        })
-    ];
-        json!({
-            "type": "function",
-            "function": {
-                "name": "git_resolve_divergence",
-                "description": "Resuelve divergencia entre local y remoto. keep_local: push --force. keep_remote: reset --hard. merge_both: pull --rebase.",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "action": {
-                            "type": "string",
-                            "enum": ["keep_local", "keep_remote", "merge_both"]
-                        }
-                    },
-                    "required": ["action"]
-                }
-            }
-        }),
-        json!({
-            "type": "function",
-            "function": {
-                "name": "analyze_images",
-                "description": "Analiza imágenes locales con modelo multimodal Qwen2.5-VL vía OpenRouter. Para comparar estilos visuales, detectar objetos, etc.",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "image_paths": {
-                            "type": "array",
-                            "items": { "type": "string" },
-                            "description": "Rutas de archivos de imagen locales"
-                        },
-                        "query": {
-                            "type": "string",
-                            "description": "Pregunta sobre las imágenes"
-                        }
-                    },
-                    "required": ["image_paths", "query"]
-                }
-            }
         })
     ];
 
-    let client = reqwest::Client::builder()
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(600))
         .tcp_keepalive(std::time::Duration::from_secs(30))
@@ -618,92 +538,6 @@ pub async fn run_agent_loop(
                             let proj_path = get_project_path(&state, proj_name);
                             let full_path = Path::new(&proj_path).join(rel_path);
 
-                            // --- PASO 0 (CRÍTICO): Verificar que el repositorio tenga un remote "origin" configurado ---
-                            // Si no existe, intentar crearlo. Si falla, NO ejecutar operaciones destructivas.
-                            let remote_check = Command::new("git")
-                                .args(&["remote", "get-url", "origin"])
-                                .current_dir(&proj_path)
-                                .stdout(std::process::Stdio::piped())
-                                .stderr(std::process::Stdio::null())
-                                .output();
-
-                            let remote_exists = remote_check.as_ref().map(|o| o.status.success()).unwrap_or(false);
-
-                            if !remote_exists {
-                                println!("INFO: El proyecto '{}' no tiene repositorio remoto en GitHub (no se encontró 'origin'). Intentando crearlo...", proj_name);
-                                
-                                // Intentar crear el repositorio remoto en GitHub mediante gh CLI
-                                let create_result = Command::new("gh")
-                                    .args(&["repo", "create", "--source=.", "--push", "--remote=origin", "--public", "--description=Proyecto IAF"])
-                                    .current_dir(&proj_path)
-                                    .stdin(std::process::Stdio::null())
-                                    .stdout(std::process::Stdio::piped())
-                                    .stderr(std::process::Stdio::piped())
-                                    .output();
-
-                                match create_result {
-                                    Ok(ref out) if out.status.success() => {
-                                        println!("INFO: Repositorio remoto creado y vinculado exitosamente en GitHub para '{}'.", proj_name);
-                                    }
-                                    _ => {
-                                        // No se pudo crear el remoto. FALLAR DE FORMA SEGURA sin tocar archivos locales.
-                                        let stderr_str = create_result.as_ref()
-                                            .ok()
-                                            .map(|o| String::from_utf8_lossy(&o.stderr).to_string())
-                                            .unwrap_or_else(|| "gh CLI no disponible o no autenticado".to_string());
-                                        play_error_beep();
-                                        return Ok(format!(
-                                            "⛔ ERROR DE SINCRONIZACIÓN: Este proyecto NO tiene un repositorio remoto en GitHub y no se pudo crear uno automáticamente.\n\n\
-                                             Detalles técnicos: {}\n\n\
-                                             ⚠️ IMPORTANTE: NO se ha modificado ni eliminado ningún archivo local. Tu código está completamente intacto.\n\n\
-                                             Para solucionarlo manualmente, ejecuta en la terminal:\n\
-                                             1. 'gh auth login' (si gh CLI no está autenticado)\n\
-                                             2. 'gh repo create --source=. --push --remote=origin' dentro de la carpeta del proyecto\n\
-                                             3. O agrega un remote manualmente: 'git remote add origin <URL_DEL_REPO>'",
-                                            stderr_str.trim()
-                                        ));
-                                    }
-                                }
-                            }
-
-                            // Verificar que el remote origin es accesible (tiene el branch master)
-                            let remote_accessible = Command::new("git")
-                                .args(&["ls-remote", "--exit-code", "--heads", "origin", "master"])
-                                .current_dir(&proj_path)
-                                .stdin(std::process::Stdio::null())
-                                .stdout(std::process::Stdio::null())
-                                .stderr(std::process::Stdio::null())
-                                .status()
-                                .map(|s| s.success())
-                                .unwrap_or(false);
-
-                            if !remote_accessible {
-                                println!("INFO: El remote 'origin' existe pero el branch 'master' no es accesible en GitHub. Intentando push inicial...");
-                                
-                                // Intentar un push inicial para crear el branch master en el remoto
-                                let push_initial = Command::new("git")
-                                    .args(&["push", "--set-upstream", "origin", "master"])
-                                    .current_dir(&proj_path)
-                                    .stdin(std::process::Stdio::null())
-                                    .stdout(std::process::Stdio::null())
-                                    .stderr(std::process::Stdio::null())
-                                    .env("GIT_TERMINAL_PROMPT", "0")
-                                    .status();
-                                
-                                if push_initial.as_ref().map(|s| !s.success()).unwrap_or(true) {
-                                    play_error_beep();
-                                    return Ok(format!(
-                                        "⛔ ERROR DE SINCRONIZACIÓN: El repositorio remoto en GitHub existe pero no se pudo acceder al branch 'master' ni crear uno.\n\n\
-                                         ⚠️ IMPORTANTE: NO se ha modificado ni eliminado ningún archivo local.\n\n\
-                                         Verifica que:\n\
-                                         1. El repositorio remoto no esté vacío (necesita al menos un commit inicial)\n\
-                                         2. Tengas permisos de escritura en el repositorio\n\
-                                         3. El branch 'master' exista en GitHub"
-                                    ));
-                                }
-                                println!("INFO: Push inicial exitoso. Branch 'master' creado en el remoto.");
-                            }
-
                             // --- PASO 1: Sincronizar con el repositorio remoto ANTES de realizar cualquier cambio local ---
                             let mut status_pull = Command::new("git")
                                 .args(&["pull", "--rebase", "--autostash", "origin", "master"])
@@ -714,10 +548,9 @@ pub async fn run_agent_loop(
                                 .env("GIT_TERMINAL_PROMPT", "0")
                                 .status();
                             
-                            // Autocuración SEGURA en caso de que git pull falle
-                            // SOLO se ejecuta si confirmamos que el remote existe y es accesible
+                            // Autocuración en caso de que git pull falle
                             if status_pull.as_ref().map(|s| !s.success()).unwrap_or(true) {
-                                println!("Advertencia: git pull falló (repositorio posiblemente bloqueado o sucio). Iniciando autocuración segura...");
+                                println!("Advertencia: git pull falló al inicio (repositorio posiblemente bloqueado o sucio). Iniciando autocuración...");
                                 
                                 // 1. Abortar cualquier rebase/merge en curso de forma silenciosa
                                 let _ = Command::new("git")
@@ -738,7 +571,26 @@ pub async fn run_agent_loop(
                                     .env("GIT_TERMINAL_PROMPT", "0")
                                     .status();
 
-                                // 2. Forzar eliminación física de carpetas residuales y archivos lock
+                                // 2. Descartar cualquier cambio local sucio o pendiente en el working directory
+                                let _ = Command::new("git")
+                                    .args(&["reset", "--hard", "HEAD"])
+                                    .current_dir(&proj_path)
+                                    .stdin(std::process::Stdio::null())
+                                    .stdout(std::process::Stdio::null())
+                                    .stderr(std::process::Stdio::null())
+                                    .env("GIT_TERMINAL_PROMPT", "0")
+                                    .status();
+                                
+                                let _ = Command::new("git")
+                                    .args(&["clean", "-fd"])
+                                    .current_dir(&proj_path)
+                                    .stdin(std::process::Stdio::null())
+                                    .stdout(std::process::Stdio::null())
+                                    .stderr(std::process::Stdio::null())
+                                    .env("GIT_TERMINAL_PROMPT", "0")
+                                    .status();
+
+                                // 3. Forzar eliminación física de carpetas residuales y archivos lock
                                 let rebase_merge_path = std::path::Path::new(&proj_path).join(".git").join("rebase-merge");
                                 let rebase_apply_path = std::path::Path::new(&proj_path).join(".git").join("rebase-apply");
                                 let index_lock_path = std::path::Path::new(&proj_path).join(".git").join("index.lock");
@@ -752,14 +604,10 @@ pub async fn run_agent_loop(
                                     let _ = fs::remove_file(&index_lock_path);
                                 }
 
-                                // 3. Forzar push local al remoto para preservar el trabajo realizado
-                                //    En lugar de descartar cambios con reset --hard (que perdería trabajo),
-                                //    forzamos que nuestro estado local prevalezca sobre el remoto.
-                                println!("Ejecutando git push --force para preservar trabajo local...");
-
-                                // Fetch para asegurar que tenemos la referencia remota más reciente
+                                // 4. Alinear el historial local forzadamente con el repositorio remoto
+                                println!("Ejecutando git reset --hard origin/master para alinear el historial local con el remoto...");
                                 let _ = Command::new("git")
-                                    .args(&["fetch", "origin", "master"])
+                                    .args(&["reset", "--hard", "origin/master"])
                                     .current_dir(&proj_path)
                                     .stdin(std::process::Stdio::null())
                                     .stdout(std::process::Stdio::null())
@@ -767,16 +615,7 @@ pub async fn run_agent_loop(
                                     .env("GIT_TERMINAL_PROMPT", "0")
                                     .status();
 
-                                // Push forzado: el trabajo local prevalece sobre el remoto
-                                let _ = Command::new("git")
-                                    .args(&["push", "origin", "master", "--force"])
-                                    .current_dir(&proj_path)
-                                    .stdin(std::process::Stdio::null())
-                                    .stdout(std::process::Stdio::null())
-                                    .stderr(std::process::Stdio::null())
-                                    .env("GIT_TERMINAL_PROMPT", "0")
-                                    .status();
-                                // 4. Pull final para sincronizar (ahora debería ser fast-forward limpio)
+                                // 5. Reintentar pull final
                                 status_pull = Command::new("git")
                                     .args(&["pull", "--rebase", "--autostash", "origin", "master"])
                                     .current_dir(&proj_path)
@@ -790,7 +629,7 @@ pub async fn run_agent_loop(
                             let pull_success = status_pull.as_ref().map(|s| s.success()).unwrap_or(false);
                             if !pull_success {
                                 play_error_beep();
-                                return Ok(format!("Error crítico de Git: No se pudo sincronizar el repositorio con la versión remota antes de escribir. Git pull (rebase) falló definitivamente tras reintentos."));
+                                return Ok(format!("Error crítico de Git: No se pudo sincronizar el repositorio con la versión remota antes de escribir. Git pull (rebase) falló definitivamente."));
                             }
                             
                             let mut write_success = false;
@@ -1213,124 +1052,7 @@ pub async fn run_agent_loop(
                                         Err(e) => json!({"error": format!("Error leyendo archivo de imagen: {}", e)}).to_string(),
                                     }
                                 }
-                    "git_resolve_divergence" => {
-                        let action = args["action"].as_str().unwrap_or("");
-                        let proj_path = if let Some(ref proj_name) = project_name {
-                            get_project_path(&state, proj_name)
-                        } else {
-                            return "Error: no hay proyecto activo".to_string();
-                        };
-                        match action {
-                            "keep_local" => {
-                                match Command::new("git").args(&["push","origin","master","--force"]).current_dir(&proj_path).env("GIT_TERMINAL_PROMPT","0").output() {
-                                    Ok(o) if o.status.success() => format!("✅ Push forzado exitoso.\n{}", String::from_utf8_lossy(&o.stdout).trim()),
-                                    Ok(o) => format!("❌ Error push: {}", String::from_utf8_lossy(&o.stderr).trim()),
-                                    Err(e) => format!("❌ Error: {}", e),
-                                }
-                            }
-                            "keep_remote" => {
-                                match Command::new("git").args(&["reset","--hard","origin/master"]).current_dir(&proj_path).env("GIT_TERMINAL_PROMPT","0").output() {
-                                    Ok(o) if o.status.success() => format!("✅ Reset exitoso.\n{}", String::from_utf8_lossy(&o.stdout).trim()),
-                                    Ok(o) => format!("❌ Error reset: {}", String::from_utf8_lossy(&o.stderr).trim()),
-                                    Err(e) => format!("❌ Error: {}", e),
-                                }
-                            }
-                            "merge_both" => {
-                                match Command::new("git").args(&["pull","--rebase","--autostash","origin","master"]).current_dir(&proj_path).env("GIT_TERMINAL_PROMPT","0").env("GIT_MERGE_AUTOEDIT","no").output() {
-                                    Ok(o) if o.status.success() => format!("✅ Merge exitoso.\n{}", String::from_utf8_lossy(&o.stdout).trim()),
-                                    Ok(o) => {
-                                        let stderr = String::from_utf8_lossy(&o.stderr);
-                                        if stderr.contains("CONFLICT") {
-                                            let _ = Command::new("git").args(&["rebase","--abort"]).current_dir(&proj_path).env("GIT_TERMINAL_PROMPT","0").status();
-                                            format!("⚠️ Conflictos detectados. Rebase abortado.\n{}", stderr)
-                                        } else {
-                                            format!("❌ Error merge: {}", stderr)
-                                        }
-                                    }
-                                    Err(e) => format!("❌ Error: {}", e),
-                                }
-                            }
-                            _ => format!("❌ Acción desconocida: '{}'. Usa keep_local, keep_remote o merge_both.", action),
-                        }
-                    }
-                    "analyze_images" => {
-                        let image_paths: Vec<String> = args.get("image_paths")
-                            .and_then(|v| v.as_array())
-                            .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect())
-                            .unwrap_or_default();
-                        let query = args["query"].as_str().unwrap_or("Describe esta imagen.");
-                        if image_paths.is_empty() {
-                            json!({"error": "Se requiere al menos una ruta de imagen"}).to_string()
-                        } else {
-                            let api_key = std::env::var("OPENROUTER_API_KEY").unwrap_or_default();
-                            if api_key.is_empty() {
-                                json!({"error": "OPENROUTER_API_KEY no configurada"}).to_string()
-                            } else {
-                                let mut content_parts: Vec<serde_json::Value> = Vec::new();
-                                content_parts.push(json!({"type":"text","text":query}));
-                                let mut errors: Vec<String> = Vec::new();
-                                let mut processed = 0usize;
-                                for path_str in &image_paths {
-                                    let path = std::path::Path::new(path_str);
-                                    if !path.exists() {
-                                        errors.push(format!("No encontrado: {}", path_str));
-                                        continue;
-                                    }
-                                    match std::fs::read(path) {
-                                        Ok(bytes) => {
-                                            if bytes.len() > 4_500_000 {
-                                                errors.push(format!("Demasiado grande ({}B): {}", bytes.len(), path_str));
-                                                continue;
-                                            }
-                                            let mime = match path.extension().and_then(|e| e.to_str()) {
-                                                Some("jpg")|Some("jpeg") => "image/jpeg",
-                                                Some("png") => "image/png",
-                                                Some("gif") => "image/gif",
-                                                Some("webp") => "image/webp",
-                                                Some("bmp") => "image/bmp",
-                                                _ => "image/png",
-                                            };
-                                            let b64 = base64::engine::general_purpose::STANDARD.encode(&bytes);
-                                            content_parts.push(json!({"type":"image_url","image_url":{"url":format!("data:{};base64,{}",mime,b64)}}));
-                                            processed += 1;
-                                        }
-                                        Err(e) => { errors.push(format!("Error leyendo {}: {}", path_str, e)); }
-                                    }
-                                }
-                                if processed == 0 {
-                                    json!({"error": format!("No se procesaron imágenes: {}", errors.join("; "))}).to_string()
-                                } else {
-                                    let mut result = String::new();
-                                    if !errors.is_empty() { result.push_str(&format!("⚠️ Advertencias: {}\n\n", errors.join("; "))); }
-                                    let body = json!({"model":"qwen/qwen2.5-vl-72b-instruct","messages":[{"role":"user","content":content_parts}]});
-                                    match reqwest::blocking::Client::new()
-                                        .post("https://openrouter.ai/api/v1/chat/completions")
-                                        .header("Authorization", format!("Bearer {}", api_key))
-                                        .header("Content-Type", "application/json")
-                                        .header("HTTP-Referer", "https://github.com/iaf")
-                                        .header("X-Title", "IAF")
-                                        .json(&body)
-                                        .timeout(std::time::Duration::from_secs(120))
-                                        .send()
-                                    {
-                                        Ok(resp) if resp.status().is_success() => {
-                                            if let Ok(j) = resp.json::<serde_json::Value>() {
-                                                result.push_str(j["choices"][0]["message"]["content"].as_str().unwrap_or("(sin respuesta)"));
-                                            }
-                                        }
-                                        Ok(resp) => {
-                                            result.push_str(&format!("❌ HTTP {}: {}", resp.status(), resp.text().unwrap_or_default()));
-                                        }
-                                        Err(e) => {
-                                            result.push_str(&format!("❌ Error de red: {}", e));
-                                        }
-                                    }
-                                    result
-                                }
-                            }
-                        }
-                    }
-                    _ => "Herramienta desconocida".to_string(),
+                                None => json!({"error": format!("No se encontró imagen con id '{}'", id)}).to_string(),
                             }
                         }
                     }
