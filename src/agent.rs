@@ -302,9 +302,6 @@ pub async fn run_agent_loop(
                 "parameters": {
                     "type": "object",
                     "properties": {
-                "parameters": {
-                    "type": "object",
-                    "properties": {
                         "id": { "type": "string", "description": "UUID de la imagen a liberar del contexto" }
                     },
                     "required": ["id"]
@@ -315,7 +312,6 @@ pub async fn run_agent_loop(
             "type": "function",
             "function": {
                 "name": "git_resolve_divergence",
-                "name": "git_resolve_divergence",
                 "description": "Resuelve una divergencia entre repositorio local y remoto. Usa 'keep_local' para sobrescribir remoto con local (push --force), 'keep_remote' para descartar local y usar remoto (reset --hard), 'merge_both' para fusionar ambos (pull --rebase --autostash).",
                 "parameters": {
                     "type": "object",
@@ -325,6 +321,9 @@ pub async fn run_agent_loop(
                             "enum": ["keep_local", "keep_remote", "merge_both"],
                             "description": "Acción para resolver la divergencia."
                         }
+                    },
+                    "required": ["action"]
+                }
                     },
                     "required": ["action"]
                 }
