@@ -1280,8 +1280,6 @@ pub async fn run_agent_loop(
                 };
 
                 {
-                    let mut status
-                {
                     let mut status = state.active_agent.lock().unwrap();
                     status.steps.push(crate::state::AuditStep {
                         step_type: "tool_result".to_string(),
