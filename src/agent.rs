@@ -1382,19 +1382,17 @@ pub async fn run_agent_loop(
                                     Ok(resp) if resp.status().is_success() => {
                                         match resp.json::<serde_json::Value>() {
                                             Ok(j) => {
-                                                let c = j["choices"][0]["message"]["content"].as_str().unwrap_or("(Sin respuesta)");
-                                                result_text.push_str(&format!("📷 Análisis de {} imagen(es):\n\n{}", processed, c));
-                                            }
-                                            Err(e) => result_text.push_str(&format!("❌ Error parseando: {}", e)),
-                                        }
-                                    }
-                                    Ok(resp) => { result_text.push_str(&format!("❌ OpenRouter error {}: {}", resp.status(), resp.text().unwrap_or_default())); }
-                                    Err(e) => result_text.push_str(&format!("❌ Error de red: {}", e)),
-                                }
-                                result_text
-                            }
-                        }
-                    }
+fn save_chat_steps_to_disk(state: &AppState, session_id_opt: &Option<String>, steps: &[crate::state::AuditStep]) {
+    // Rate-limiting: solo escribir cada 5 invocaciones para reducir I/O
+    // Usamos una celda atómica para contar las invocaciones
+    use std::sync::atomic::{AtomicU32, Ordering};
+    static SAVE_COUNTER: AtomicU32 = AtomicU32::new(0);
+    let count = SAVE_COUNTER.fetch_add(1, Ordering::Relaxed);
+    if count % 5 != 0 && count > 0 {
+        return; // Solo escribir cada 5 llamadas (o en la primera)
+    }
+    
+    if let Some(ref session_id) = *session_id_opt {
                     _ => "Herramienta desconocida".to_string(),
                 };
 
