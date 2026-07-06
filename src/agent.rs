@@ -1059,9 +1059,10 @@ pub async fn run_agent_loop(
                                 format!("GH CLI STDOUT:\n{}\nGH CLI STDERR:\n{}", stdout, stderr)
                             }
                             Err(e) => format!("Error ejecutando gh CLI: {}", e),
-                        }
                     }
+                    "notificar_usuario" => {
                         let tipo = args["tipo"].as_str().unwrap_or("informativo");
+                        let mensaje = args["mensaje"].as_str().unwrap_or("");
                         let mensaje = args["mensaje"].as_str().unwrap_or("");
                         
                         if let Some(ref s_id) = session_id {
