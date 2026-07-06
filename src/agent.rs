@@ -995,21 +995,20 @@ pub async fn run_agent_loop(
                             .timeout(std::time::Duration::from_secs(15))
                             .build();
                         
-                        match client {
-                            Ok(c) => {
-                                match c.get(url).send().await {
-                                    Ok(res) => {
-                                        match res.text().await {
-                                            Ok(body) => {
-                                                // Limpiar etiquetas HTML básicas para no saturar tokens
-                                                let cleaned = scraper_clean_tags(&body);
-                                                if cleaned.len() > 8000 {
-                                                    format!("{}... [Truncado por longitud]", safe_truncate(&cleaned, 8000))
-                                                } else {
-                                                    cleaned
-                                                }
-                                            }
-                                            Err(e) => format!("Error obteniendo texto de respuesta: {}", e),
+                    "check_github_cli" => {
+                        let command = args["command"].as_str().unwrap_or("");
+                        let working_dir = if let Some(ref proj_name) = project_name {
+                            get_project_path(&state, proj_name)
+                        } else {
+                            state.base_workspace.to_string_lossy().to_string()
+                        };
+                        
+                        // Usar shell-style parsing para manejar argumentos con comillas correctamente
+                        let parsed_args = parse_shell_args(command);
+                        let output = Command::new("gh")
+                            .args(&parsed_args)
+                            .current_dir(&working_dir)
+                            .output();
                                         }
                                     }
                                     Err(e) => format!("Error al conectar con la URL: {}", e),
