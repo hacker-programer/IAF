@@ -441,7 +441,7 @@ pub async fn run_agent_loop(
             }
         }
 
-        let mut force_none_tool_choice = false;
+        let force_none_tool_choice = false;
         let current_tool_choice = if force_none_tool_choice { "none" } else { "auto" };
 
         let mut attempts = 0;
