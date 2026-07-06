@@ -879,12 +879,11 @@ pub async fn run_agent_loop(
                             }
                         }
                         if let Some(reason) = blocked_reason {
+                        if let Some(reason) = blocked_reason {
                             json!({"error": reason}).to_string()
                         } else {
-                        }
 
                         // ========== FIN SANITIZACIÓN ==========
-                        // Optional timer in seconds (max 300). If provided, we run the command without the default 30s timeout
                         let timer_opt = args.get("timer").and_then(|v| v.as_u64());
                         if let Some(ref proj_name) = project_name {
                             let proj_path = get_project_path(&state, proj_name);
