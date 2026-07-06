@@ -1031,7 +1031,8 @@ pub async fn run_agent_loop(
                                     Ok(resp) => {
                                         match resp.text().await {
                                             Ok(text) => scraper_clean_tags(&text),
-                                    }
+                                            Err(e) => format!("Error leyendo respuesta: {}", e),
+                                        }
                                     Err(e) => format!("Error al conectar con la URL: {}", e),
                                 }
                             }
