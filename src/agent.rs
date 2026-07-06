@@ -402,14 +402,51 @@ pub async fn run_agent_loop(
         sanitize_messages_for_api(&mut messages);
 
         let _ = fs::write(
-            state.base_workspace.join("debug_messages.json"),
-            serde_json::to_string_pretty(&messages).unwrap_or_default()
-        );
+        // Sanar los mensajes para evitar errores de la API sobre roles "tool" huérfanos
+        sanitize_messages_for_api(&mut messages);
+
+        // Rate-limiting: solo escribir debug_messages.json cada 5 iteraciones para reducir I/O
+        if iteration % 5 == 0 {
+            let _ = fs::write(
+                state.base_workspace.join("debug_messages.json"),
+                serde_json::to_string_pretty(&messages).unwrap_or_default()
+            );
+        }
+
+        // Límite de seguridad: máximo 500 iteraciones para evitar bucles infinitos
+        if iteration > 500 {
+            let _ = fs::write(
+                state.base_workspace.join("debug_messages.json"),
+                serde_json::to_string_pretty(&messages).unwrap_or_default()
+            );
+            state.process_registry.kill_all();
+            return Ok(format!(
+                "LÍMITE DE SEGURIDAD ALCANZADO: El agente ha ejecutado {} iteraciones. \
+                Se ha detenido automáticamente para evitar bucles infinitos. \
+                Revisá debug_messages.json para ver el estado del contexto.",
+                iteration
+            ));
+        }
+
+        // Límite de pasos de auditoría: máximo 10000 para evitar archivos JSON gigantes
+        {
+            let status = state.active_agent.lock().unwrap();
+            if status.steps.len() > 10000 {
+                drop(status);
+                let mut status = state.active_agent.lock().unwrap();
+                // Truncar a los últimos 5000 pasos
+                let total = status.steps.len();
+                status.steps = status.steps.split_off(total - 5000);
+                status.steps.insert(0, crate::state::AuditStep {
+                    step_type: "thinking".to_string(),
+                    title: "Pasos truncados".to_string(),
+                    detail: format!("Se eliminaron {} pasos antiguos para evitar crecimiento excesivo del archivo de auditoría.", total - 5000),
+                    timestamp: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs(),
+                });
+            }
+        }
 
         let mut force_none_tool_choice = false;
-        let current_tool_choice = if force_none_tool_choice {
-            "none"
-        } else {
             "auto"
         };
         force_none_tool_choice = false;
