@@ -979,13 +979,13 @@ pub async fn run_agent_loop(
                         } else {
                             json!({"error": "No hay ningún proyecto activo seleccionado."}).to_string()
                         }
-                    }
-                    "search_code" => {
-                        } else {
-                            json!({"error": "No hay ningún proyecto activo seleccionado."}).to_string()
-                        }
                         } // Fin del else de bloqueo de comandos (blocked_reason)
                     }
+                    "search_code" => {
+                        let query = args["query"].as_str().unwrap_or("");
+                        if let Some(ref proj_name) = project_name {
+                            let proj_path = get_project_path(&state, proj_name);
+                            match search_code_in_project(&proj_path, query, voyage_key).await {
                                 Ok(res) => res,
                                 Err(e) => format!("Error en búsqueda semántica: {}", e),
                             }
