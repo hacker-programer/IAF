@@ -1,8 +1,8 @@
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
-use std::collections::HashMap;
-use std::process::Child;
+use std::collections::{HashMap, HashSet};
+use std::process::Command;
 
 use crate::desktop::DesktopController;
 #[derive(Clone, Serialize, Deserialize)]
@@ -74,78 +74,168 @@ pub struct CaptchaRequest {
     pub solved_content: Option<String>,
 }
 
-/// Registro de procesos hijo spawnados por el agente.
-/// La clave es el PID del proceso (u32) y el valor es el handle Child.
-/// Esto permite matar procesos de forma segura sin depender de taskkill,
-/// evitando matar accidentalmente al servidor principal.
+/// Registro seguro de procesos hijo spawnados por el agente.
+/// Almacena los PIDs de procesos que nosotros spawnamos.
+/// Para matar un proceso, verifica que:
+/// 1. El PID está en nuestro registro (lo spawnamos nosotros)
+/// 2. El proceso existe y su parent PID es el de este servidor
+/// Solo entonces ejecuta taskkill.
+/// Esto elimina el riesgo de matar al servidor principal por error.
 #[derive(Clone)]
 pub struct ProcessRegistry {
-    pub processes: Arc<Mutex<HashMap<u32, Child>>>,
+    /// PIDs que spawnamos, con timestamp de creación
+    pub spawned: Arc<Mutex<HashSet<u32>>>,
+    /// PID del servidor (cacheado al iniciar)
+    pub server_pid: u32,
 }
 
 impl ProcessRegistry {
     pub fn new() -> Self {
         Self {
-            processes: Arc::new(Mutex::new(HashMap::new())),
+            spawned: Arc::new(Mutex::new(HashSet::new())),
+            server_pid: std::process::id(),
         }
     }
 
-    /// Registra un proceso hijo. Devuelve su PID.
-    pub fn register(&self, child: Child) -> u32 {
-        let pid = child.id();
-        let mut procs = self.processes.lock().unwrap();
-        procs.insert(pid, child);
-        pid
+    /// Registra un PID como spawnado por nosotros.
+    pub fn register(&self, pid: u32) {
+        let mut spawned = self.spawned.lock().unwrap();
+        spawned.insert(pid);
     }
 
-    /// Mata un proceso por PID y lo remueve del registro.
-    /// Retorna true si existía y se pudo matar, false si no existía.
-    pub fn kill(&self, pid: u32) -> bool {
-        let mut procs = self.processes.lock().unwrap();
-        if let Some(mut child) = procs.remove(&pid) {
-            let _ = child.kill();
-            let _ = child.wait();
-            true
-        } else {
-            false
+    /// Intenta matar un proceso de forma segura.
+    /// Retorna un mensaje descriptivo del resultado.
+    pub fn safe_kill(&self, pid: u32) -> String {
+        // Paso 1: Verificar que el PID está en nuestro registro
+        {
+            let spawned = self.spawned.lock().unwrap();
+            if !spawned.contains(&pid) {
+                return format!(
+                    "ERROR DE SEGURIDAD: El PID {} no fue spawnado por este agente. \
+                    No se permite matar procesos arbitrarios. \
+                    Solo podés matar procesos que hayas spawnado con execute_powershell.",
+                    pid
+                );
+            }
+        }
+
+        // Paso 2: Verificar que el proceso existe y es hijo de este servidor
+        let parent_pid = match get_parent_pid(pid) {
+            Some(ppid) => ppid,
+            None => {
+                // El proceso ya no existe, limpiar del registro
+                let mut spawned = self.spawned.lock().unwrap();
+                spawned.remove(&pid);
+                return format!(
+                    "El proceso con PID {} ya no existe (posiblemente ya terminó). \
+                    Se ha limpiado del registro.",
+                    pid
+                );
+            }
+        };
+
+        if parent_pid != self.server_pid {
+            return format!(
+                "ERROR DE SEGURIDAD: El proceso con PID {} tiene parent PID {} \
+                pero el servidor es PID {}. No es un hijo directo del servidor. \
+                Matarlo podría afectar al sistema. Operación cancelada.",
+                pid, parent_pid, self.server_pid
+            );
+        }
+
+        // Paso 3: Matar el proceso
+        let output = Command::new("taskkill")
+            .args(&["/PID", &pid.to_string(), "/F"])
+            .output();
+
+        match output {
+            Ok(out) => {
+                let stdout = String::from_utf8_lossy(&out.stdout);
+                let stderr = String::from_utf8_lossy(&out.stderr);
+                // Limpiar del registro
+                let mut spawned = self.spawned.lock().unwrap();
+                spawned.remove(&pid);
+                if out.status.success() {
+                    format!("Proceso PID {} matado exitosamente.\nstdout: {}\nstderr: {}", pid, stdout, stderr)
+                } else {
+                    format!("taskkill retornó error para PID {}.\nstdout: {}\nstderr: {}", pid, stdout, stderr)
+                }
+            }
+            Err(e) => {
+                format!("Error al ejecutar taskkill para PID {}: {}", pid, e)
+            }
         }
     }
 
-    /// Mata y limpia TODOS los procesos registrados.
+    /// Mata todos los procesos registrados que sigan siendo hijos del servidor.
     /// Se llama al finalizar la sesión del agente.
     pub fn kill_all(&self) {
-        let mut procs = self.processes.lock().unwrap();
-        for (_pid, mut child) in procs.drain() {
-            let _ = child.kill();
-            let _ = child.wait();
+        let pids: Vec<u32> = {
+            let spawned = self.spawned.lock().unwrap();
+            spawned.iter().cloned().collect()
+        };
+
+        for pid in pids {
+            // Verificar parent PID antes de matar
+            if let Some(parent_pid) = get_parent_pid(pid) {
+                if parent_pid == self.server_pid {
+                    let _ = Command::new("taskkill")
+                        .args(&["/PID", &pid.to_string(), "/F"])
+                        .stdout(std::process::Stdio::null())
+                        .stderr(std::process::Stdio::null())
+                        .status();
+                }
+            }
+        }
+
+        // Limpiar todo el registro
+        let mut spawned = self.spawned.lock().unwrap();
+        spawned.clear();
+    }
+
+    /// Limpia procesos que ya terminaron del registro.
+    pub fn reap(&self) -> usize {
+        let mut spawned = self.spawned.lock().unwrap();
+        let before = spawned.len();
+        spawned.retain(|&pid| {
+            get_parent_pid(pid).is_some() // solo mantiene si el proceso existe
+        });
+        before - spawned.len()
+    }
+
+    /// Retorna true si un PID está registrado.
+    pub fn contains(&self, pid: u32) -> bool {
+        let spawned = self.spawned.lock().unwrap();
+        spawned.contains(&pid)
+    }
+}
+
+/// Obtiene el ParentProcessId de un proceso Windows usando WMIC.
+/// Retorna None si el proceso no existe.
+fn get_parent_pid(pid: u32) -> Option<u32> {
+    let output = Command::new("wmic")
+        .args(&[
+            "process",
+            "where",
+            &format!("ProcessId={}", pid),
+            "get",
+            "ParentProcessId",
+            "/format:csv",
+        ])
+        .output()
+        .ok()?;
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    // El output CSV tiene formato: \r\nNode,ParentProcessId\r\nNOMBRE,12345\r\n
+    for line in stdout.lines().skip(1) {
+        let parts: Vec<&str> = line.split(',').collect();
+        if parts.len() >= 2 {
+            if let Ok(ppid) = parts[1].trim().parse::<u32>() {
+                return Some(ppid);
+            }
         }
     }
-
-    /// Limpia procesos que ya terminaron (zombies) del registro.
-    /// Retorna cuántos procesos fueron limpiados.
-    pub fn reap(&self) -> usize {
-        let mut procs = self.processes.lock().unwrap();
-        let before = procs.len();
-        procs.retain(|_pid, child| {
-            match child.try_wait() {
-                Ok(Some(_)) => false, // ya terminó, remover
-                _ => true,            // sigue corriendo o error, mantener
-            }
-        });
-        before - procs.len()
-    }
-
-    /// Retorna true si un PID existe en el registro.
-    pub fn contains(&self, pid: u32) -> bool {
-        let procs = self.processes.lock().unwrap();
-        procs.contains_key(&pid)
-    }
-
-    /// Retorna la cantidad de procesos actualmente registrados.
-    pub fn len(&self) -> usize {
-        let procs = self.processes.lock().unwrap();
-        procs.len()
-    }
+    None
 }
 
 #[derive(Clone)]
@@ -161,6 +251,6 @@ pub struct AppState {
     pub image_store: Arc<Mutex<HashMap<String, String>>>,
     pub context_store: Arc<Mutex<HashMap<String, ContextEntry>>>,
     /// Registro seguro de procesos hijo spawnados por el agente.
-    /// Permite matar procesos por handle sin riesgo de matar al servidor.
+    /// Permite matar procesos de forma segura con validación de parent PID.
     pub process_registry: ProcessRegistry,
 }
