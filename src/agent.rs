@@ -731,26 +731,14 @@ pub async fn run_agent_loop(
                             }
 
                             let pull_success = status_pull.as_ref().map(|s| s.success()).unwrap_or(false);
-                            if !pull_success {
-                                play_error_beep();
-                                // NO retornar Err que termine la sesión del agente. 
-                                // En su lugar, devolvemos el error como resultado de la herramienta
-                                // para que el agente pueda reaccionar.
-                                // Usamos un string de error que se asigna a tool_result más abajo.
-                                return Ok(format!("Error de Git: No se pudo sincronizar con origin/master. \
-                                    El remote existe (verificado en PASO 0) pero git pull falló. \
-                                    Posibles causas: branch 'master' no existe en remote, conflictos irresolubles, \
-                                    o problemas de red. Intentá hacer push inicial si es un repo nuevo."));
-                            }
-                                    .stderr(std::process::Stdio::null())
-                                    .env("GIT_TERMINAL_PROMPT", "0")
-                                    .status();
-                            }
-
                             let pull_success = status_pull.as_ref().map(|s| s.success()).unwrap_or(false);
                             if !pull_success {
                                 play_error_beep();
-                                return Ok(format!("Error crítico de Git: No se pudo sincronizar el repositorio con la versión remota antes de escribir. Git pull (rebase) falló definitivamente."));
+                                // NO retornar Err que termine la sesión. Usamos break del labeled block.
+                                break 'write_handler format!("Error de Git: No se pudo sincronizar con origin/master. \
+                                    El remote existe (verificado en PASO 0) pero git pull falló. \
+                                    Posibles causas: branch 'master' no existe en remote, conflictos irresolubles, \
+                                    o problemas de red. Intentá hacer push inicial si es un repo nuevo.");
                             }
                             
                             let mut write_success = false;
