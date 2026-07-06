@@ -1062,10 +1062,9 @@ pub async fn run_agent_loop(
                                 let stdout = String::from_utf8_lossy(&out.stdout).to_string();
                                 let stderr = String::from_utf8_lossy(&out.stderr).to_string();
                                 format!("GH CLI STDOUT:\n{}\nGH CLI STDERR:\n{}", stdout, stderr)
-                            }
                             Err(e) => format!("Error ejecutando gh CLI: {}", e),
+                        }
                     }
-                    "notificar_usuario" => {
                     "notificar_usuario" => {
                         let tipo = args["tipo"].as_str().unwrap_or("informativo");
                         let mensaje = args["mensaje"].as_str().unwrap_or("");
