@@ -769,6 +769,47 @@ pub async fn run_agent_loop(
                     }
                     "execute_powershell" => {
                         let command = args["command"].as_str().unwrap_or("");
+
+                        // ========== SANITIZACIÓN DE SEGURIDAD ==========
+                        // Bloquear comandos que intentan matar procesos del sistema.
+                        // Esto protege al servidor principal de ser terminado accidentalmente.
+                        let command_lower = command.to_lowercase();
+                        let forbidden_patterns = [
+                            "taskkill",
+                            "stop-process",
+                            "tskill",
+                            "wmic process delete",
+                            "wmic process where",
+                            "get-process",
+                            "kill ",
+                            "-name rustc",
+                            "-name cargo",
+                            "-name iaf",
+                            "-im rustc",
+                            "-im cargo",
+                            "-im iaf",
+                            "/im rustc",
+                            "/im cargo",
+                            "/im iaf",
+                            "process.kill",
+                            ".kill(",
+                        ];
+
+                        for pattern in &forbidden_patterns {
+                            if command_lower.contains(pattern) {
+                                return json!({
+                                    "error": format!(
+                                        "COMANDO BLOQUEADO POR SEGURIDAD: El comando contiene '{}'. \
+                                        Para matar procesos, usá la herramienta `kill_process` con el PID. \
+                                        Está prohibido usar taskkill, Stop-Process o cualquier comando \
+                                        que pueda matar procesos del sistema o al servidor principal.",
+                                        pattern
+                                    )
+                                }).to_string();
+                            }
+                        }
+                        // ========== FIN SANITIZACIÓN ==========
+
                         // Optional timer in seconds (max 300). If provided, we run the command without the default 30s timeout
                         let timer_opt = args.get("timer").and_then(|v| v.as_u64());
                         if let Some(ref proj_name) = project_name {
@@ -788,9 +829,9 @@ pub async fn run_agent_loop(
                                     .spawn() {
                                     Ok(child) => {
                                         let pid = child.id();
+                                        // REGISTRAR EL PID EN EL PROCESS REGISTRY
+                                        state.process_registry.register(pid);
                                         // Si se pidió un timer, iniciamos una tarea background que avisa al agente cuando expira
-                                        if let Some(seconds) = timer_opt {
-                                            let pid_copy = pid;
                                             tokio::spawn(async move {
                                                 tokio::time::sleep(tokio::time::Duration::from_secs(seconds)).await;
                                                 println!("Timer de {}s expiró para PID {}", seconds, pid_copy);
