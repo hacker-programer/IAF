@@ -1519,13 +1519,12 @@ pub fn discover_projects(state: &AppState) {
                 }
             }
         }
-    }
 }
+
 async fn search_code_in_project(proj_path: &str, query: &str, voyage_key: &str) -> Result<String, Box<dyn Error + Send + Sync>> {
     semantic_code_search(proj_path, query, voyage_key).await
 }
 
-async fn semantic_code_search(proj_path: &str, query: &str, _voyage_key: &str) -> Result<String, Box<dyn Error + Send + Sync>> {
 async fn semantic_code_search(proj_path: &str, query: &str, _voyage_key: &str) -> Result<String, Box<dyn Error + Send + Sync>> {
     let query_lower = query.to_lowercase();
     let query_words: Vec<&str> = query_lower.split_whitespace().collect();
