@@ -657,21 +657,15 @@ pub async fn run_agent_loop(
                                     play_error_beep();
                                     return Ok(error_msg); // Este return está dentro del match "write_file_with_commit" — 
                                     // NOTA: Este es un return del closure del match, NO del run_agent_loop.
-                                    // Pero como es un return Ok(...) en el ámbito de la función, terminaría la sesión.
-                                    // CORREGIDO: Lo convertimos a un resultado de herramienta en el flujo de abajo.
+                                    // NO retornar error que termine la sesión. Usamos labeled block para
+                                    // que el error sea el resultado de la herramienta, no el fin del agente.
+                                    play_error_beep();
+                                    break 'write_handler error_msg;
                                 }
                             }
 
                             // --- PASO 1: Sincronizar con el repositorio remoto ---
                             let mut status_pull = Command::new("git")
-                                .args(&["pull", "--rebase", "--autostash", "origin", "master"])
-                                .current_dir(&proj_path)
-                                .stdin(std::process::Stdio::null())
-                                .stdout(std::process::Stdio::null())
-                                .stderr(std::process::Stdio::null())
-                                .env("GIT_TERMINAL_PROMPT", "0")
-                                .status();
-                            
                             // Autocuración SEGURA en caso de que git pull falle (remote ya verificado)
                             if status_pull.as_ref().map(|s| !s.success()).unwrap_or(true) {
                                 println!("Advertencia: git pull falló al inicio. Iniciando autocuración SEGURA (remote verificado)...");
