@@ -380,6 +380,7 @@ pub async fn run_agent_loop(
         {
             let status = state.active_agent.lock().unwrap();
             if status.interrupted {
+                state.process_registry.kill_all();
                 return Ok("Ejecución del agente interrumpida manualmente por el usuario.".to_string());
             }
         }
