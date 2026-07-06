@@ -127,5 +127,14 @@ impl DesktopController {
             }
         }
         Ok(())
+        Ok(())
+    }
+
+    /// Launch an executable and track its child process.
+    pub fn launch_executable(&self, path: &str) -> Result<u32, Box<dyn std::error::Error>> {
+        let child = Command::new(path).spawn()?;
+        let pid = child.id();
+        self.children.lock().unwrap().push(child);
+        Ok(pid)
     }
 }
