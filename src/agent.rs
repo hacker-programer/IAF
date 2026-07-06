@@ -863,7 +863,6 @@ pub async fn run_agent_loop(
                         let command = args["command"].as_str().unwrap_or("");
 
                         // ========== SANITIZACIÃ“N DE SEGURIDAD ==========
-                        // ========== SANITIZACIÃ“N DE SEGURIDAD ==========
                         // Bloquear comandos que intentan matar procesos del sistema.
                         // Esto protege al servidor principal de ser terminado accidentalmente.
                         let command_lower = command.to_lowercase();
