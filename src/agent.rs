@@ -1025,8 +1025,8 @@ pub async fn run_agent_loop(
                             .build();
                             .build();
                         match client {
-                            Ok(client) => {
-                                match client.get(url).send() {
+                            .build();
+                        match client {
                                     Ok(resp) => {
                                         match resp.text() {
                                             Ok(text) => scraper_clean_tags(&text),
