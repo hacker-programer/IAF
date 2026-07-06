@@ -1801,6 +1801,7 @@ async fn compress_active_messages_if_needed(
                         }
                     }
                     // Si llegamos aquí, la compresión falló o fue incompleta
+                    // Si llegamos aquí, la compresión falló o fue incompleta
                     // Fallback: truncar mensajes viejos de forma agresiva
                     if messages.len() > 10 {
                         // Mantener system prompt + últimos 4 mensajes
@@ -1821,14 +1822,13 @@ async fn compress_active_messages_if_needed(
                         }
                     }
                 }
-                Err(e) => {
-                    eprintln!("Advertencia: Falló la llamada a la API para comprimir contexto activo: {}", e);
-                }
+            }
+            Err(e) => {
+                eprintln!("Advertencia: Falló la llamada a la API para comprimir contexto activo: {}", e);
             }
         }
     }
 }
-
 /// Parsea una línea de comandos shell respetando comillas dobles y simples.
 /// Ej: 'gh repo create "my repo" --public' → ["gh", "repo", "create", "my repo", "--public"]
 fn parse_shell_args(input: &str) -> Vec<String> {
