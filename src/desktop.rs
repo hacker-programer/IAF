@@ -32,23 +32,51 @@ impl DesktopController {
     /// Type a string as keyboard events (simplified).
     pub fn type_text(&self, text: &str) -> Result<(), SimulateError> {
         for ch in text.chars() {
-            match ch {
-                ' ' => {
-                    simulate(&EventType::KeyPress(Key::Space))?;
-                    simulate(&EventType::KeyRelease(Key::Space))?;
+    /// Type a string as keyboard events.
+    /// Soporta letras (a-z, A-Z), números (0-9), espacio, y puntuación común.
+    pub fn type_text(&self, text: &str) -> Result<(), SimulateError> {
+        for ch in text.chars() {
+            let key = match ch {
+                'a'..='z' => Key::from_str(&ch.to_string()),
+                'A'..='Z' => {
+                    // Para mayúsculas: presionar Shift + letra
+                    let lower = ch.to_ascii_lowercase();
+                    let key = Key::from_str(&lower.to_string());
+                    simulate(&EventType::KeyPress(Key::ShiftLeft))?;
+                    simulate(&EventType::KeyPress(key))?;
+                    simulate(&EventType::KeyRelease(key))?;
+                    simulate(&EventType::KeyRelease(Key::ShiftLeft))?;
+                    continue;
                 }
-                _ => continue, // ignore unsupported characters for now
-            }
+                '0'..='9' => Key::from_str(&ch.to_string()),
+                ' ' => Key::Space,
+                '.' => Key::Dot,
+                ',' => Key::Comma,
+                '-' => Key::Minus,
+                '_' => {
+                    simulate(&EventType::KeyPress(Key::ShiftLeft))?;
+                    simulate(&EventType::KeyPress(Key::Minus))?;
+                    simulate(&EventType::KeyRelease(Key::Minus))?;
+                    simulate(&EventType::KeyRelease(Key::ShiftLeft))?;
+                    continue;
+                }
+                '/' => Key::Slash,
+                '\\' => Key::BackSlash,
+                ':' => {
+                    simulate(&EventType::KeyPress(Key::ShiftLeft))?;
+                    simulate(&EventType::KeyPress(Key::SemiColon))?;
+                    simulate(&EventType::KeyRelease(Key::SemiColon))?;
+                    simulate(&EventType::KeyRelease(Key::ShiftLeft))?;
+                    continue;
+                }
+                '\n' | '\r' => Key::Return,
+                '\t' => Key::Tab,
+                _ => continue, // Ignorar caracteres no soportados
+            };
+            simulate(&EventType::KeyPress(key))?;
+            simulate(&EventType::KeyRelease(key))?;
         }
         Ok(())
-    }
-
-    /// Launch an executable file and keep the child handle.
-    pub fn launch_executable(&self, path: &str) -> Result<u32, std::io::Error> {
-        let child = Command::new(path).spawn()?;
-        let pid = child.id();
-        self.children.lock().unwrap().push(child);
-        Ok(pid)
     }
 
     /// Abrir una imagen (o cualquier archivo) con la aplicación predeterminada del sistema.
