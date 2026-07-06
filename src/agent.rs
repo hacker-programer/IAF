@@ -830,6 +830,8 @@ pub async fn run_agent_loop(
                                         // REGISTRAR EL PID EN EL PROCESS REGISTRY
                                         state.process_registry.register(pid);
                                         // Si se pidió un timer, iniciamos una tarea background que avisa al agente cuando expira
+                                        if let Some(seconds) = timer_opt {
+                                            let pid_copy = pid;
                                             tokio::spawn(async move {
                                                 tokio::time::sleep(tokio::time::Duration::from_secs(seconds)).await;
                                                 println!("Timer de {}s expiró para PID {}", seconds, pid_copy);
