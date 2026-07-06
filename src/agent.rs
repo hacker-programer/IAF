@@ -1017,9 +1017,9 @@ pub async fn run_agent_loop(
                                 discover_projects(&state);
  
                                 format!("Fork & Clone output:\nSTDOUT:\n{}\nSTDERR:\n{}", stdout, stderr)
-                            }
+                            Err(e) => format!("Error corriendo gh CLI: {}", e),
                         }
-                    "read_url" => {
+                    }
                         let url = args["url"].as_str().unwrap_or("");
                         let client = reqwest::Client::builder()
                             .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36")
