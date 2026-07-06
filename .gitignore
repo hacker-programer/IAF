@@ -1,3 +1,6 @@
 
 citybound/
 /target
+.config/
+Cargo.lock
+debug_messages.json
