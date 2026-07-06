@@ -183,20 +183,20 @@ pub async fn run_agent_loop(
         }),
         json!({
             "type": "function",
+        json!({
+            "type": "function",
             "function": {
                 "name": "search_code",
-                "description": "Busca fragmentos de código semánticamente usando embeddings de VoyageAI.",
+                "description": "Busca fragmentos de código mediante coincidencia local de palabras clave en archivos del proyecto (NO usa VoyageAI embeddings; es búsqueda de texto exacta).",
                 "parameters": {
                     "type": "object",
                     "properties": {
                         "query": { "type": "string" }
                     },
-                "name": "search_code",
-                "description": "Busca fragmentos de código mediante coincidencia local de palabras clave en archivos del proyecto (NO usa VoyageAI embeddings; es búsqueda de texto exacta).",
+                    "required": ["query"]
+                }
             }
         }),
-        json!({
-            "type": "function",
             "function": {
                 "name": "fork_and_clone_repo",
                 "description": "Forkea y clona un repositorio de GitHub de terceros mediante GitHub CLI (gh).",
