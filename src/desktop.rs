@@ -127,7 +127,6 @@ impl DesktopController {
             }
         }
         Ok(())
-        Ok(())
     }
 
     /// Launch an executable and track its child process.
