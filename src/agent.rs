@@ -898,6 +898,15 @@ pub async fn run_agent_loop(
                             json!({"error": "No hay ningún proyecto activo seleccionado."}).to_string()
                         }
                     }
+                    "kill_process" => {
+                        let pid = args["pid"].as_u64().unwrap_or(0) as u32;
+                        if pid == 0 {
+                            json!({"error": "PID inválido: debe ser un entero positivo."}).to_string()
+                        } else {
+                            // Usar el ProcessRegistry para matar de forma segura
+                            state.process_registry.safe_kill(pid)
+                        }
+                    }
                     "fork_and_clone_repo" => {
                         let repo_url = args["repo_url"].as_str().unwrap_or("");
                         let target_dir = state.base_workspace.clone();
