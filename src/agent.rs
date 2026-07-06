@@ -223,7 +223,6 @@ pub async fn run_agent_loop(
                 }
             }
         }),
-        }),
         json!({
             "type": "function",
             "function": {
