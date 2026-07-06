@@ -1413,17 +1413,29 @@ pub async fn run_agent_loop(
                                     Ok(resp) if resp.status().is_success() => {
                                         match resp.json::<serde_json::Value>() {
                                             Ok(j) => {
-fn save_chat_steps_to_disk(state: &AppState, session_id_opt: &Option<String>, steps: &[crate::state::AuditStep]) {
-    // Rate-limiting: solo escribir cada 5 invocaciones para reducir I/O
-    // Usamos una celda atómica para contar las invocaciones
-    use std::sync::atomic::{AtomicU32, Ordering};
-    static SAVE_COUNTER: AtomicU32 = AtomicU32::new(0);
-    let count = SAVE_COUNTER.fetch_add(1, Ordering::Relaxed);
-    if count % 5 != 0 && count > 0 {
-        return; // Solo escribir cada 5 llamadas (o en la primera)
-    }
-    
-    if let Some(ref session_id) = *session_id_opt {
+                                                if let Some(choices) = j["choices"].as_array() {
+                                                    if let Some(first) = choices.first() {
+                                                        if let Some(msg) = first["message"].as_object() {
+                                                            if let Some(content) = msg["content"].as_str() {
+                                                                result_text.push_str(content);
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                                if result_text.is_empty() {
+                                                    result_text.push_str(&format!("Respuesta: {:?}", j));
+                                                }
+                                                result_text
+                                            }
+                                            Err(e) => format!("Error parseando respuesta: {}", e),
+                                        }
+                                    }
+                                    Ok(resp) => format!("Error HTTP {}: {}", resp.status(), resp.text().unwrap_or_default()),
+                                    Err(e) => format!("Error de conexión: {}", e),
+                                }
+                            }
+                        }
+                    }
                     _ => "Herramienta desconocida".to_string(),
                 };
 
