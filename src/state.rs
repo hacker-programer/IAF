@@ -5,6 +5,7 @@ use std::collections::{HashMap, HashSet};
 use std::process::Command;
 
 use crate::desktop::DesktopController;
+
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Project {
     pub name: String,
@@ -210,32 +211,24 @@ impl ProcessRegistry {
     }
 }
 
-/// Obtiene el ParentProcessId de un proceso Windows usando WMIC.
+/// Obtiene el ParentProcessId de un proceso Windows usando Get-Process (PowerShell).
+/// Reemplaza al obsoleto wmic.
 /// Retorna None si el proceso no existe.
 fn get_parent_pid(pid: u32) -> Option<u32> {
-    let output = Command::new("wmic")
+    let output = Command::new("powershell")
         .args(&[
-            "process",
-            "where",
-            &format!("ProcessId={}", pid),
-            "get",
-            "ParentProcessId",
-            "/format:csv",
+            "-NoProfile",
+            "-Command",
+            &format!(
+                "(Get-Process -Id {} -ErrorAction SilentlyContinue).ParentProcessId",
+                pid
+            ),
         ])
         .output()
         .ok()?;
 
     let stdout = String::from_utf8_lossy(&output.stdout);
-    // El output CSV tiene formato: \r\nNode,ParentProcessId\r\nNOMBRE,12345\r\n
-    for line in stdout.lines().skip(1) {
-        let parts: Vec<&str> = line.split(',').collect();
-        if parts.len() >= 2 {
-            if let Ok(ppid) = parts[1].trim().parse::<u32>() {
-                return Some(ppid);
-            }
-        }
-    }
-    None
+    stdout.trim().parse::<u32>().ok()
 }
 
 #[derive(Clone)]
