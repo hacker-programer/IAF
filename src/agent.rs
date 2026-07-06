@@ -182,7 +182,6 @@ pub async fn run_agent_loop(
             }
         }),
         json!({
-        json!({
             "type": "function",
             "function": {
                 "name": "search_code",
