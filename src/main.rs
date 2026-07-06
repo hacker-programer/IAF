@@ -1192,7 +1192,6 @@ async fn main() {
             }
         }
     }
-
     let state = AppState {
         config_path,
         prompts: Arc::new(Mutex::new(prompts)),
@@ -1204,6 +1203,8 @@ async fn main() {
         desktop: Arc::new(Mutex::new(DesktopController::new())),
         image_store: Arc::new(Mutex::new(HashMap::new())),
         context_store: Arc::new(Mutex::new(HashMap::new())),
+        process_registry: ProcessRegistry::new(),
+    };
     };
     // Auto-descubrir proyectos locales por defecto
     discover_projects(&state);
