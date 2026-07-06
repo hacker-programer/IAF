@@ -1769,8 +1769,35 @@ async fn compress_active_messages_if_needed(
                             return;
                         }
                     }
+
+/// Parsea una línea de comandos shell respetando comillas dobles y simples.
+/// Ej: 'gh repo create "my repo" --public' → ["gh", "repo", "create", "my repo", "--public"]
+fn parse_shell_args(input: &str) -> Vec<String> {
+    let mut args = Vec::new();
+    let mut current = String::new();
+    let mut in_single_quote = false;
+    let mut in_double_quote = false;
+    
+    for ch in input.chars() {
+        match ch {
+            '\'' if !in_double_quote => in_single_quote = !in_single_quote,
+            '"' if !in_single_quote => in_double_quote = !in_double_quote,
+            ' ' | '\t' if !in_single_quote && !in_double_quote => {
+                if !current.is_empty() {
+                    args.push(current.clone());
+                    current.clear();
                 }
-                eprintln!("Advertencia: La respuesta de la API de compresión activa no fue exitosa.");
+            }
+            _ => current.push(ch),
+        }
+    }
+    if !current.is_empty() {
+        args.push(current);
+    }
+    args
+}
+
+pub fn play_error_beep() {
             }
             Err(e) => {
                 eprintln!("Advertencia: Falló la llamada a la API para comprimir contexto activo: {}", e);
