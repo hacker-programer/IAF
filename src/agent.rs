@@ -512,16 +512,12 @@ pub async fn run_agent_loop(
                 {
                     let status = state.active_agent.lock().unwrap();
                     if status.interrupted {
-                // Verificar señal de interrupción antes de cada herramienta
-                {
-                    let status = state.active_agent.lock().unwrap();
-                    if status.interrupted {
                         state.process_registry.kill_all();
                         return Ok("Ejecución del agente interrumpida manualmente antes de ejecutar herramienta.".to_string());
                     }
                 }
-                let args: Value = serde_json::from_str(args_str).unwrap_or(json!({}));
 
+                let call_id = tool_call["id"].as_str().unwrap_or("");
                 if func_name == "notificar_usuario" {
                     let tipo = args["tipo"].as_str().unwrap_or("informativo");
                     if tipo == "pregunta" {
