@@ -1366,8 +1366,8 @@ pub async fn run_agent_loop(
             for tr in tool_responses {
                 messages.push(tr);
             }
-
             if let Some(msg) = final_message {
+                state.process_registry.kill_all();
                 return Ok(msg);
             }
         } else {
