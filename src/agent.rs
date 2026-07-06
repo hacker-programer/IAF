@@ -209,6 +209,7 @@ pub async fn run_agent_loop(
                 }
             }
         }),
+        json!({
             "type": "function",
             "function": {
                 "name": "read_url",
@@ -221,6 +222,7 @@ pub async fn run_agent_loop(
                     "required": ["url"]
                 }
             }
+        }),
         }),
         json!({
             "type": "function",
