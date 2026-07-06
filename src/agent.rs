@@ -889,9 +889,9 @@ pub async fn run_agent_loop(
                         for pattern in &forbidden_patterns {
                             if command_lower.contains(pattern) {
                                 blocked_reason = Some(format!(
-                                    "COMANDO BLOQUEADO POR SEGURIDAD: El comando contiene '{}'. \
-                                    Para matar procesos, usÃ¡ la herramienta `kill_process` con el PID. \
-                                    EstÃ¡ prohibido usar taskkill, Stop-Process o cualquier comando \
+                                    "[SISTEMA] BLOQUEO DE SEGURIDAD: El sistema ha interceptado este comando porque contiene '{}'. \
+                                    IMPORTANTE: Esto NO es un error tuyo. Es una protecci\u00f3n autom\u00e1tica del servidor. NO reintentes este comando. \
+                                    Busca una alternativa segura o usa la herramienta `kill_process` con el PID exacto. \
                                     que pueda matar procesos del sistema o al servidor principal.",
                                     pattern
                                 ));
@@ -899,7 +899,7 @@ pub async fn run_agent_loop(
                             }
                         }
                         if let Some(reason) = blocked_reason {
-                            json!({"error": reason}).to_string()
+                            json!({"system_blocked": true, "message": reason}).to_string()
                         } else {
 
                         // ========== FIN SANITIZACIÃ“N ==========
