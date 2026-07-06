@@ -347,14 +347,7 @@ pub async fn run_agent_loop(
                     "required": ["image_paths", "query"]
                 }
             }
-        })
-    ];
-
-    let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(600))
-        .tcp_keepalive(std::time::Duration::from_secs(30))
-        .build()?;
-    let mut iteration = {
+        }),
         json!({
             "type": "function",
             "function": {
@@ -370,11 +363,14 @@ pub async fn run_agent_loop(
             }
         })
     ];
+
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(600))
+        .tcp_keepalive(std::time::Duration::from_secs(30))
+        .build()?;
+    let mut iteration = {
         status.steps.iter().filter(|s| s.step_type == "thinking").count()
     };
-
-    let mut force_none_tool_choice = true;
-
     loop {
         // Verificar señal de interrupción
         {
