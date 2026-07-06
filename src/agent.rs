@@ -1040,14 +1040,28 @@ pub async fn run_agent_loop(
                             Err(e) => format!("Error inicializando cliente HTTP: {}", e),
                         }
                     }
+                    }
+                    "check_github_cli" => {
+                        let command = args["command"].as_str().unwrap_or("");
+                        let working_dir = if let Some(ref proj_name) = project_name {
+                            get_project_path(&state, proj_name)
                         } else {
                             state.base_workspace.to_string_lossy().to_string()
                         };
                         
                         let output = Command::new("gh")
-                            .args(command.split_whitespace().collect::<Vec<&str>>()) // Dividir los argumentos de gh
+                            .args(command.split_whitespace().collect::<Vec<&str>>())
                             .current_dir(&working_dir)
                             .output();
+                        match output {
+                            Ok(out) => {
+                                let stdout = String::from_utf8_lossy(&out.stdout).to_string();
+                                let stderr = String::from_utf8_lossy(&out.stderr).to_string();
+                                format!("GH CLI STDOUT:\n{}\nGH CLI STDERR:\n{}", stdout, stderr)
+                            }
+                            Err(e) => format!("Error ejecutando gh CLI: {}", e),
+                        }
+                    }
                         match output {
                             Ok(out) => {
                                 let stdout = String::from_utf8_lossy(&out.stdout).to_string();
