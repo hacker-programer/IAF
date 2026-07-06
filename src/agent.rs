@@ -443,9 +443,7 @@ pub async fn run_agent_loop(
         }
 
         let mut force_none_tool_choice = false;
-            "auto"
-        };
-        force_none_tool_choice = false;
+        let tool_choice = if force_none_tool_choice { "none" } else { "auto" };
 
         let mut attempts = 0;
         let res_val: Value = loop {
