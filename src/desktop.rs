@@ -30,8 +30,6 @@ impl DesktopController {
     }
 
     /// Type a string as keyboard events (simplified).
-    pub fn type_text(&self, text: &str) -> Result<(), SimulateError> {
-        for ch in text.chars() {
     /// Type a string as keyboard events.
     /// Soporta letras (a-z, A-Z), números (0-9), espacio, y puntuación común.
     pub fn type_text(&self, text: &str) -> Result<(), SimulateError> {
