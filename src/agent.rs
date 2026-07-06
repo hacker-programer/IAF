@@ -1025,18 +1025,18 @@ pub async fn run_agent_loop(
                             .build();
                         match client {
                             Ok(client) => {
-                                match client.get(url).send() {
-                                    Ok(resp) => {
                                 match client.get(url).send().await {
                                     Ok(resp) => {
                                         match resp.text().await {
                                             Ok(text) => scraper_clean_tags(&text),
                                             Err(e) => format!("Error leyendo respuesta: {}", e),
                                         }
+                                    }
                                     Err(e) => format!("Error al conectar con la URL: {}", e),
                                 }
                             }
                             Err(e) => format!("Error inicializando cliente HTTP: {}", e),
+                        }
                         }
                     }
                     "check_github_cli" => {
