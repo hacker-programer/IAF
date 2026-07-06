@@ -265,40 +265,47 @@ sendBtn.onclick = async () => {
         sendBtn.disabled = false;
     }
 };
+// Debounce helper
+let sendDebounceTimer = null;
+const SEND_DEBOUNCE_MS = 500;
 
-// Enviar Directo sin Refinar
-const sendDirectBtn = document.getElementById('sendDirectBtn');
-if (sendDirectBtn) {
-    sendDirectBtn.onclick = async () => {
+// Send Message to Agent - Interceptado para Refinamiento (con debounce)
+sendBtn.onclick = async () => {
+    if (sendDebounceTimer) {
+        clearTimeout(sendDebounceTimer);
+    }
+    sendDebounceTimer = setTimeout(async () => {
+        sendDebounceTimer = null;
         const text = chatInput.value.trim();
         if (!text) return;
         
-        chatInput.value = '';
-        await sendMessageToAgent(text);
-    };
-}
-
-applyRefinedPromptBtn.onclick = async () => {
-    refinePromptModal.classList.add('hidden');
-    const refinedMsg = refinedPromptText.value;
-    chatInput.value = '';
-    await sendMessageToAgent(refinedMsg);
+        sendBtn.disabled = true;
+        if (refinePromptFeedback) refinePromptFeedback.value = '';
+        
+        // Llamar al endpoint de refinamiento
+        try {
+            const refineRes = await apiCall('/api/prompts/refine', 'POST', { 
+                prompt: text,
+                session_id: currentSessionId,
+                project_name: activeProject
+            });
+            if (refineRes.status === 'ok') {
+                pendingMessageToSend = text;
+                refinedPromptText.value = refineRes.refined;
+                refinePromptModal.classList.remove('hidden');
+            } else {
+                // Si falla el refinador, enviar mensaje original
+                chatInput.value = '';
+                await sendMessageToAgent(text);
+            }
+        } catch(e) {
+            chatInput.value = '';
+            await sendMessageToAgent(text);
+        } finally {
+            sendBtn.disabled = false;
+        }
+    }, SEND_DEBOUNCE_MS);
 };
-
-reRefinePromptBtn.onclick = async () => {
-    const textToReRefine = refinedPromptText.value.trim();
-    const fbText = refinePromptFeedback ? refinePromptFeedback.value.trim() : '';
-    if (!textToReRefine) return;
-    
-    reRefinePromptBtn.innerText = 'Refinando...';
-    reRefinePromptBtn.disabled = true;
-    
-    try {
-        const refineRes = await apiCall('/api/prompts/refine', 'POST', { 
-            prompt: textToReRefine,
-            feedback: fbText.length > 0 ? fbText : null,
-            session_id: currentSessionId,
-            project_name: activeProject
         });
         if (refineRes.status === 'ok') {
             refinedPromptText.value = refineRes.refined;
