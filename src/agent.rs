@@ -792,6 +792,10 @@ pub async fn run_agent_loop(
                             if command_lower.contains(pattern) {
                                 return Ok(json!({
                                     "error": format!(
+                        for pattern in &forbidden_patterns {
+                            if command_lower.contains(pattern) {
+                                return Ok(json!({
+                                    "error": format!(
                                         "COMANDO BLOQUEADO POR SEGURIDAD: El comando contiene '{}'. \
                                         Para matar procesos, usá la herramienta `kill_process` con el PID. \
                                         Está prohibido usar taskkill, Stop-Process o cualquier comando \
@@ -801,13 +805,7 @@ pub async fn run_agent_loop(
                                 }).to_string());
                             }
                         }
-                                        pattern
-                                    )
-                                }).to_string();
-                            }
-                        }
                         // ========== FIN SANITIZACIÓN ==========
-
                         // Optional timer in seconds (max 300). If provided, we run the command without the default 30s timeout
                         let timer_opt = args.get("timer").and_then(|v| v.as_u64());
                         if let Some(ref proj_name) = project_name {
