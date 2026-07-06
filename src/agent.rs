@@ -1927,4 +1927,3 @@ fn sanitize_messages_for_api(messages: &mut Vec<serde_json::Value>) {
         i += 1;
     }
 }
-}
