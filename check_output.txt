@@ -1,7 +1,0 @@
-﻿cargo :     Blocking waiting for file lock on build directory
-En línea: 1 Carácter: 104
-+ ... rgo-target" ; cd "C:\Users\Fa\Desktop\IAF" ; cargo check 2>&1 | Out-F ...
-+                                                  ~~~~~~~~~~~~~~~~
-    + CategoryInfo          : NotSpecified: (    Blocking wa...build directory:String) [], RemoteException
-    + FullyQualifiedErrorId : NativeCommandError
- 

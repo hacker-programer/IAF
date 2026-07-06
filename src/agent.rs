@@ -355,7 +355,21 @@ pub async fn run_agent_loop(
         .tcp_keepalive(std::time::Duration::from_secs(30))
         .build()?;
     let mut iteration = {
-        let status = state.active_agent.lock().unwrap();
+        json!({
+            "type": "function",
+            "function": {
+                "name": "kill_process",
+                "description": "Mata de forma segura un proceso que fue spawnado previamente con execute_powershell. Solo puede matar procesos registrados internamente (los que vos mismo spawnaste). Recibe el PID exacto devuelto por execute_powershell. IMPORTANTE: Esta es la ÚNICA forma permitida de matar procesos. No uses taskkill ni Stop-Process.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "pid": { "type": "integer", "description": "PID del proceso a matar, tal como fue devuelto por execute_powershell." }
+                    },
+                    "required": ["pid"]
+                }
+            }
+        })
+    ];
         status.steps.iter().filter(|s| s.step_type == "thinking").count()
     };
 
