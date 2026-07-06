@@ -402,14 +402,12 @@ pub async fn run_agent_loop(
         sanitize_messages_for_api(&mut messages);
 
         let _ = fs::write(
-        let _ = fs::write(
             state.base_workspace.join("debug_messages.json"),
             serde_json::to_string_pretty(&messages).unwrap_or_default()
         );
 
         let mut force_none_tool_choice = false;
         let current_tool_choice = if force_none_tool_choice {
-            "none"
             "none"
         } else {
             "auto"
@@ -591,6 +589,80 @@ pub async fn run_agent_loop(
                             let full_path = Path::new(&proj_path).join(rel_path);
 
                             // --- PASO 1: Sincronizar con el repositorio remoto ANTES de realizar cualquier cambio local ---
+                            // --- PASO 0: Verificar que el repositorio tiene un remote 'origin' configurado ---
+                            // Si no existe, intentar crearlo. Si no se puede, abortar sin tocar archivos locales.
+                            let remote_check = Command::new("git")
+                                .args(&["remote", "get-url", "origin"])
+                                .current_dir(&proj_path)
+                                .stdin(std::process::Stdio::null())
+                                .stdout(std::process::Stdio::null())
+                                .stderr(std::process::Stdio::null())
+                                .env("GIT_TERMINAL_PROMPT", "0")
+                                .status();
+
+                            let has_remote = remote_check.as_ref().map(|s| s.success()).unwrap_or(false);
+
+                            if !has_remote {
+                                println!("PASO 0: No se detectó remote 'origin'. Intentando crear repositorio en GitHub...");
+                                // Intentar crear el repo en GitHub y configurar origin
+                                let gh_result = Command::new("gh")
+                                    .args(&["repo", "create", "--source=.", "--push", "--remote=origin", "--public"])
+                                    .current_dir(&proj_path)
+                                    .stdin(std::process::Stdio::null())
+                                    .stdout(std::process::Stdio::null())
+                                    .stderr(std::process::Stdio::null())
+                                    .env("GIT_TERMINAL_PROMPT", "0")
+                                    .status();
+
+                                if gh_result.as_ref().map(|s| s.success()).unwrap_or(false) {
+                                    println!("PASO 0: Repositorio creado exitosamente en GitHub. Continuando sincronización...");
+                                } else {
+                                    // Verificar si gh está instalado
+                                    let gh_available = Command::new("gh")
+                                        .args(&["--version"])
+                                        .stdin(std::process::Stdio::null())
+                                        .stdout(std::process::Stdio::null())
+                                        .stderr(std::process::Stdio::null())
+                                        .status()
+                                        .map(|s| s.success())
+                                        .unwrap_or(false);
+
+                                    let error_msg = if gh_available {
+                                        format!(
+                                            "ERROR DE SINCRONIZACIÓN: El proyecto '{}' no tiene un repositorio remoto 'origin' configurado. \
+                                            Se intentó crear uno con 'gh repo create' pero falló. \
+                                            \n\nPara continuar, necesitás una de estas opciones:\n\
+                                            1. Ejecutar manualmente: cd \"{}\" && gh repo create --source=. --push --remote=origin --public\n\
+                                            2. O configurar un remote manualmente: cd \"{}\" && git remote add origin <URL>\n\
+                                            3. O crear un repo en GitHub y vincularlo manualmente.\n\n\
+                                            Tus archivos locales NO fueron modificados.",
+                                            proj_name, proj_path, proj_path
+                                        )
+                                    } else {
+                                        format!(
+                                            "ERROR DE SINCRONIZACIÓN: El proyecto '{}' no tiene un repositorio remoto 'origin' configurado \
+                                            y GitHub CLI (gh) no está instalado en este sistema.\n\n\
+                                            Para continuar, necesitás:\n\
+                                            1. Instalar GitHub CLI: winget install GitHub.cli\n\
+                                            2. Autenticarte: gh auth login\n\
+                                            3. Luego ejecutar: cd \"{}\" && gh repo create --source=. --push --remote=origin --public\n\n\
+                                            O configurar un remote manualmente: cd \"{}\" && git remote add origin <URL>\n\n\
+                                            Tus archivos locales NO fueron modificados.",
+                                            proj_name, proj_path, proj_path
+                                        )
+                                    };
+
+                                    // NO retornar error que termine la sesión. Devolverlo como resultado de herramienta
+                                    // para que el agente pueda informar al usuario y tomar acción alternativa.
+                                    play_error_beep();
+                                    return Ok(error_msg); // Este return está dentro del match "write_file_with_commit" — 
+                                    // NOTA: Este es un return del closure del match, NO del run_agent_loop.
+                                    // Pero como es un return Ok(...) en el ámbito de la función, terminaría la sesión.
+                                    // CORREGIDO: Lo convertimos a un resultado de herramienta en el flujo de abajo.
+                                }
+                            }
+
+                            // --- PASO 1: Sincronizar con el repositorio remoto ---
                             let mut status_pull = Command::new("git")
                                 .args(&["pull", "--rebase", "--autostash", "origin", "master"])
                                 .current_dir(&proj_path)
@@ -600,11 +672,11 @@ pub async fn run_agent_loop(
                                 .env("GIT_TERMINAL_PROMPT", "0")
                                 .status();
                             
-                            // Autocuración en caso de que git pull falle
+                            // Autocuración SEGURA en caso de que git pull falle (remote ya verificado)
                             if status_pull.as_ref().map(|s| !s.success()).unwrap_or(true) {
-                                println!("Advertencia: git pull falló al inicio (repositorio posiblemente bloqueado o sucio). Iniciando autocuración...");
+                                println!("Advertencia: git pull falló al inicio. Iniciando autocuración SEGURA (remote verificado)...");
                                 
-                                // 1. Abortar cualquier rebase/merge en curso de forma silenciosa
+                                // 1. Abortar cualquier rebase/merge en curso
                                 let _ = Command::new("git")
                                     .args(&["rebase", "--abort"])
                                     .current_dir(&proj_path)
@@ -623,7 +695,8 @@ pub async fn run_agent_loop(
                                     .env("GIT_TERMINAL_PROMPT", "0")
                                     .status();
 
-                                // 2. Descartar cualquier cambio local sucio o pendiente en el working directory
+                                // 2. Resetear a HEAD (seguro: solo descarta cambios locales en staging/working,
+                                //    no borra archivos untracked como lo hacía git clean -fd)
                                 let _ = Command::new("git")
                                     .args(&["reset", "--hard", "HEAD"])
                                     .current_dir(&proj_path)
@@ -632,32 +705,17 @@ pub async fn run_agent_loop(
                                     .stderr(std::process::Stdio::null())
                                     .env("GIT_TERMINAL_PROMPT", "0")
                                     .status();
-                                
-                                let _ = Command::new("git")
-                                    .args(&["clean", "-fd"])
-                                    .current_dir(&proj_path)
-                                    .stdin(std::process::Stdio::null())
-                                    .stdout(std::process::Stdio::null())
-                                    .stderr(std::process::Stdio::null())
-                                    .env("GIT_TERMINAL_PROMPT", "0")
-                                    .status();
 
-                                // 3. Forzar eliminación física de carpetas residuales y archivos lock
+                                // 3. Eliminar lock files residuales (nunca git clean -fd)
+                                let index_lock_path = std::path::Path::new(&proj_path).join(".git").join("index.lock");
                                 let rebase_merge_path = std::path::Path::new(&proj_path).join(".git").join("rebase-merge");
                                 let rebase_apply_path = std::path::Path::new(&proj_path).join(".git").join("rebase-apply");
-                                let index_lock_path = std::path::Path::new(&proj_path).join(".git").join("index.lock");
-                                if rebase_merge_path.exists() {
-                                    let _ = fs::remove_dir_all(&rebase_merge_path);
-                                }
-                                if rebase_apply_path.exists() {
-                                    let _ = fs::remove_dir_all(&rebase_apply_path);
-                                }
-                                if index_lock_path.exists() {
-                                    let _ = fs::remove_file(&index_lock_path);
-                                }
+                                if index_lock_path.exists() { let _ = fs::remove_file(&index_lock_path); }
+                                if rebase_merge_path.exists() { let _ = fs::remove_dir_all(&rebase_merge_path); }
+                                if rebase_apply_path.exists() { let _ = fs::remove_dir_all(&rebase_apply_path); }
 
-                                // 4. Alinear el historial local forzadamente con el repositorio remoto
-                                println!("Ejecutando git reset --hard origin/master para alinear el historial local con el remoto...");
+                                // 4. Alinear con remote (SEGURO: remote ya fue verificado en PASO 0)
+                                println!("Ejecutando git reset --hard origin/master (remote verificado)...");
                                 let _ = Command::new("git")
                                     .args(&["reset", "--hard", "origin/master"])
                                     .current_dir(&proj_path)
@@ -673,6 +731,23 @@ pub async fn run_agent_loop(
                                     .current_dir(&proj_path)
                                     .stdin(std::process::Stdio::null())
                                     .stdout(std::process::Stdio::null())
+                                    .stderr(std::process::Stdio::null())
+                                    .env("GIT_TERMINAL_PROMPT", "0")
+                                    .status();
+                            }
+
+                            let pull_success = status_pull.as_ref().map(|s| s.success()).unwrap_or(false);
+                            if !pull_success {
+                                play_error_beep();
+                                // NO retornar Err que termine la sesión del agente. 
+                                // En su lugar, devolvemos el error como resultado de la herramienta
+                                // para que el agente pueda reaccionar.
+                                // Usamos un string de error que se asigna a tool_result más abajo.
+                                return Ok(format!("Error de Git: No se pudo sincronizar con origin/master. \
+                                    El remote existe (verificado en PASO 0) pero git pull falló. \
+                                    Posibles causas: branch 'master' no existe en remote, conflictos irresolubles, \
+                                    o problemas de red. Intentá hacer push inicial si es un repo nuevo."));
+                            }
                                     .stderr(std::process::Stdio::null())
                                     .env("GIT_TERMINAL_PROMPT", "0")
                                     .status();
@@ -802,8 +877,7 @@ pub async fn run_agent_loop(
                                 }).to_string());
                             }
                         }
-                        // ========== FIN SANITIZACIÓN ==========
-                        }
+
                         // ========== FIN SANITIZACIÓN ==========
                         // Optional timer in seconds (max 300). If provided, we run the command without the default 30s timeout
                         let timer_opt = args.get("timer").and_then(|v| v.as_u64());
@@ -1000,8 +1074,6 @@ pub async fn run_agent_loop(
                         }
                         
                         if tipo == "pregunta" {
-                        
-                        if tipo == "pregunta" {
                             // Cambiar estado a esperando respuesta
                             {
                                 let mut status = state.active_agent.lock().unwrap();
@@ -1015,7 +1087,7 @@ pub async fn run_agent_loop(
                                     timestamp: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs(),
                                 });
                                 if let Some(ref s_id) = session_id {
-                                    save_chat_steps_to_disk(&state, s_id, &status.steps);
+                                    save_chat_steps_to_disk(&state, &Some(s_id.clone()), &status.steps);
                                 }
                             }
  
@@ -1049,11 +1121,8 @@ pub async fn run_agent_loop(
                                     timestamp: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs(),
                                 });
                                 if let Some(ref s_id) = session_id {
-                                    save_chat_steps_to_disk(&state, s_id, &status.steps);
+                                    save_chat_steps_to_disk(&state, &Some(s_id.clone()), &status.steps);
                                 }
-                            }
-                            format!("Notificación enviada con éxito: {}", mensaje)
-                        }
                             }
                             format!("Notificación enviada con éxito: {}", mensaje)
                         }
