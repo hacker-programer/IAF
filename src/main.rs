@@ -23,7 +23,7 @@ mod state;
 
 use crate::desktop::DesktopController;
 use crate::agent::{discover_projects, run_agent_loop};
-use crate::state::{AppState, Project, PromptConfig, ActiveAgentStatus};
+use crate::state::{AppState, Project, PromptConfig, ActiveAgentStatus, ProcessRegistry};
 
 use std::sync::OnceLock;
 
