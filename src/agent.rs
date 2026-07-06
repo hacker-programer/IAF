@@ -1047,9 +1047,9 @@ pub async fn run_agent_loop(
                             state.base_workspace.to_string_lossy().to_string()
                         };
                         
+                        let parsed_args = parse_shell_args(command);
                         let output = Command::new("gh")
-                            .args(command.split_whitespace().collect::<Vec<&str>>())
-                            .current_dir(&working_dir)
+                            .args(&parsed_args)
                             .output();
                         match output {
                             Ok(out) => {
