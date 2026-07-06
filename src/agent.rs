@@ -402,11 +402,14 @@ pub async fn run_agent_loop(
         sanitize_messages_for_api(&mut messages);
 
         let _ = fs::write(
+        let _ = fs::write(
             state.base_workspace.join("debug_messages.json"),
             serde_json::to_string_pretty(&messages).unwrap_or_default()
         );
 
+        let mut force_none_tool_choice = false;
         let current_tool_choice = if force_none_tool_choice {
+            "none"
             "none"
         } else {
             "auto"
