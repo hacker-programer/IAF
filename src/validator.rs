@@ -258,6 +258,97 @@ fn check_rust_common_errors(content: &str) -> Vec<String> {
 }
 
 /// Trunca un string para mostrarlo en advertencias.
+
+/// Detecta definiciones duplicadas de funciones, structs, enums, traits, constantes y módulos.
+/// Este es el detector MÁS IMPORTANTE: atrapa el patrón de error más frecuente del agente
+/// donde copy-paste accidental deja dos definiciones idénticas de la misma función/struct.
+fn detect_duplicate_definitions(content: &str) -> Vec<String> {
+    let mut warnings = Vec::new();
+    let mut definitions: std::collections::HashMap<String, Vec<usize>> = std::collections::HashMap::new();
+
+    let lines: Vec<&str> = content.lines().collect();
+    for (i, line) in lines.iter().enumerate() {
+        let trimmed = line.trim();
+        
+        // Detectar definiciones de fn, pub fn, async fn, etc.
+        if let Some(name) = extract_def_name(trimmed, "fn ") {
+            definitions.entry(name).or_default().push(i + 1);
+        }
+        // Detectar struct
+        if let Some(name) = extract_def_name(trimmed, "struct ") {
+            definitions.entry(format!("struct {}", name)).or_default().push(i + 1);
+        }
+        // Detectar enum
+        if let Some(name) = extract_def_name(trimmed, "enum ") {
+            definitions.entry(format!("enum {}", name)).or_default().push(i + 1);
+        }
+        // Detectar trait
+        if let Some(name) = extract_def_name(trimmed, "trait ") {
+            definitions.entry(format!("trait {}", name)).or_default().push(i + 1);
+        }
+        // Detectar const
+        if let Some(name) = extract_def_name(trimmed, "const ") {
+            definitions.entry(format!("const {}", name)).or_default().push(i + 1);
+        }
+        // Detectar static
+        if let Some(name) = extract_def_name(trimmed, "static ") {
+            definitions.entry(format!("static {}", name)).or_default().push(i + 1);
+        }
+        // Detectar mod
+        if let Some(name) = extract_def_name(trimmed, "mod ") {
+            // Ignorar mod que no tienen body (solo declaración de archivo externo)
+            if !trimmed.ends_with(';') {
+                definitions.entry(format!("mod {}", name)).or_default().push(i + 1);
+            }
+        }
+    }
+
+    for (def_name, locations) in &definitions {
+        if locations.len() > 1 {
+            let locs_str = locations.iter()
+                .map(|l| l.to_string())
+                .collect::<Vec<_>>()
+                .join(", ");
+            warnings.push(format!(
+                "DEFINICIÓN DUPLICADA DETECTADA: '{}' definida {} veces (líneas: {}). Esto causará error de compilación.",
+                def_name, locations.len(), locs_str
+            ));
+        }
+    }
+
+    if !warnings.is_empty() {
+        warnings.push(format!(
+            "Se encontraron {} definiciones duplicadas. EDITAR EL ARCHIVO COMPLETO, no uses start_line/end_line.",
+            warnings.len()
+        ));
+    }
+
+    warnings
+}
+
+/// Extrae el nombre de una definición. Ej: "pub fn foo(" → Some("fn foo"), "struct Bar {" → Some("struct Bar")
+fn extract_def_name<'a>(line: &'a str, keyword: &str) -> Option<String> {
+    let line = line.trim();
+    // Buscar el keyword
+    let pos = line.find(keyword)?;
+    let after_keyword = &line[pos + keyword.len()..];
+    // El nombre es lo que sigue hasta '(' o '{' o '<' o ' '
+    let name_end = after_keyword.find(|c: char| c == '(' || c == '{' || c == '<' || c == ';' || c == ':').unwrap_or(after_keyword.len());
+    let name = after_keyword[..name_end].trim();
+    if name.is_empty() || name == "(" || name == "{" {
+        return None;
+    }
+    // Verificar que no sea una llamada a función (que tendría "=" antes o estaría dentro de otra expresión)
+    // Solo consideramos definiciones a nivel de archivo (sin indentación o con pub)
+    let before_keyword = &line[..pos];
+    if before_keyword.trim().is_empty() || before_keyword.trim() == "pub" || before_keyword.trim() == "pub(crate)" || before_keyword.trim() == "pub(super)" || before_keyword.trim() == "async" || before_keyword.trim() == "pub async" || before_keyword.trim() == "unsafe" || before_keyword.trim() == "pub unsafe" || before_keyword.trim() == "default" || before_keyword.trim() == "const" || before_keyword.trim() == "extern" {
+        Some(format!("{} {}", keyword.trim(), name))
+    } else {
+        None
+    }
+}
+
+
 fn truncate_for_display(s: &str, max_len: usize) -> String {
     if s.chars().count() <= max_len {
         s.to_string()
