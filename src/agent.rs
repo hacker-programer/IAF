@@ -685,8 +685,6 @@ pub async fn run_agent_loop(
                                     // NO retornar error que termine la sesión. Devolverlo como resultado de herramienta
                                     // para que el agente pueda informar al usuario y tomar acción alternativa.
                                     play_error_beep();
-                                    return Ok(error_msg); // Este return está dentro del match "write_file_with_commit" — 
-                                    // NOTA: Este es un return del closure del match, NO del run_agent_loop.
                                     // NO retornar error que termine la sesión. Usamos labeled block para
                                     // que el error sea el resultado de la herramienta, no el fin del agente.
                                     play_error_beep();
