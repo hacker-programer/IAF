@@ -33,8 +33,9 @@ impl DesktopController {
     /// Type a string as keyboard events.
     /// Soporta letras (a-z, A-Z), números (0-9), espacio, y puntuación común.
     pub fn type_text(&self, text: &str) -> Result<(), SimulateError> {
+        for ch in text.chars() {
+            match ch {
                 'a'..='z' => {
-                    let key = match ch {
                         'a' => Key::KeyA, 'b' => Key::KeyB, 'c' => Key::KeyC,
                         'd' => Key::KeyD, 'e' => Key::KeyE, 'f' => Key::KeyF,
                         'g' => Key::KeyG, 'h' => Key::KeyH, 'i' => Key::KeyI,
