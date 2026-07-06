@@ -1025,21 +1025,13 @@ pub async fn run_agent_loop(
                             .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36")
                             .timeout(std::time::Duration::from_secs(15))
                             .build();
-                        
-                    "check_github_cli" => {
-                        let command = args["command"].as_str().unwrap_or("");
-                        let working_dir = if let Some(ref proj_name) = project_name {
-                            get_project_path(&state, proj_name)
-                        } else {
-                            state.base_workspace.to_string_lossy().to_string()
-                        };
-                        
-                        // Usar shell-style parsing para manejar argumentos con comillas correctamente
-                        let parsed_args = parse_shell_args(command);
-                        let output = Command::new("gh")
-                            .args(&parsed_args)
-                            .current_dir(&working_dir)
-                            .output();
+                            .build();
+                        match client {
+                            Ok(client) => {
+                                match client.get(url).send() {
+                                    Ok(resp) => {
+                                        match resp.text() {
+                                            Ok(text) => scraper_clean_tags(&text),
                                         }
                                     }
                                     Err(e) => format!("Error al conectar con la URL: {}", e),
