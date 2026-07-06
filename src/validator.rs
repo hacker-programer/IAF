@@ -15,6 +15,7 @@ use std::process::Command;
 /// Resultado de la validación de un archivo.
 #[derive(Debug, Clone)]
 pub struct ValidationResult {
+    #[allow(dead_code)]
     pub path: String,
     pub warnings: Vec<String>,
     pub errors: Vec<String>,
@@ -73,6 +74,10 @@ pub fn validate_file_after_write(file_path: &str, _content: &str) -> ValidationR
     // === VALIDACIÓN 1: Detectar líneas duplicadas consecutivas ===
     let dup_warnings = detect_duplicate_lines(&disk_content);
     result.warnings.extend(dup_warnings);
+
+    // === VALIDACIÓN 1.5: Detectar definiciones duplicadas (fn, struct, enum, etc.) ===
+    let def_warnings = detect_duplicate_definitions(&disk_content);
+    result.warnings.extend(def_warnings);
 
     // === VALIDACIÓN 2: Verificar delimitadores balanceados ===
     let delim_errors = check_balanced_delimiters(&disk_content);
