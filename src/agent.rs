@@ -578,8 +578,8 @@ pub async fn run_agent_loop(
                         }
                     }
                     "write_file_with_commit" => {
+                        'write_handler: {
                         let rel_path = args["path"].as_str().unwrap_or("");
-                        let content = args["content"].as_str().unwrap_or("");
                         let commit_msg = args["commit_message"].as_str().unwrap_or("Update by Agent");
                         let start_line_opt = args["start_line"].as_i64();
                         let end_line_opt = args["end_line"].as_i64();
