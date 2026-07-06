@@ -1924,15 +1924,4 @@ fn sanitize_messages_for_api(messages: &mut Vec<serde_json::Value>) {
         i += 1;
     }
 }
-
-
-pub fn play_error_beep() {
-    print!("\x07");
-    let _ = std::io::Write::flush(&mut std::io::stdout());
-    let _ = std::process::Command::new("powershell")
-        .args(&["-Command", "[System.Console]::Beep(1000, 500)"])
-        .stdin(std::process::Stdio::null())
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .status();
 }
