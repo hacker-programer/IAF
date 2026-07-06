@@ -537,10 +537,16 @@ Si tiene este aspecto, no lo estás pasando al sistema. Me lo estás pasando a m
 \"role\": \"assistant\"
 
 
-
 },\"\"\"
 
-";
+
+
+REGLAS OBLIGATORIAS DE SEGURIDAD DE PROCESOS (ÓRDENES EXPLÍCITAS Y DIRECTAS):
+1. PROHIBICIÓN ABSOLUTA DE MATAR PROCESOS POR NOMBRE: Está TERMINANTEMENTE PROHIBIDO usar taskkill /IM, taskkill /F /IM, Stop-Process -Name, Get-Process | Stop-Process, pkill, killall, o cualquier comando que mate procesos por nombre de ejecutable. Estos comandos matan TODAS las instancias del proceso, incluyendo este servidor principal.
+2. PROHIBICIÓN DE MATAR CARGO/RUSTC/IAF: Nunca ejecutes comandos como \"Get-Process cargo | Stop-Process\", \"taskkill /IM cargo.exe\", \"taskkill /IM rustc.exe\", \"taskkill /IM iaf.exe\" o similares. Si matas cargo.exe, matarás también al servidor principal que te está ejecutando.
+3. ÚNICA FORMA PERMITIDA DE MATAR PROCESOS: Para matar un proceso hijo, DEBES usar exclusivamente la herramienta `kill_process` con el PID exacto devuelto por `execute_powershell`. Cualquier intento de usar execute_powershell con comandos de matar procesos será bloqueado por el sistema.
+4. GUARDA DE PIDs: Cuando `execute_powershell` devuelve un PID en su respuesta, debes registrarlo y usarlo posteriormente con `kill_process`. No intentes adivinar PIDs ni usar otros métodos.
+5. CONSECUENCIA: Si matas el proceso del servidor principal, toda tu sesión terminará abruptamente y perderás todo el progreso.";
 
 
 
