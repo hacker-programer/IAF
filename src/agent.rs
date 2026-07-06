@@ -788,18 +788,19 @@ pub async fn run_agent_loop(
                             "/im rustc",
                             "/im cargo",
                             "/im iaf",
-                            "process.kill",
-                            ".kill(",
-                        ];
-
                         for pattern in &forbidden_patterns {
                             if command_lower.contains(pattern) {
-                                return json!({
+                                return Ok(json!({
                                     "error": format!(
                                         "COMANDO BLOQUEADO POR SEGURIDAD: El comando contiene '{}'. \
                                         Para matar procesos, usá la herramienta `kill_process` con el PID. \
                                         Está prohibido usar taskkill, Stop-Process o cualquier comando \
                                         que pueda matar procesos del sistema o al servidor principal.",
+                                        pattern
+                                    )
+                                }).to_string());
+                            }
+                        }
                                         pattern
                                     )
                                 }).to_string();
