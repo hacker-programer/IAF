@@ -369,7 +369,7 @@ pub async fn run_agent_loop(
         .tcp_keepalive(std::time::Duration::from_secs(30))
         .build()?;
     let mut iteration = {
-        status.steps.iter().filter(|s| s.step_type == "thinking").count()
+        state.active_agent.lock().unwrap().steps.iter().filter(|s| s.step_type == "thinking").count()
     };
     loop {
         // Verificar señal de interrupción
