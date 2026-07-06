@@ -843,6 +843,7 @@ pub async fn run_agent_loop(
                         let command = args["command"].as_str().unwrap_or("");
 
                         // ========== SANITIZACIÓN DE SEGURIDAD ==========
+                        // ========== SANITIZACIÓN DE SEGURIDAD ==========
                         // Bloquear comandos que intentan matar procesos del sistema.
                         // Esto protege al servidor principal de ser terminado accidentalmente.
                         let command_lower = command.to_lowercase();
@@ -864,18 +865,22 @@ pub async fn run_agent_loop(
                             "/im cargo",
                             "/im iaf",
                         ];
+                        let mut blocked_reason: Option<String> = None;
                         for pattern in &forbidden_patterns {
                             if command_lower.contains(pattern) {
-                                return Ok(json!({
-                                    "error": format!(
-                                        "COMANDO BLOQUEADO POR SEGURIDAD: El comando contiene '{}'. \
-                                        Para matar procesos, usá la herramienta `kill_process` con el PID. \
-                                        Está prohibido usar taskkill, Stop-Process o cualquier comando \
-                                        que pueda matar procesos del sistema o al servidor principal.",
-                                        pattern
-                                    )
-                                }).to_string());
+                                blocked_reason = Some(format!(
+                                    "COMANDO BLOQUEADO POR SEGURIDAD: El comando contiene '{}'. \
+                                    Para matar procesos, usá la herramienta `kill_process` con el PID. \
+                                    Está prohibido usar taskkill, Stop-Process o cualquier comando \
+                                    que pueda matar procesos del sistema o al servidor principal.",
+                                    pattern
+                                ));
+                                break;
                             }
+                        }
+                        if let Some(reason) = blocked_reason {
+                            json!({"error": reason}).to_string()
+                        } else {
                         }
 
                         // ========== FIN SANITIZACIÓN ==========
