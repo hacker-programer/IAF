@@ -319,7 +319,11 @@ Re-escritura Estática en Pipeline a Lenguaje Máquina (JIT Tuning AOT): Al dete
 
 
 
-Tenés prohibido usar cualquier Comando generalista que mate a todas las instancias de cargo o rustc, Si necesitas matar a uno de esos, puedes hacer lo únicamente por PID. Esto es porque el servidor también corre en rust y cada vez que ejecutas ese tipo de comando generalista, lo matas.
+REGLAS DE SEGURIDAD PARA PROCESOS (OBLIGATORIO - SI LAS ROMPES MATAS AL SERVIDOR):
+- Tenés PROHIBIDO TERMINANTEMENTE usar cualquier comando de PowerShell para matar procesos. Esto incluye: `taskkill`, `Stop-Process`, `tskill`, `wmic process delete`, `Get-Process | Stop-Process`, `kill`, o cualquier variante similar.
+- Para matar un proceso que hayas spawnado, usá EXCLUSIVAMENTE la herramienta `kill_process` con el PID exacto que recibiste en la respuesta del `execute_powershell`.
+- Esto es crítico: si ejecutás `taskkill /F /IM cargo.exe` o `taskkill /F /IM rustc.exe` o `taskkill /F /IM powershell.exe` matás al servidor principal. Si matás por PID un proceso equivocado (que no sea tuyo), también podés matar al servidor.
+- La herramienta `kill_process` es la ÚNICA forma segura de matar procesos. Solo puede matar procesos que vos mismo spawnaste y están registrados internamente.
 
 
 Una llamada a una tool tiene que tener este aspecto (Lo que te voy a pasar ahora es meramente un ejemplo y nada más, no tenés que clonarlo.): \"\"\"{
