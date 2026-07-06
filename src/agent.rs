@@ -36,29 +36,29 @@ pub async fn run_agent_loop(
         global_prompt
     };
     system_prompt.push_str(
-        "\n\nOBLIGACIÓN CRÍTICA DE INICIO - CREAR DOCUMENTACIÓN:\n\
-         Tu primera e inmediata acción en esta sesión DEBE ser verificar si existe el archivo `DOCUMENTATION.md` en la raíz de tu proyecto actual.\n\
-         - SI NO EXISTE: Debes crearlo INMEDIATAMENTE como tu primer paso técnico usando la herramienta `write_file_with_commit` antes de hacer cualquier otra modificación o análisis profundo de código.\n\
-         - SI YA EXISTE: Debes leerlo obligatoriamente para orientarte en la arquitectura y actualizarlo si realizas algún cambio estructural.\n\
+        "\n\nOBLIGACIÃ“N CRÃTICA DE INICIO - CREAR DOCUMENTACIÃ“N:\n\
+         Tu primera e inmediata acciÃ³n en esta sesiÃ³n DEBE ser verificar si existe el archivo `DOCUMENTATION.md` en la raÃ­z de tu proyecto actual.\n\
+         - SI NO EXISTE: Debes crearlo INMEDIATAMENTE como tu primer paso tÃ©cnico usando la herramienta `write_file_with_commit` antes de hacer cualquier otra modificaciÃ³n o anÃ¡lisis profundo de cÃ³digo.\n\
+         - SI YA EXISTE: Debes leerlo obligatoriamente para orientarte en la arquitectura y actualizarlo si realizas algÃºn cambio estructural.\n\
          \n\
-         REQUISITOS DE DOCUMENTACIÓN EXHAUSTIVA:\n\
-         Este archivo `DOCUMENTATION.md` NO puede ser un resumen superficial. Debe ser un mapa técnico detallado y exhaustivo de todo el proyecto, conteniendo:\n\
+         REQUISITOS DE DOCUMENTACIÃ“N EXHAUSTIVA:\n\
+         Este archivo `DOCUMENTATION.md` NO puede ser un resumen superficial. Debe ser un mapa tÃ©cnico detallado y exhaustivo de todo el proyecto, conteniendo:\n\
          1. Lista completa de archivos fuente clave del repositorio.\n\
-         2. Nombre exacto de todas las estructuras (structs, enums, classes) y funciones principales de cada archivo, detallando su funcionamiento interno específico y dependencias.\n\
-         3. Rangos de líneas exactos o aproximados donde se define cada componente importante.\n\
+         2. Nombre exacto de todas las estructuras (structs, enums, classes) y funciones principales de cada archivo, detallando su funcionamiento interno especÃ­fico y dependencias.\n\
+         3. Rangos de lÃ­neas exactos o aproximados donde se define cada componente importante.\n\
          \n\
-         NOTA DE BÚSQUEDA DE CÓDIGO:\n\
-         La herramienta `search_code` realiza búsquedas de texto local de coincidencia exacta por términos y palabras clave (ya no utiliza embeddings de VoyageAI). Por ende, el archivo `DOCUMENTATION.md` que crees debe ser rico en términos descriptivos clave (como 'MunicipalFinance', 'tax_system.rs', 'GameWorld', etc.) para que puedas usar `search_code` en el futuro y encontrar la ubicación exacta de cualquier componente en un instante sin necesidad de leer archivos grandes enteros."
+         NOTA DE BÃšSQUEDA DE CÃ“DIGO:\n\
+         La herramienta `search_code` realiza bÃºsquedas de texto local de coincidencia exacta por tÃ©rminos y palabras clave (ya no utiliza embeddings de VoyageAI). Por ende, el archivo `DOCUMENTATION.md` que crees debe ser rico en tÃ©rminos descriptivos clave (como 'MunicipalFinance', 'tax_system.rs', 'GameWorld', etc.) para que puedas usar `search_code` en el futuro y encontrar la ubicaciÃ³n exacta de cualquier componente en un instante sin necesidad de leer archivos grandes enteros."
     );
     system_prompt.push_str(
-        "\n\nNOTA DE CONTEXTO: Para optimizar la memoria y la eficiencia, el sistema puede resumir los mensajes más antiguos del chat en una sola entrada con el encabezado `--- RESUMEN CONTEXTO ANTERIOR (Auto-comprimido por el sistema) ---`. Si encuentras este mensaje, debes interpretarlo como la continuación histórica y fidedigna de los acontecimientos y decisiones tomadas en el proyecto hasta ese momento."
+        "\n\nNOTA DE CONTEXTO: Para optimizar la memoria y la eficiencia, el sistema puede resumir los mensajes mÃ¡s antiguos del chat en una sola entrada con el encabezado `--- RESUMEN CONTEXTO ANTERIOR (Auto-comprimido por el sistema) ---`. Si encuentras este mensaje, debes interpretarlo como la continuaciÃ³n histÃ³rica y fidedigna de los acontecimientos y decisiones tomadas en el proyecto hasta ese momento."
     );
 
     let mut messages = vec![
         json!({ "role": "system", "content": system_prompt }),
     ];
 
-    // Cargar todo el historial del chat excepto el último mensaje (que es el nuevo prompt del usuario)
+    // Cargar todo el historial del chat excepto el Ãºltimo mensaje (que es el nuevo prompt del usuario)
     let len = session_messages.len();
     if len > 0 {
         for m in &session_messages[..len - 1] {
@@ -66,7 +66,7 @@ pub async fn run_agent_loop(
             messages.push(json!({ "role": role, "content": m.content }));
         }
 
-        // Inyectar memoria de ejecución reciente (pasos de auditoría de herramientas) si existen
+        // Inyectar memoria de ejecuciÃ³n reciente (pasos de auditorÃ­a de herramientas) si existen
         let steps = {
             let status = state.active_agent.lock().unwrap();
             status.steps.clone()
@@ -74,7 +74,7 @@ pub async fn run_agent_loop(
 
         if !steps.is_empty() {
             let mut steps_text = String::new();
-            // Tomar todos los pasos de auditoría desde el principio para evitar amnesia
+            // Tomar todos los pasos de auditorÃ­a desde el principio para evitar amnesia
             let start_idx = 0;
             for (i, step) in steps.iter().enumerate() {
                 // Truncar de forma segura a 1500 caracteres sin romper UTF-8
@@ -85,7 +85,7 @@ pub async fn run_agent_loop(
                     step.detail.clone()
                 };
                 steps_text.push_str(&format!(
-                    "Paso #{}: Tipo={}, Título={}\nDetalle: {}\n\n",
+                    "Paso #{}: Tipo={}, TÃ­tulo={}\nDetalle: {}\n\n",
                     start_idx + i + 1, step.step_type, step.title, detail_short
                 ));
             }
@@ -94,10 +94,10 @@ pub async fn run_agent_loop(
                 let context_msg = json!({
                     "role": "system",
                     "content": format!(
-                        "--- MEMORIA DE EJECUCIÓN RECIENTE (ACCIONES ANTES DE SER INTERRUMPIDO) ---\n\
-                         El agente estaba trabajando en esta sesión y fue interrumpido por el nuevo mensaje del usuario que leerás a continuación. \
-                         Aquí tienes el registro técnico de las últimas acciones y herramientas ejecutadas antes del nuevo mensaje. \
-                         Analízalo para saber qué archivos modificaste, qué errores obtuviste y qué descubriste para no perder el progreso:\n\n{}",
+                        "--- MEMORIA DE EJECUCIÃ“N RECIENTE (ACCIONES ANTES DE SER INTERRUMPIDO) ---\n\
+                         El agente estaba trabajando en esta sesiÃ³n y fue interrumpido por el nuevo mensaje del usuario que leerÃ¡s a continuaciÃ³n. \
+                         AquÃ­ tienes el registro tÃ©cnico de las Ãºltimas acciones y herramientas ejecutadas antes del nuevo mensaje. \
+                         AnalÃ­zalo para saber quÃ© archivos modificaste, quÃ© errores obtuviste y quÃ© descubriste para no perder el progreso:\n\n{}",
                         steps_text
                     )
                 });
@@ -105,12 +105,12 @@ pub async fn run_agent_loop(
             }
         }
 
-        // Cargar el último mensaje del usuario (el prompt activo)
+        // Cargar el Ãºltimo mensaje del usuario (el prompt activo)
         let last_msg = &session_messages[len - 1];
         let role = if last_msg.role == "agent" { "assistant" } else { "user" };
         messages.push(json!({ "role": role, "content": last_msg.content }));
     } else {
-        // Por si acaso el historial estuviese vacío (no debería ocurrir)
+        // Por si acaso el historial estuviese vacÃ­o (no deberÃ­a ocurrir)
         for m in session_messages {
             let role = if m.role == "agent" { "assistant" } else { "user" };
             messages.push(json!({ "role": role, "content": m.content }));
@@ -122,7 +122,7 @@ pub async fn run_agent_loop(
             "type": "function",
             "function": {
                 "name": "search_google",
-                "description": "Busca información en Google si necesitas datos actualizados.",
+                "description": "Busca informaciÃ³n en Google si necesitas datos actualizados.",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -136,13 +136,13 @@ pub async fn run_agent_loop(
             "type": "function",
             "function": {
                 "name": "read_file",
-                "description": "Lee el contenido de un archivo dentro del proyecto. Permite especificar opcionalmente un rango de líneas (start_line y end_line, indexado desde 1) para leer solo una sección del archivo y ahorrar contexto.",
+                "description": "Lee el contenido de un archivo dentro del proyecto. Permite especificar opcionalmente un rango de lÃ­neas (start_line y end_line, indexado desde 1) para leer solo una secciÃ³n del archivo y ahorrar contexto.",
                 "parameters": {
                     "type": "object",
                     "properties": {
                         "path": { "type": "string" },
-                        "start_line": { "type": "integer", "description": "Línea inicial a leer (opcional, indexada desde 1)." },
-                        "end_line": { "type": "integer", "description": "Línea final a leer (opcional, indexada desde 1, inclusiva)." }
+                        "start_line": { "type": "integer", "description": "LÃ­nea inicial a leer (opcional, indexada desde 1)." },
+                        "end_line": { "type": "integer", "description": "LÃ­nea final a leer (opcional, indexada desde 1, inclusiva)." }
                     },
                     "required": ["path"]
                 }
@@ -152,15 +152,15 @@ pub async fn run_agent_loop(
             "type": "function",
             "function": {
                 "name": "write_file_with_commit",
-                "description": "Modifica o crea un archivo en el proyecto y realiza un commit automático de GitHub. Permite especificar opcionalmente un rango de líneas (start_line y end_line, indexado desde 1) para modificar solo una sección del archivo y ahorrar contexto.",
+                "description": "Modifica o crea un archivo en el proyecto y realiza un commit automÃ¡tico de GitHub. Permite especificar opcionalmente un rango de lÃ­neas (start_line y end_line, indexado desde 1) para modificar solo una secciÃ³n del archivo y ahorrar contexto.",
                 "parameters": {
                     "type": "object",
                     "properties": {
                         "path": { "type": "string" },
-                        "content": { "type": "string", "description": "El nuevo contenido a escribir o bloque de reemplazo si se especifican líneas." },
+                        "content": { "type": "string", "description": "El nuevo contenido a escribir o bloque de reemplazo si se especifican lÃ­neas." },
                         "commit_message": { "type": "string" },
-                        "start_line": { "type": "integer", "description": "Línea inicial a reemplazar (opcional, indexada desde 1)." },
-                        "end_line": { "type": "integer", "description": "Línea final a reemplazar (opcional, indexada desde 1, inclusiva)." }
+                        "start_line": { "type": "integer", "description": "LÃ­nea inicial a reemplazar (opcional, indexada desde 1)." },
+                        "end_line": { "type": "integer", "description": "LÃ­nea final a reemplazar (opcional, indexada desde 1, inclusiva)." }
                     },
                     "required": ["path", "content", "commit_message"]
                 }
@@ -175,7 +175,7 @@ pub async fn run_agent_loop(
                     "type": "object",
                     "properties": {
                         "command": { "type": "string" },
-                        "timer": { "type": "integer", "description": "Duración del temporizador en segundos (máx 300). Si se especifica, el comando se ejecuta sin timeout y se inicia un temporizador independiente." }
+                        "timer": { "type": "integer", "description": "DuraciÃ³n del temporizador en segundos (mÃ¡x 300). Si se especifica, el comando se ejecuta sin timeout y se inicia un temporizador independiente." }
                     },
                     "required": ["command"]
                 }
@@ -185,7 +185,7 @@ pub async fn run_agent_loop(
             "type": "function",
             "function": {
                 "name": "search_code",
-                "description": "Busca fragmentos de código mediante coincidencia local de palabras clave en archivos del proyecto (NO usa VoyageAI embeddings; es búsqueda de texto exacta).",
+                "description": "Busca fragmentos de cÃ³digo mediante coincidencia local de palabras clave en archivos del proyecto (NO usa VoyageAI embeddings; es bÃºsqueda de texto exacta).",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -213,7 +213,7 @@ pub async fn run_agent_loop(
             "type": "function",
             "function": {
                 "name": "read_url",
-                "description": "Accede y extrae el texto de una URL pública (página web o documentación).",
+                "description": "Accede y extrae el texto de una URL pÃºblica (pÃ¡gina web o documentaciÃ³n).",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -241,7 +241,7 @@ pub async fn run_agent_loop(
             "type": "function",
             "function": {
                 "name": "notificar_usuario",
-                "description": "Permite al agente comunicarse con el usuario durante su ejecución. Puede usarse para dar información o para pausar y hacer preguntas obligatorias de aclaración.",
+                "description": "Permite al agente comunicarse con el usuario durante su ejecuciÃ³n. Puede usarse para dar informaciÃ³n o para pausar y hacer preguntas obligatorias de aclaraciÃ³n.",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -256,7 +256,7 @@ pub async fn run_agent_loop(
             "type": "function",
             "function": {
                 "name": "finalizar_tarea",
-                "description": "Indica explícitamente que el agente ha terminado de resolver la tarea y la da por finalizada.",
+                "description": "Indica explÃ­citamente que el agente ha terminado de resolver la tarea y la da por finalizada.",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -270,7 +270,7 @@ pub async fn run_agent_loop(
             "type": "function",
             "function": {
                 "name": "image_fetch",
-                "description": "Descarga una imagen desde una URL, la guarda en disco y devuelve un identificador UUID y la ruta del archivo. NO muestra la imagen automáticamente; para verla usa image_view después.",
+                "description": "Descarga una imagen desde una URL, la guarda en disco y devuelve un identificador UUID y la ruta del archivo. NO muestra la imagen automÃ¡ticamente; para verla usa image_view despuÃ©s.",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -284,7 +284,7 @@ pub async fn run_agent_loop(
             "type": "function",
             "function": {
                 "name": "image_view",
-                "description": "Inyecta una imagen previamente descargada en el contexto del chat para que puedas verla. La imagen se codifica en Base64 y se envía como contenido multimodal. Usa image_release cuando ya no necesites verla para ahorrar tokens.",
+                "description": "Inyecta una imagen previamente descargada en el contexto del chat para que puedas verla. La imagen se codifica en Base64 y se envÃ­a como contenido multimodal. Usa image_release cuando ya no necesites verla para ahorrar tokens.",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -298,7 +298,7 @@ pub async fn run_agent_loop(
             "type": "function",
             "function": {
                 "name": "image_release",
-                "description": "Elimina una imagen del contexto del chat (deja de enviarla a la API en las siguientes iteraciones). El archivo permanece en disco. Úsalo cuando ya no necesites ver la imagen para reducir costos de tokens.",
+                "description": "Elimina una imagen del contexto del chat (deja de enviarla a la API en las siguientes iteraciones). El archivo permanece en disco. Ãšsalo cuando ya no necesites ver la imagen para reducir costos de tokens.",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -319,7 +319,7 @@ pub async fn run_agent_loop(
                         "action": {
                             "type": "string",
                             "enum": ["keep_local", "keep_remote", "merge_both"],
-                            "description": "Acción para resolver la divergencia."
+                            "description": "AcciÃ³n para resolver la divergencia."
                         }
                     },
                     "required": ["action"]
@@ -330,7 +330,7 @@ pub async fn run_agent_loop(
             "type": "function",
             "function": {
                 "name": "analyze_images",
-                "description": "Analiza una o varias imágenes locales con un modelo multimodal (Qwen2.5-VL) vía OpenRouter. Permite preguntar sobre el contenido visual, estilo, comparar imágenes, etc.",
+                "description": "Analiza una o varias imÃ¡genes locales con un modelo multimodal (Qwen2.5-VL) vÃ­a OpenRouter. Permite preguntar sobre el contenido visual, estilo, comparar imÃ¡genes, etc.",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -341,7 +341,7 @@ pub async fn run_agent_loop(
                         },
                         "query": {
                             "type": "string",
-                            "description": "Pregunta sobre las imágenes."
+                            "description": "Pregunta sobre las imÃ¡genes."
                         }
                     },
                     "required": ["image_paths", "query"]
@@ -352,7 +352,7 @@ pub async fn run_agent_loop(
             "type": "function",
             "function": {
                 "name": "kill_process",
-                "description": "Mata de forma segura un proceso que fue spawnado previamente con execute_powershell. Solo puede matar procesos registrados internamente (los que vos mismo spawnaste). Recibe el PID exacto devuelto por execute_powershell. IMPORTANTE: Esta es la ÚNICA forma permitida de matar procesos. No uses taskkill ni Stop-Process.",
+                "description": "Mata de forma segura un proceso que fue spawnado previamente con execute_powershell. Solo puede matar procesos registrados internamente (los que vos mismo spawnaste). Recibe el PID exacto devuelto por execute_powershell. IMPORTANTE: Esta es la ÃšNICA forma permitida de matar procesos. No uses taskkill ni Stop-Process.",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -372,12 +372,12 @@ pub async fn run_agent_loop(
         state.active_agent.lock().unwrap().steps.iter().filter(|s| s.step_type == "thinking").count()
     };
     loop {
-        // Verificar señal de interrupción
+        // Verificar seÃ±al de interrupciÃ³n
         {
             let status = state.active_agent.lock().unwrap();
             if status.interrupted {
                 state.process_registry.kill_all();
-                return Ok("Ejecución del agente interrumpida manualmente por el usuario.".to_string());
+                return Ok("EjecuciÃ³n del agente interrumpida manualmente por el usuario.".to_string());
             }
         }
 
@@ -398,8 +398,7 @@ pub async fn run_agent_loop(
         // Comprimir el contexto activo acumulado en este turno si se vuelve demasiado grande
         compress_active_messages_if_needed(&state, &session_id, &mut messages, deepseek_key).await;
 
-        // Sanar los mensajes para evitar errores de la API sobre roles "tool" huérfanos
-        // Sanar los mensajes para evitar errores de la API sobre roles "tool" huérfanos
+        // Sanar los mensajes para evitar errores de la API sobre roles "tool" huÃ©rfanos
         sanitize_messages_for_api(&mut messages);
 
         // Rate-limiting: solo escribir debug_messages.json cada 5 iteraciones para reducir I/O
@@ -416,26 +415,26 @@ pub async fn run_agent_loop(
             );
             state.process_registry.kill_all();
             return Ok(format!(
-                "LÍMITE DE SEGURIDAD ALCANZADO: El agente ha ejecutado {} iteraciones. \
-                Se ha detenido automáticamente para evitar bucles infinitos. \
-                Revisá debug_messages.json para ver el estado del contexto.",
+                "LÃMITE DE SEGURIDAD ALCANZADO: El agente ha ejecutado {} iteraciones. \
+                Se ha detenido automÃ¡ticamente para evitar bucles infinitos. \
+                RevisÃ¡ debug_messages.json para ver el estado del contexto.",
                 iteration
             ));
         }
 
-        // Límite de pasos de auditoría: máximo 10000 para evitar archivos JSON gigantes
+        // LÃ­mite de pasos de auditorÃ­a: mÃ¡ximo 10000 para evitar archivos JSON gigantes
         {
             let status = state.active_agent.lock().unwrap();
             if status.steps.len() > 10000 {
                 drop(status);
                 let mut status = state.active_agent.lock().unwrap();
-                // Truncar a los últimos 5000 pasos
+                // Truncar a los Ãºltimos 5000 pasos
                 let total = status.steps.len();
                 status.steps = status.steps.split_off(total - 5000);
                 status.steps.insert(0, crate::state::AuditStep {
                     step_type: "thinking".to_string(),
                     title: "Pasos truncados".to_string(),
-                    detail: format!("Se eliminaron {} pasos antiguos para evitar crecimiento excesivo del archivo de auditoría.", total - 5000),
+                    detail: format!("Se eliminaron {} pasos antiguos para evitar crecimiento excesivo del archivo de auditorÃ­a.", total - 5000),
                     timestamp: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs(),
                 });
             }
@@ -481,7 +480,7 @@ pub async fn run_agent_loop(
                         if attempts >= 3 {
                             return Err(format!("DeepSeek API returned error status {}: {}", status, err_text).into());
                         }
-                        println!("Advertencia: La API retornó status {} (intento {}/3). Reintentando...", status, attempts);
+                        println!("Advertencia: La API retornÃ³ status {} (intento {}/3). Reintentando...", status, attempts);
                         tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
                     }
                 }
@@ -489,7 +488,7 @@ pub async fn run_agent_loop(
                     if attempts >= 3 {
                         return Err(Box::new(e));
                     }
-                    println!("Advertencia: Error de conexión HTTP (intento {}/3): {}. Reintentando...", attempts, e);
+                    println!("Advertencia: Error de conexiÃ³n HTTP (intento {}/3): {}. Reintentando...", attempts, e);
                     tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
                 }
             }
@@ -539,12 +538,12 @@ pub async fn run_agent_loop(
             let mut final_message = None;
 
             for tool_call in tool_calls {
-                // Verificar señal de interrupción antes de cada herramienta
+                // Verificar seÃ±al de interrupciÃ³n antes de cada herramienta
                 {
                     let status = state.active_agent.lock().unwrap();
                     if status.interrupted {
                         state.process_registry.kill_all();
-                        return Ok("Ejecución del agente interrumpida manualmente antes de ejecutar herramienta.".to_string());
+                        return Ok("EjecuciÃ³n del agente interrumpida manualmente antes de ejecutar herramienta.".to_string());
                     }
                 }
 
@@ -592,10 +591,10 @@ pub async fn run_agent_loop(
                                         let start_idx = start.saturating_sub(1);
                                         let end_idx = end.min(total_lines);
                                         if start_idx >= total_lines || start_idx > end_idx {
-                                            format!("Error: El rango de líneas {}-{} es inválido para un archivo de {} líneas.", start, end, total_lines)
+                                            format!("Error: El rango de lÃ­neas {}-{} es invÃ¡lido para un archivo de {} lÃ­neas.", start, end, total_lines)
                                         } else {
                                             let chunk = lines[start_idx..end_idx].join("\n");
-                                            format!("// Líneas {}-{} de {} en {}\n{}", start_idx + 1, end_idx, total_lines, rel_path, chunk)
+                                            format!("// LÃ­neas {}-{} de {} en {}\n{}", start_idx + 1, end_idx, total_lines, rel_path, chunk)
                                         }
                                     } else {
                                         content
@@ -604,7 +603,7 @@ pub async fn run_agent_loop(
                                 Err(e) => format!("Error leyendo archivo: {}", e),
                             }
                         } else {
-                            "No hay ningún proyecto activo seleccionado.".to_string()
+                            "No hay ningÃºn proyecto activo seleccionado.".to_string()
                         }
                     }
                     "write_file_with_commit" => {
@@ -633,7 +632,7 @@ pub async fn run_agent_loop(
                             let has_remote = remote_check.as_ref().map(|s| s.success()).unwrap_or(false);
 
                             if !has_remote {
-                                println!("PASO 0: No se detectó remote 'origin'. Intentando crear repositorio en GitHub...");
+                                println!("PASO 0: No se detectÃ³ remote 'origin'. Intentando crear repositorio en GitHub...");
                                 // Intentar crear el repo en GitHub y configurar origin
                                 let gh_result = Command::new("gh")
                                     .args(&["repo", "create", "--source=.", "--push", "--remote=origin", "--public"])
@@ -645,9 +644,9 @@ pub async fn run_agent_loop(
                                     .status();
 
                                 if gh_result.as_ref().map(|s| s.success()).unwrap_or(false) {
-                                    println!("PASO 0: Repositorio creado exitosamente en GitHub. Continuando sincronización...");
+                                    println!("PASO 0: Repositorio creado exitosamente en GitHub. Continuando sincronizaciÃ³n...");
                                 } else {
-                                    // Verificar si gh está instalado
+                                    // Verificar si gh estÃ¡ instalado
                                     let gh_available = Command::new("gh")
                                         .args(&["--version"])
                                         .stdin(std::process::Stdio::null())
@@ -659,9 +658,9 @@ pub async fn run_agent_loop(
 
                                     let error_msg = if gh_available {
                                         format!(
-                                            "ERROR DE SINCRONIZACIÓN: El proyecto '{}' no tiene un repositorio remoto 'origin' configurado. \
-                                            Se intentó crear uno con 'gh repo create' pero falló. \
-                                            \n\nPara continuar, necesitás una de estas opciones:\n\
+                                            "ERROR DE SINCRONIZACIÃ“N: El proyecto '{}' no tiene un repositorio remoto 'origin' configurado. \
+                                            Se intentÃ³ crear uno con 'gh repo create' pero fallÃ³. \
+                                            \n\nPara continuar, necesitÃ¡s una de estas opciones:\n\
                                             1. Ejecutar manualmente: cd \"{}\" && gh repo create --source=. --push --remote=origin --public\n\
                                             2. O configurar un remote manualmente: cd \"{}\" && git remote add origin <URL>\n\
                                             3. O crear un repo en GitHub y vincularlo manualmente.\n\n\
@@ -670,9 +669,9 @@ pub async fn run_agent_loop(
                                         )
                                     } else {
                                         format!(
-                                            "ERROR DE SINCRONIZACIÓN: El proyecto '{}' no tiene un repositorio remoto 'origin' configurado \
-                                            y GitHub CLI (gh) no está instalado en este sistema.\n\n\
-                                            Para continuar, necesitás:\n\
+                                            "ERROR DE SINCRONIZACIÃ“N: El proyecto '{}' no tiene un repositorio remoto 'origin' configurado \
+                                            y GitHub CLI (gh) no estÃ¡ instalado en este sistema.\n\n\
+                                            Para continuar, necesitÃ¡s:\n\
                                             1. Instalar GitHub CLI: winget install GitHub.cli\n\
                                             2. Autenticarte: gh auth login\n\
                                             3. Luego ejecutar: cd \"{}\" && gh repo create --source=. --push --remote=origin --public\n\n\
@@ -682,10 +681,10 @@ pub async fn run_agent_loop(
                                         )
                                     };
 
-                                    // NO retornar error que termine la sesión. Devolverlo como resultado de herramienta
-                                    // para que el agente pueda informar al usuario y tomar acción alternativa.
+                                    // NO retornar error que termine la sesiÃ³n. Devolverlo como resultado de herramienta
+                                    // para que el agente pueda informar al usuario y tomar acciÃ³n alternativa.
                                     play_error_beep();
-                                    // NO retornar error que termine la sesión. Usamos labeled block para
+                                    // NO retornar error que termine la sesiÃ³n. Usamos labeled block para
                                     // que el error sea el resultado de la herramienta, no el fin del agente.
                                     play_error_beep();
                                     break 'write_handler error_msg;
@@ -701,9 +700,9 @@ pub async fn run_agent_loop(
                                 .stderr(std::process::Stdio::null())
                                 .env("GIT_TERMINAL_PROMPT", "0")
                                 .status();
-                            // Autocuración SEGURA en caso de que git pull falle (remote ya verificado)
+                            // AutocuraciÃ³n SEGURA en caso de que git pull falle (remote ya verificado)
                             if status_pull.as_ref().map(|s| !s.success()).unwrap_or(true) {
-                                println!("Advertencia: git pull falló al inicio. Iniciando autocuración SEGURA (remote verificado)...");
+                                println!("Advertencia: git pull fallÃ³ al inicio. Iniciando autocuraciÃ³n SEGURA (remote verificado)...");
                                 
                                 // 1. Abortar cualquier rebase/merge en curso
                                 let _ = Command::new("git")
@@ -724,7 +723,7 @@ pub async fn run_agent_loop(
                                     .status();
 
                                 // 2. Resetear a HEAD (seguro: solo descarta cambios locales en staging/working,
-                                //    no borra archivos untracked como lo hacía git clean -fd)
+                                //    no borra archivos untracked como lo hacÃ­a git clean -fd)
                                 let _ = Command::new("git")
                                     .args(&["reset", "--hard", "HEAD"])
                                     .current_dir(&proj_path)
@@ -767,11 +766,11 @@ pub async fn run_agent_loop(
                             let pull_success = status_pull.as_ref().map(|s| s.success()).unwrap_or(false);
                             if !pull_success {
                                 play_error_beep();
-                                // NO retornar Err que termine la sesión. Usamos break del labeled block.
+                                // NO retornar Err que termine la sesiÃ³n. Usamos break del labeled block.
                                 break 'write_handler format!("Error de Git: No se pudo sincronizar con origin/master. \
-                                    El remote existe (verificado en PASO 0) pero git pull falló. \
+                                    El remote existe (verificado en PASO 0) pero git pull fallÃ³. \
                                     Posibles causas: branch 'master' no existe en remote, conflictos irresolubles, \
-                                    o problemas de red. Intentá hacer push inicial si es un repo nuevo.");
+                                    o problemas de red. IntentÃ¡ hacer push inicial si es un repo nuevo.");
                             }
                             
                             let mut write_success = false;
@@ -779,7 +778,7 @@ pub async fn run_agent_loop(
                             let mut is_agent_error = false;
                             
                             if start_line_opt.is_some() || end_line_opt.is_some() {
-                                // Edición por rango de líneas en archivo existente
+                                // EdiciÃ³n por rango de lÃ­neas en archivo existente
                                 match fs::read_to_string(&full_path) {
                                     Ok(orig_content) => {
                                         let line_ending = if orig_content.contains("\r\n") { "\r\n" } else { "\n" };
@@ -791,7 +790,7 @@ pub async fn run_agent_loop(
                                         let end_idx = end.min(total_lines);
                                         
                                         if start_idx > total_lines || start_idx > end_idx {
-                                            write_err_msg = format!("Error: Rango de líneas {}-{} inválido para edición de un archivo de {} líneas.", start, end, total_lines);
+                                            write_err_msg = format!("Error: Rango de lÃ­neas {}-{} invÃ¡lido para ediciÃ³n de un archivo de {} lÃ­neas.", start, end, total_lines);
                                             is_agent_error = true;
                                         } else {
                                             let replacement_lines: Vec<String> = content.split('\n').map(|s| s.replace('\r', "")).collect();
@@ -804,7 +803,7 @@ pub async fn run_agent_loop(
                                         }
                                     }
                                     Err(e) => {
-                                        write_err_msg = format!("Error leyendo el archivo original para edición de líneas: {}", e);
+                                        write_err_msg = format!("Error leyendo el archivo original para ediciÃ³n de lÃ­neas: {}", e);
                                     }
                                 }
                             } else {
@@ -851,15 +850,15 @@ pub async fn run_agent_loop(
                                 write_err_msg
                             }
                         } else {
-                            "No hay ningún proyecto activo seleccionado.".to_string()
+                            "No hay ningÃºn proyecto activo seleccionado.".to_string()
                         }
                         } // Fin de 'write_handler labeled block
                     }
                     "execute_powershell" => {
                         let command = args["command"].as_str().unwrap_or("");
 
-                        // ========== SANITIZACIÓN DE SEGURIDAD ==========
-                        // ========== SANITIZACIÓN DE SEGURIDAD ==========
+                        // ========== SANITIZACIÃ“N DE SEGURIDAD ==========
+                        // ========== SANITIZACIÃ“N DE SEGURIDAD ==========
                         // Bloquear comandos que intentan matar procesos del sistema.
                         // Esto protege al servidor principal de ser terminado accidentalmente.
                         let command_lower = command.to_lowercase();
@@ -886,8 +885,8 @@ pub async fn run_agent_loop(
                             if command_lower.contains(pattern) {
                                 blocked_reason = Some(format!(
                                     "COMANDO BLOQUEADO POR SEGURIDAD: El comando contiene '{}'. \
-                                    Para matar procesos, usá la herramienta `kill_process` con el PID. \
-                                    Está prohibido usar taskkill, Stop-Process o cualquier comando \
+                                    Para matar procesos, usÃ¡ la herramienta `kill_process` con el PID. \
+                                    EstÃ¡ prohibido usar taskkill, Stop-Process o cualquier comando \
                                     que pueda matar procesos del sistema o al servidor principal.",
                                     pattern
                                 ));
@@ -898,16 +897,16 @@ pub async fn run_agent_loop(
                             json!({"error": reason}).to_string()
                         } else {
 
-                        // ========== FIN SANITIZACIÓN ==========
+                        // ========== FIN SANITIZACIÃ“N ==========
                         let timer_opt = args.get("timer").and_then(|v| v.as_u64());
                         if let Some(ref proj_name) = project_name {
                             let proj_path = get_project_path(&state, proj_name);
-                            // Detect comandos que normalmente son de larga duración (ej. cargo run, npm start, python main.py)
+                            // Detect comandos que normalmente son de larga duraciÃ³n (ej. cargo run, npm start, python main.py)
                             let is_long_running = command.contains("cargo run")
                                 || command.contains("npm start")
                                 || (command.contains("python") && command.contains("main.py"));
 
-                            // Si es de larga duración o se especificó un timer, usamos spawn sin bloquear
+                            // Si es de larga duraciÃ³n o se especificÃ³ un timer, usamos spawn sin bloquear
                             if is_long_running || timer_opt.is_some() {
                                 match Command::new("powershell")
                                     .args(&["-Command", command])
@@ -919,22 +918,22 @@ pub async fn run_agent_loop(
                                         let pid = child.id();
                                         // REGISTRAR EL PID EN EL PROCESS REGISTRY
                                         state.process_registry.register(pid);
-                                        // Si se pidió un timer, iniciamos una tarea background que avisa al agente cuando expira
+                                        // Si se pidiÃ³ un timer, iniciamos una tarea background que avisa al agente cuando expira
                                         if let Some(seconds) = timer_opt {
                                             let pid_copy = pid;
                                             tokio::spawn(async move {
                                                 tokio::time::sleep(tokio::time::Duration::from_secs(seconds)).await;
-                                                println!("Timer de {}s expiró para PID {}", seconds, pid_copy);
+                                                println!("Timer de {}s expirÃ³ para PID {}", seconds, pid_copy);
                                             });
                                         }
 
                                         if is_long_running {
                                             json!({
-                                                "message": "Comando de larga duración iniciado en background.",
+                                                "message": "Comando de larga duraciÃ³n iniciado en background.",
                                                 "pid": pid
                                             }).to_string()
                                         } else {
-                                            // Esperamos salida con timeout de 30 s (solo si no hay timer explícito)
+                                            // Esperamos salida con timeout de 30â€¯s (solo si no hay timer explÃ­cito)
                                             let handle = tokio::task::spawn_blocking(move || child.wait_with_output());
                                             match tokio::time::timeout(tokio::time::Duration::from_secs(30), handle).await {
                                                 Ok(join_res) => match join_res {
@@ -949,16 +948,16 @@ pub async fn run_agent_loop(
                                                         }).to_string()
                                                     }
                                                     Ok(Err(e)) => json!({ "error": format!("Error de E/S ejecutando comando: {}", e) }).to_string(),
-                                                    Err(e) => json!({ "error": format!("La tarea en segundo plano falló (JoinError): {}", e) }).to_string(),
+                                                    Err(e) => json!({ "error": format!("La tarea en segundo plano fallÃ³ (JoinError): {}", e) }).to_string(),
                                                 },
-                                                Err(_) => json!({ "error": "El comando excedió el timeout de 30 segundos y continúa corriendo en segundo plano.", "pid": pid }).to_string(),
+                                                Err(_) => json!({ "error": "El comando excediÃ³ el timeout de 30 segundos y continÃºa corriendo en segundo plano.", "pid": pid }).to_string(),
                                             }
                                         }
                                     }
                                     Err(e) => json!({ "error": format!("Error al iniciar PowerShell: {}", e) }).to_string(),
                                 }
                             } else {
-                                // Ruta tradicional con timeout de 30 s (comandos cortos)
+                                // Ruta tradicional con timeout de 30â€¯s (comandos cortos)
                                 let child = Command::new("powershell")
                                     .args(&["-Command", command])
                                     .current_dir(&proj_path)
@@ -973,7 +972,7 @@ pub async fn run_agent_loop(
                                 }
                             }
                         } else {
-                            json!({"error": "No hay ningún proyecto activo seleccionado."}).to_string()
+                            json!({"error": "No hay ningÃºn proyecto activo seleccionado."}).to_string()
                         }
                         } // Fin del else de bloqueo de comandos (blocked_reason)
                     }
@@ -983,16 +982,16 @@ pub async fn run_agent_loop(
                             let proj_path = get_project_path(&state, proj_name);
                             match search_code_in_project(&proj_path, query, voyage_key).await {
                                 Ok(res) => res,
-                                Err(e) => format!("Error en búsqueda semántica: {}", e),
+                                Err(e) => format!("Error en bÃºsqueda semÃ¡ntica: {}", e),
                             }
                         } else {
-                            json!({"error": "No hay ningún proyecto activo seleccionado."}).to_string()
+                            json!({"error": "No hay ningÃºn proyecto activo seleccionado."}).to_string()
                         }
                     }
                     "kill_process" => {
                         let pid = args["pid"].as_u64().unwrap_or(0) as u32;
                         if pid == 0 {
-                            json!({"error": "PID inválido: debe ser un entero positivo."}).to_string()
+                            json!({"error": "PID invÃ¡lido: debe ser un entero positivo."}).to_string()
                         } else {
                             // Usar el ProcessRegistry para matar de forma segura
                             state.process_registry.safe_kill(pid)
@@ -1050,6 +1049,7 @@ pub async fn run_agent_loop(
                         let parsed_args = parse_shell_args(command);
                         let output = Command::new("gh")
                             .args(&parsed_args)
+                            .current_dir(&working_dir)
                             .output();
                         match output {
                             Ok(out) => {
@@ -1101,16 +1101,16 @@ pub async fn run_agent_loop(
                                 }
                             }
  
-                            // Bloquear ciclo asíncronamente con un sleep no bloqueante de Tokio hasta que respuesta_usuario sea Some
+                            // Bloquear ciclo asÃ­ncronamente con un sleep no bloqueante de Tokio hasta que respuesta_usuario sea Some
                             let respuesta = loop {
                                 tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
                                 
-                                // Comprobar si se envió señal de interrupción mientras esperaba
+                                // Comprobar si se enviÃ³ seÃ±al de interrupciÃ³n mientras esperaba
                                 {
                                     let status = state.active_agent.lock().unwrap();
                                     if status.interrupted {
                                         state.process_registry.kill_all();
-                                        return Ok("Ejecución del agente interrumpida mientras esperaba respuesta del usuario.".to_string());
+                                        return Ok("EjecuciÃ³n del agente interrumpida mientras esperaba respuesta del usuario.".to_string());
                                     }
                                     if !status.esperando_respuesta_usuario {
                                         if let Some(ref respuesta) = status.respuesta_usuario {
@@ -1126,7 +1126,7 @@ pub async fn run_agent_loop(
                                 let mut status = state.active_agent.lock().unwrap();
                                 status.steps.push(crate::state::AuditStep {
                                     step_type: "informativo".to_string(),
-                                    title: "Notificación del Agente".to_string(),
+                                    title: "NotificaciÃ³n del Agente".to_string(),
                                     detail: mensaje.to_string(),
                                     timestamp: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs(),
                                 });
@@ -1134,7 +1134,7 @@ pub async fn run_agent_loop(
                                     save_chat_steps_to_disk(&state, &Some(s_id.clone()), &status.steps);
                                 }
                             }
-                            format!("Notificación enviada con éxito: {}", mensaje)
+                            format!("NotificaciÃ³n enviada con Ã©xito: {}", mensaje)
                         }
                     }
                     "finalizar_tarea" => {
@@ -1147,7 +1147,7 @@ pub async fn run_agent_loop(
                     "image_fetch" => {
                         let url = args["url"].as_str().unwrap_or("");
                         if url.is_empty() {
-                            json!({"error": "No se proporcionó URL"}).to_string()
+                            json!({"error": "No se proporcionÃ³ URL"}).to_string()
                         } else {
                             let fetch_client = reqwest::Client::builder()
                                 .user_agent("Mozilla/5.0")
@@ -1205,7 +1205,7 @@ pub async fn run_agent_loop(
                     "image_view" => {
                         let id = args["id"].as_str().unwrap_or("");
                         if id.is_empty() {
-                            json!({"error": "No se proporcionó ID de imagen"}).to_string()
+                            json!({"error": "No se proporcionÃ³ ID de imagen"}).to_string()
                         } else {
                             let path_opt = {
                                 let store = state.image_store.lock().unwrap();
@@ -1228,7 +1228,7 @@ pub async fn run_agent_loop(
                                                 "messages": [{
                                                     "role": "user",
                                                     "content": [
-                                                        {"type": "text", "text": "Describe detalladamente esta imagen. Incluye elementos visuales, colores, composición, estilo y cualquier texto visible."},
+                                                        {"type": "text", "text": "Describe detalladamente esta imagen. Incluye elementos visuales, colores, composiciÃ³n, estilo y cualquier texto visible."},
                                                         {"type": "image_url", "image_url": {"url": data_url}}
                                                     ]
                                                 }]
@@ -1253,7 +1253,7 @@ pub async fn run_agent_loop(
                                                             // Inyectar SOLO texto en el contexto (DeepSeek puede leer texto)
                                                             messages.push(json!({
                                                                 "role": "user",
-                                                                "content": format!("[Sistema] Imagen analizada (id: {}). Descripción:\n\n{}", id, description)
+                                                                "content": format!("[Sistema] Imagen analizada (id: {}). DescripciÃ³n:\n\n{}", id, description)
                                                             }));
                                                             json!({
                                                                 "message": format!("Imagen '{}' analizada e inyectada en el contexto (solo texto, sin imagen). Usa image_release('{}') cuando no la necesites.", id, id)
@@ -1273,14 +1273,14 @@ pub async fn run_agent_loop(
                                         Err(e) => json!({"error": format!("Error leyendo archivo: {}", e)}).to_string(),
                                     }
                                 }
-                                None => json!({"error": format!("No se encontró imagen con id '{}'", id)}).to_string(),
+                                None => json!({"error": format!("No se encontrÃ³ imagen con id '{}'", id)}).to_string(),
                             }
                         }
                     }
                     "image_release" => {
                         let id = args["id"].as_str().unwrap_or("");
                         if id.is_empty() {
-                            json!({"error": "No se proporcionó ID de imagen"}).to_string()
+                            json!({"error": "No se proporcionÃ³ ID de imagen"}).to_string()
                         } else {
                             let marker = format!("(id: {})", id);
                             let before_len = messages.len();
@@ -1324,32 +1324,32 @@ pub async fn run_agent_loop(
                             match action {
                                 "keep_local" => {
                                     match Command::new("git").args(&["push","origin","master","--force"]).current_dir(&proj_path).env("GIT_TERMINAL_PROMPT","0").output() {
-                                        Ok(o) if o.status.success() => format!("✅ Push forzado exitoso.\n{}", String::from_utf8_lossy(&o.stdout).trim()),
-                                        Ok(o) => format!("❌ Error push: {}", String::from_utf8_lossy(&o.stderr).trim()),
-                                        Err(e) => format!("❌ Error: {}", e),
+                                        Ok(o) if o.status.success() => format!("âœ… Push forzado exitoso.\n{}", String::from_utf8_lossy(&o.stdout).trim()),
+                                        Ok(o) => format!("âŒ Error push: {}", String::from_utf8_lossy(&o.stderr).trim()),
+                                        Err(e) => format!("âŒ Error: {}", e),
                                     }
                                 }
                                 "keep_remote" => {
                                     match Command::new("git").args(&["reset","--hard","origin/master"]).current_dir(&proj_path).env("GIT_TERMINAL_PROMPT","0").output() {
-                                        Ok(o) if o.status.success() => "✅ Reset exitoso. Local coincide con origin/master.".to_string(),
-                                        Ok(o) => format!("❌ Error reset: {}", String::from_utf8_lossy(&o.stderr).trim()),
-                                        Err(e) => format!("❌ Error: {}", e),
+                                        Ok(o) if o.status.success() => "âœ… Reset exitoso. Local coincide con origin/master.".to_string(),
+                                        Ok(o) => format!("âŒ Error reset: {}", String::from_utf8_lossy(&o.stderr).trim()),
+                                        Err(e) => format!("âŒ Error: {}", e),
                                     }
                                 }
                                 "merge_both" => {
                                     match Command::new("git").args(&["pull","--rebase","--autostash","origin","master"]).current_dir(&proj_path).env("GIT_TERMINAL_PROMPT","0").env("GIT_MERGE_AUTOEDIT","no").output() {
-                                        Ok(o) if o.status.success() => format!("✅ Merge/rebase exitoso.\n{}", String::from_utf8_lossy(&o.stdout).trim()),
+                                        Ok(o) if o.status.success() => format!("âœ… Merge/rebase exitoso.\n{}", String::from_utf8_lossy(&o.stdout).trim()),
                                         Ok(o) => {
                                             let stderr = String::from_utf8_lossy(&o.stderr).trim().to_string();
                                             if stderr.contains("CONFLICT") || stderr.contains("conflict") {
                                                 let _ = Command::new("git").args(&["rebase","--abort"]).current_dir(&proj_path).env("GIT_TERMINAL_PROMPT","0").status();
-                                                format!("⚠️ Conflictos. Rebase abortado.\n{}", stderr)
-                                            } else { format!("❌ Error merge: {}", stderr) }
+                                                format!("âš ï¸ Conflictos. Rebase abortado.\n{}", stderr)
+                                            } else { format!("âŒ Error merge: {}", stderr) }
                                         }
-                                        Err(e) => format!("❌ Error: {}", e),
+                                        Err(e) => format!("âŒ Error: {}", e),
                                     }
                                 }
-                                _ => format!("❌ Acción desconocida: '{}'. Usa keep_local, keep_remote o merge_both.", action),
+                                _ => format!("âŒ AcciÃ³n desconocida: '{}'. Usa keep_local, keep_remote o merge_both.", action),
                             }
                         }
                     }
@@ -1358,7 +1358,7 @@ pub async fn run_agent_loop(
                             .and_then(|v| v.as_array())
                             .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect())
                             .unwrap_or_default();
-                        let query = args.get("query").and_then(|v| v.as_str()).unwrap_or("Describe estas imágenes.");
+                        let query = args.get("query").and_then(|v| v.as_str()).unwrap_or("Describe estas imÃ¡genes.");
                         if image_paths.is_empty() {
                             json!({"error": "Se requiere al menos una imagen"}).to_string()
                         } else {
@@ -1392,7 +1392,7 @@ pub async fn run_agent_loop(
                                 json!({"error": format!("No procesadas: {}", errors.join("; "))}).to_string()
                             } else {
                                 let mut result_text = String::new();
-                                if !errors.is_empty() { result_text.push_str(&format!("⚠️ {} errores: {}\n\n", errors.len(), errors.join("; "))); }
+                                if !errors.is_empty() { result_text.push_str(&format!("âš ï¸ {} errores: {}\n\n", errors.len(), errors.join("; "))); }
                                 let body = json!({"model": "qwen/qwen2.5-vl-72b-instruct", "messages": [{"role": "user", "content": content_parts}]});
                                 match reqwest::blocking::Client::new()
                                     .post("https://openrouter.ai/api/v1/chat/completions")
@@ -1422,7 +1422,7 @@ pub async fn run_agent_loop(
                                         }
                                     }
                                     Ok(resp) => format!("Error HTTP {}: {}", resp.status(), resp.text().unwrap_or_default()),
-                                    Err(e) => format!("Error de conexión: {}", e),
+                                    Err(e) => format!("Error de conexiÃ³n: {}", e),
                                 }
                             }
                         }
@@ -1447,7 +1447,7 @@ pub async fn run_agent_loop(
 
                 let display_result = if tool_result.len() > 25000 {
                     format!(
-                        "{}... [TRUNCADO POR EL SISTEMA. El resultado es demasiado grande ({} caracteres). Para leer archivos, utiliza parámetros start_line y end_line en 'read_file'. Para comandos de PowerShell, filtra la salida usando select, grep o head/tail.]",
+                        "{}... [TRUNCADO POR EL SISTEMA. El resultado es demasiado grande ({} caracteres). Para leer archivos, utiliza parÃ¡metros start_line y end_line en 'read_file'. Para comandos de PowerShell, filtra la salida usando select, grep o head/tail.]",
                         safe_truncate(&tool_result, 20000),
                         tool_result.len()
                     )
@@ -1473,7 +1473,7 @@ pub async fn run_agent_loop(
             messages.push(message_val.clone());
             messages.push(json!({
                 "role": "user",
-                "content": "Has respondido con texto pero no has ejecutado ninguna herramienta. Si has finalizado la tarea por completo, llama obligatoriamente a la herramienta 'finalizar_tarea'. Si todavía necesitas realizar cambios, ejecutar comandos o leer archivos, hazlo llamando a la herramienta correspondiente."
+                "content": "Has respondido con texto pero no has ejecutado ninguna herramienta. Si has finalizado la tarea por completo, llama obligatoriamente a la herramienta 'finalizar_tarea'. Si todavÃ­a necesitas realizar cambios, ejecutar comandos o leer archivos, hazlo llamando a la herramienta correspondiente."
             }));
         }
     }
@@ -1503,18 +1503,21 @@ fn get_project_path(state: &AppState, name: &str) -> String {
 
 pub fn discover_projects(state: &AppState) {
     let mut projs = state.projects.lock().unwrap();
-    projs.clear();
+    // Preservar proyectos locales agregados manualmente; solo eliminar los auto-descubiertos
+    projs.retain(|p| p.is_local);
     if let Ok(entries) = fs::read_dir(&state.base_workspace) {
         for entry in entries.filter_map(Result::ok) {
             let path = entry.path();
             if path.is_dir() {
                 if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
-                    if name != ".git" && name != "target" && name != "public" {
-                        projs.push(crate::state::Project {
-                            name: name.to_string(),
-                            path: path.to_string_lossy().to_string(),
-                            is_local: false,
-                        });
+                    if name != ".git" && name != "target" && name != "public" && name != ".config" {
+                        if !projs.iter().any(|p| p.name == name) {
+                            projs.push(crate::state::Project {
+                                name: name.to_string(),
+                                path: path.to_string_lossy().to_string(),
+                                is_local: false,
+                            });
+                        }
                     }
                 }
             }
@@ -1580,7 +1583,7 @@ async fn semantic_code_search(proj_path: &str, query: &str, _voyage_key: &str) -
                                 };
                                 let final_score = score * keyword_ratio;
                                 
-                                // Calcular líneas exactas del fragmento
+                                // Calcular lÃ­neas exactas del fragmento
                                 let chunk_ptr = chunk.as_ptr() as usize;
                                 let byte_offset = chunk_ptr - base_ptr;
                                 let prefix = &content[..byte_offset];
@@ -1604,13 +1607,13 @@ async fn semantic_code_search(proj_path: &str, query: &str, _voyage_key: &str) -
     let mut result_summary = String::new();
     for (score, file, start_line, end_line, chunk) in matches.into_iter().take(8) {
         result_summary.push_str(&format!(
-            "--- Matches (score: {:.2}) in {} [Líneas {}-{}] ---\n{}\n\n",
+            "--- Matches (score: {:.2}) in {} [LÃ­neas {}-{}] ---\n{}\n\n",
             score, file, start_line, end_line, chunk
         ));
     }
 
     if result_summary.is_empty() {
-        Ok("No se encontraron fragmentos de código que coincidan con la búsqueda.".to_string())
+        Ok("No se encontraron fragmentos de cÃ³digo que coincidan con la bÃºsqueda.".to_string())
     } else {
         Ok(result_summary)
     }
@@ -1633,7 +1636,7 @@ fn truncate_old_tool_responses(messages: &mut Vec<serde_json::Value>) {
     for i in 0..messages.len() {
         if messages[i]["role"] == "assistant" {
             assistant_count += 1;
-            // Si ha pasado por 3 o más iteraciones de razonamiento, truncarlo
+            // Si ha pasado por 3 o mÃ¡s iteraciones de razonamiento, truncarlo
             if assistant_count >= 3 {
                 if let Some(content_val) = messages[i].get_mut("content") {
                     if let Some(content_str) = content_val.as_str() {
@@ -1671,7 +1674,7 @@ async fn compress_active_messages_if_needed(
                     if content_str.contains("Truncado por el sistema tras 3 iteraciones") {
                         content_str.len()
                     } else {
-                        content_str.len().min(2000) // Contar solo 2000 si está en el periodo de gracia de 3 iteraciones
+                        content_str.len().min(2000) // Contar solo 2000 si estÃ¡ en el periodo de gracia de 3 iteraciones
                     }
                 }
                 _ => 0,
@@ -1680,14 +1683,14 @@ async fn compress_active_messages_if_needed(
         .sum();
 
     if total_len > 500000 && messages.len() >= 4 {
-        // Registrar paso en auditoría
+        // Registrar paso en auditorÃ­a
         {
             let mut status = state.active_agent.lock().unwrap();
             status.steps.push(crate::state::AuditStep {
                 step_type: "thinking".to_string(),
-                title: "Compresión de Contexto Activo".to_string(),
+                title: "CompresiÃ³n de Contexto Activo".to_string(),
                 detail: format!(
-                    "El contexto de ejecución actual supera los {} caracteres. Comprimiendo el historial activo para evitar sobrecarga...",
+                    "El contexto de ejecuciÃ³n actual supera los {} caracteres. Comprimiendo el historial activo para evitar sobrecarga...",
                     total_len
                 ),
                 timestamp: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs(),
@@ -1695,7 +1698,7 @@ async fn compress_active_messages_if_needed(
             save_chat_steps_to_disk(state, session_id_opt, &status.steps);
         }
 
-        // Dejar el primer mensaje (System Prompt) y los últimos 2 mensajes sin comprimir
+        // Dejar el primer mensaje (System Prompt) y los Ãºltimos 2 mensajes sin comprimir
         let split_idx = messages.len() - 2;
         let messages_to_compress = &messages[1..split_idx];
         
@@ -1713,7 +1716,7 @@ async fn compress_active_messages_if_needed(
             history_text.push_str(&format!("{}: {}\n\n", role_str, content));
         }
 
-        // Llamar a DeepSeek V4 Flash para compresión
+        // Llamar a DeepSeek V4 Flash para compresiÃ³n
         let client = reqwest::Client::builder()
             .timeout(std::time::Duration::from_secs(120))
             .tcp_keepalive(std::time::Duration::from_secs(30))
@@ -1724,7 +1727,7 @@ async fn compress_active_messages_if_needed(
             "messages": [
                 {
                     "role": "system",
-                    "content": "Eres un arquitecto de software y programador principal. Tu tarea es resumir el historial de esta ejecución activa para que el agente de desarrollo (que leerá este resumen como su contexto histórico) pueda continuar trabajando de forma fluida sin perder el hilo y sin exceder su límite de tokens. El resumen debe estar estructurado en español bajo los siguientes puntos:\n1. ¿Qué estaba haciendo el agente y cuál era su objetivo activo?\n2. ¿Qué le faltaba por hacer o qué quedó pendiente/a medias?\n3. ¿Cómo lo estaba haciendo? (Estrategia técnica y enfoque empleado).\n4. ¿Qué archivos estaba editando o analizando activamente?\n5. ¿Qué conocimientos, descubrimientos o conclusiones sobre el código ya tiene claros el agente (para evitar redundancia)?\n\nRedáctalo en un formato directo, estructurado y altamente técnico, sin saludos ni preámbulos."
+                    "content": "Eres un arquitecto de software y programador principal. Tu tarea es resumir el historial de esta ejecuciÃ³n activa para que el agente de desarrollo (que leerÃ¡ este resumen como su contexto histÃ³rico) pueda continuar trabajando de forma fluida sin perder el hilo y sin exceder su lÃ­mite de tokens. El resumen debe estar estructurado en espaÃ±ol bajo los siguientes puntos:\n1. Â¿QuÃ© estaba haciendo el agente y cuÃ¡l era su objetivo activo?\n2. Â¿QuÃ© le faltaba por hacer o quÃ© quedÃ³ pendiente/a medias?\n3. Â¿CÃ³mo lo estaba haciendo? (Estrategia tÃ©cnica y enfoque empleado).\n4. Â¿QuÃ© archivos estaba editando o analizando activamente?\n5. Â¿QuÃ© conocimientos, descubrimientos o conclusiones sobre el cÃ³digo ya tiene claros el agente (para evitar redundancia)?\n\nRedÃ¡ctalo en un formato directo, estructurado y altamente tÃ©cnico, sin saludos ni preÃ¡mbulos."
                 },
                 {
                     "role": "user",
@@ -1748,7 +1751,7 @@ async fn compress_active_messages_if_needed(
                             let summary_msg = json!({
                                 "role": "user",
                                 "content": format!(
-                                    "--- RESUMEN CONTEXTO DE EJECUCIÓN ACTIVA (Auto-comprimido por el sistema) ---\nEste es un resumen de las acciones y resultados de herramientas anteriores en esta ejecución para mantener la eficiencia:\n\n{}",
+                                    "--- RESUMEN CONTEXTO DE EJECUCIÃ“N ACTIVA (Auto-comprimido por el sistema) ---\nEste es un resumen de las acciones y resultados de herramientas anteriores en esta ejecuciÃ³n para mantener la eficiencia:\n\n{}",
                                     summary_text
                                 )
                             });
@@ -1756,11 +1759,11 @@ async fn compress_active_messages_if_needed(
                             let last_messages = messages.split_off(split_idx);
                             let system_prompt = messages.remove(0); // Remover el system prompt temporalmente
                             messages.clear();
-                            messages.push(system_prompt); // Volver a poner el system prompt en el índice 0
+                            messages.push(system_prompt); // Volver a poner el system prompt en el Ã­ndice 0
                             messages.push(summary_msg); // Poner el resumen
-                            messages.extend(last_messages); // Añadir los últimos 4 mensajes
+                            messages.extend(last_messages); // AÃ±adir los Ãºltimos 4 mensajes
 
-                            // Guardar en el archivo JSON de la conversación en disco de forma persistente
+                            // Guardar en el archivo JSON de la conversaciÃ³n en disco de forma persistente
                             if let Some(ref session_id) = *session_id_opt {
                                 let chat_file = state.base_workspace.join(".config").join("chats").join(format!("{}.json", session_id));
                                 if chat_file.exists() {
@@ -1791,13 +1794,13 @@ async fn compress_active_messages_if_needed(
                                 }
                             }
 
-                            // Registrar éxito en auditoría
+                            // Registrar Ã©xito en auditorÃ­a
                             {
                                 let mut status = state.active_agent.lock().unwrap();
                                 status.steps.push(crate::state::AuditStep {
                                     step_type: "thinking".to_string(),
                                     title: "Contexto Activo Comprimido".to_string(),
-                                    detail: "El contexto de la ejecución activa ha sido comprimido exitosamente para ahorrar tokens.".to_string(),
+                                    detail: "El contexto de la ejecuciÃ³n activa ha sido comprimido exitosamente para ahorrar tokens.".to_string(),
                                     timestamp: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs(),
                                 });
                                 save_chat_steps_to_disk(state, session_id_opt, &status.steps);
@@ -1805,18 +1808,18 @@ async fn compress_active_messages_if_needed(
                             return;
                         }
                     }
-                    // Si llegamos aquí, la compresión falló o fue incompleta
-                    // Si llegamos aquí, la compresión falló o fue incompleta
+                    // Si llegamos aquÃ­, la compresiÃ³n fallÃ³ o fue incompleta
+                    // Si llegamos aquÃ­, la compresiÃ³n fallÃ³ o fue incompleta
                     // Fallback: truncar mensajes viejos de forma agresiva
                     if messages.len() > 10 {
-                        // Mantener system prompt + últimos 4 mensajes
+                        // Mantener system prompt + Ãºltimos 4 mensajes
                         let keep_start = 1; // system prompt
                         let keep_end = messages.len().saturating_sub(4);
                         if keep_end > keep_start {
                             // Insertar un marcador de truncado
                             let marker = json!({
                                 "role": "user",
-                                "content": "[Contexto truncado automáticamente para mantenerse dentro del límite de tokens]"
+                                "content": "[Contexto truncado automÃ¡ticamente para mantenerse dentro del lÃ­mite de tokens]"
                             });
                             let system = messages[0].clone();
                             let last_few: Vec<_> = messages[keep_end..].to_vec();
@@ -1829,13 +1832,13 @@ async fn compress_active_messages_if_needed(
                 }
             }
             Err(e) => {
-                eprintln!("Advertencia: Falló la llamada a la API para comprimir contexto activo: {}", e);
+                eprintln!("Advertencia: FallÃ³ la llamada a la API para comprimir contexto activo: {}", e);
             }
         }
     }
 }
-/// Parsea una línea de comandos shell respetando comillas dobles y simples.
-/// Ej: 'gh repo create "my repo" --public' → ["gh", "repo", "create", "my repo", "--public"]
+/// Parsea una lÃ­nea de comandos shell respetando comillas dobles y simples.
+/// Ej: 'gh repo create "my repo" --public' â†’ ["gh", "repo", "create", "my repo", "--public"]
 fn parse_shell_args(input: &str) -> Vec<String> {
     let mut args = Vec::new();
     let mut current = String::new();
@@ -1878,18 +1881,18 @@ pub fn play_error_beep() {
 fn sanitize_messages_for_api(messages: &mut Vec<serde_json::Value>) {
     let mut i = 0;
     while i < messages.len() {
-        // ─────────────────────────────────────────────────────────────
+        // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         // 1. Los mensajes con content tipo array (multimodal con
         //    image_url) se preservan intactos. DeepSeek los soporta
         //    correctamente.
-        // ─────────────────────────────────────────────────────────────
+        // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-        // ─────────────────────────────────────────────────────────────
-        // 2. Sanar mensajes de herramienta huérfanos
-        // ─────────────────────────────────────────────────────────────
-        // ─────────────────────────────────────────────────────────────
+        // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // 2. Sanar mensajes de herramienta huÃ©rfanos
+        // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         if messages[i]["role"] == "tool" {
-            // Escanear hacia atrás buscando el primer mensaje que no sea de tipo "tool"
+            // Escanear hacia atrÃ¡s buscando el primer mensaje que no sea de tipo "tool"
             let mut has_valid_parent = false;
             let mut j = i;
             while j > 0 {
@@ -1911,7 +1914,7 @@ fn sanitize_messages_for_api(messages: &mut Vec<serde_json::Value>) {
             }
             
             if !has_valid_parent {
-                println!("Sanando mensaje de herramienta huérfano en el índice {}...", i);
+                println!("Sanando mensaje de herramienta huÃ©rfano en el Ã­ndice {}...", i);
                 if let Some(obj) = messages[i].as_object_mut() {
                     // Convertir a rol "user" para evitar el error de la API
                     obj.insert("role".to_string(), json!("user"));
