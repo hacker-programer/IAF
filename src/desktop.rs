@@ -34,8 +34,6 @@ impl DesktopController {
     /// Soporta letras (a-z, A-Z), números (0-9), espacio, y puntuación común.
     pub fn type_text(&self, text: &str) -> Result<(), SimulateError> {
         for ch in text.chars() {
-    pub fn type_text(&self, text: &str) -> Result<(), SimulateError> {
-        for ch in text.chars() {
             match ch {
                 'a'..='z' => {
                     let key = match ch {
