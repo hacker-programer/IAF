@@ -389,7 +389,7 @@ function startAgentMonitoring() {
         if (currentSessionId) {
             try {
                 const chatRes = await apiCall(`/api/chats/${currentSessionId}`);
-                if (chatRes.status === 'ok') {
+    }, 2000); // Polling cada 2 segundos (optimizado desde 1s)
                     const currentMessageCount = chatArea.querySelectorAll('.message').length;
                     if (chatRes.session.messages.length > currentMessageCount) {
                         chatArea.innerHTML = '';
