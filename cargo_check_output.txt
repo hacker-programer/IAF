@@ -1,10 +1,20 @@
-﻿cargo :     Checking iaf v0.1.0 (C:\Users\Fa\Desktop\IAF)
-En línea: 1 Carácter: 41
-+ cd "C:\Users\Fa\Desktop\IAF"; $result = cargo check 2>&1 | Out-String ...
-+                                         ~~~~~~~~~~~~~~~~
-    + CategoryInfo          : NotSpecified: (    Checking ia...Fa\Desktop\IAF):String) [], RemoteException
+﻿cargo : warning: field `path` is never read
+En línea: 1 Carácter: 31
++ cd "C:\Users\Fa\Desktop\IAF"; cargo check 2>&1 | Out-File -FilePath " ...
++                               ~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (warning: field `path` is never read:String) [], RemoteException
     + FullyQualifiedErrorId : NativeCommandError
  
+  --> src\validator.rs:18:9
+   |
+17 | pub struct ValidationResult {
+   |            ---------------- field in this struct
+18 |     pub path: String,
+   |         ^^^^
+   |
+   = note: `ValidationResult` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
 warning: methods `reap` and `contains` are never used
    --> src\state.rs:198:12
     |
@@ -16,8 +26,6 @@ warning: methods `reap` and `contains` are never used
 ...
 208 |     pub fn contains(&self, pid: u32) -> bool {
     |            ^^^^^^^^
-    |
-    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
 
 warning: field `context_store` is never read
    --> src\state.rs:245:9
@@ -30,6 +38,5 @@ warning: field `context_store` is never read
     |
     = note: `AppState` has a derived impl for the trait `Clone`, but this is intentionally ignored during dead code analysis
 
-warning: `iaf` (bin "iaf") generated 2 warnings
-    Finished `dev` profile [unoptimized + debuginfo] target(s) in 8.94s
-
+warning: `iaf` (bin "iaf") generated 3 warnings
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.19s

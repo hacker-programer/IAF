@@ -17,6 +17,7 @@ use tower_http::services::ServeDir;
 
 mod agent;
 mod scraper;
+mod validator;
 mod desktop;
 mod state;
 

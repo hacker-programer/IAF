@@ -8,7 +8,6 @@
 //!
 //! Se diseñó para prevenir los errores recurrentes documentados en MEMORIES.md.
 
-use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 use std::process::Command;

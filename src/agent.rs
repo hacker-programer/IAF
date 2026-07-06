@@ -3,6 +3,7 @@ use serde_json::{json, Value};
 use std::error::Error;
 use std::process::Command;
 use crate::state::AppState;
+use crate::validator::validate_file_after_write;
 use crate::scraper::{perform_search, scraper_clean_tags};
 use std::fs;
 use std::path::Path;
@@ -839,10 +840,14 @@ pub async fn run_agent_loop(
                                     play_error_beep();
                                 }
 
-                                format!(
-                                    "Archivo escrito correctamente. Git add: {:?}, Commit: {:?}, Push: {:?}",
-                                    status_add, status_commit, status_push
-                                )
+                                    let full_path_str = full_path.to_string_lossy().to_string();
+                                    let validation = validate_file_after_write(&full_path_str, "");
+                                    let mut msg = format!(
+                                        "Archivo escrito correctamente. Git add: {:?}, Commit: {:?}, Push: {:?}",
+                                        status_add, status_commit, status_push
+                                    );
+                                    msg.push_str(&validation.to_message());
+                                    msg
                             } else {
                                 if !is_agent_error {
                                     play_error_beep();
