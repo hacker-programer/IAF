@@ -1,8 +1,11 @@
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Duration;
 use reqwest::Client;
 use regex::Regex;
 use crate::state::CaptchaRequest;
+
+/// Regex estática para limpiar tags HTML. Se compila una sola vez (LUT de regex).
+static TAG_CLEAN_REGEX: OnceLock<Regex> = OnceLock::new();
 
 pub async fn perform_search(
     query: &str,
@@ -60,7 +63,9 @@ pub async fn perform_search(
     }
 }
 
+/// Limpia todas las etiquetas HTML de un string.
+/// Usa OnceLock para compilar la regex una sola vez (LUT de regex precomputada).
 pub fn scraper_clean_tags(html: &str) -> String {
-    let re = Regex::new(r#"<[^>]*>"#).unwrap();
+    let re = TAG_CLEAN_REGEX.get_or_init(|| Regex::new(r"<[^>]*>").unwrap());
     re.replace_all(html, "").to_string()
 }
