@@ -852,13 +852,12 @@ pub async fn run_agent_loop(
                                 if !is_agent_error {
                                     play_error_beep();
                                 }
+                                write_err_msg
+                            }
                         } else {
                             "No hay ningún proyecto activo seleccionado.".to_string()
                         }
                         } // Fin de 'write_handler labeled block
-                    }
-                            "No hay ningún proyecto activo seleccionado.".to_string()
-                        }
                     }
                     "execute_powershell" => {
                         let command = args["command"].as_str().unwrap_or("");
