@@ -9,6 +9,7 @@ const activeProjectName = document.getElementById('activeProjectName');
 const chatArea = document.getElementById('chatArea');
 const chatInput = document.getElementById('chatInput');
 const sendBtn = document.getElementById('sendBtn');
+const sendDirectBtn = document.getElementById('sendDirectBtn');
 const repoUrl = document.getElementById('repoUrl');
 const forkBtn = document.getElementById('forkBtn');
 const globalPrompt = document.getElementById('globalPrompt');
@@ -234,43 +235,12 @@ const rejectPlanBtn = document.getElementById('rejectPlanBtn');
 
 let pendingMessageToSend = null;
 
-// Send Message to Agent - Interceptado para Refinamiento
-sendBtn.onclick = async () => {
-    const text = chatInput.value.trim();
-    if (!text) return;
-    
-    sendBtn.disabled = true;
-    if (refinePromptFeedback) refinePromptFeedback.value = '';
-    
-    // Llamar al endpoint de refinamiento
-    try {
-        const refineRes = await apiCall('/api/prompts/refine', 'POST', { 
-            prompt: text,
-            session_id: currentSessionId,
-            project_name: activeProject
-        });
-        if (refineRes.status === 'ok') {
-            pendingMessageToSend = text;
-            refinedPromptText.value = refineRes.refined;
-            refinePromptModal.classList.remove('hidden');
-        } else {
-            // Si falla el refinador, enviar mensaje original
-            chatInput.value = '';
-            await sendMessageToAgent(text);
-        }
-    } catch(e) {
-        chatInput.value = '';
-        await sendMessageToAgent(text);
-    } finally {
-        sendBtn.disabled = false;
-    }
-};
 // Debounce helper
 let sendDebounceTimer = null;
 const SEND_DEBOUNCE_MS = 500;
 
 // Send Message to Agent - Interceptado para Refinamiento (con debounce)
-sendBtn.onclick = async () => {
+sendBtn.onclick = () => {
     if (sendDebounceTimer) {
         clearTimeout(sendDebounceTimer);
     }
@@ -306,6 +276,44 @@ sendBtn.onclick = async () => {
         }
     }, SEND_DEBOUNCE_MS);
 };
+
+// Enviar Directo (sin refinar)
+sendDirectBtn.onclick = async () => {
+    const text = chatInput.value.trim();
+    if (!text) return;
+    
+    sendDirectBtn.disabled = true;
+    chatInput.value = '';
+    await sendMessageToAgent(text);
+    sendDirectBtn.disabled = false;
+};
+
+// Aplicar Prompt Refinado
+applyRefinedPromptBtn.onclick = async () => {
+    refinePromptModal.classList.add('hidden');
+    if (pendingMessageToSend) {
+        const finalText = refinedPromptText.value.trim() || pendingMessageToSend;
+        chatInput.value = '';
+        await sendMessageToAgent(finalText);
+        pendingMessageToSend = null;
+    }
+};
+
+// Re-Refinar con instrucción adicional
+reRefinePromptBtn.onclick = async () => {
+    const currentText = refinedPromptText.value.trim();
+    const feedback = refinePromptFeedback ? refinePromptFeedback.value.trim() : '';
+    if (!currentText) return;
+    
+    reRefinePromptBtn.disabled = true;
+    reRefinePromptBtn.innerText = 'Re-Refinando...';
+    
+    try {
+        const refineRes = await apiCall('/api/prompts/refine', 'POST', {
+            prompt: currentText,
+            feedback: feedback,
+            session_id: currentSessionId,
+            project_name: activeProject
         });
         if (refineRes.status === 'ok') {
             refinedPromptText.value = refineRes.refined;
@@ -321,11 +329,13 @@ sendBtn.onclick = async () => {
     reRefinePromptBtn.disabled = false;
 };
 
+// Cancelar refinamiento y usar prompt original
 cancelRefinedPromptBtn.onclick = async () => {
     refinePromptModal.classList.add('hidden');
     if (pendingMessageToSend) {
         chatInput.value = '';
         await sendMessageToAgent(pendingMessageToSend);
+        pendingMessageToSend = null;
     }
 };
 
@@ -389,7 +399,7 @@ function startAgentMonitoring() {
         if (currentSessionId) {
             try {
                 const chatRes = await apiCall(`/api/chats/${currentSessionId}`);
-    }, 2000); // Polling cada 2 segundos (optimizado desde 1s)
+                if (chatRes.status === 'ok') {
                     const currentMessageCount = chatArea.querySelectorAll('.message').length;
                     if (chatRes.session.messages.length > currentMessageCount) {
                         chatArea.innerHTML = '';
@@ -506,4 +516,3 @@ closeCaptchaBtn.onclick = () => {
 loadProjects();
 loadPrompts();
 loadChatHistory();
-
