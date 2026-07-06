@@ -191,8 +191,8 @@ pub async fn run_agent_loop(
                     "properties": {
                         "query": { "type": "string" }
                     },
-                    "required": ["query"]
-                }
+                "name": "search_code",
+                "description": "Busca fragmentos de código mediante coincidencia local de palabras clave en archivos del proyecto (NO usa VoyageAI embeddings; es búsqueda de texto exacta).",
             }
         }),
         json!({
