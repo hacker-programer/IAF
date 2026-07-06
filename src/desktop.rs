@@ -72,7 +72,7 @@ fn char_to_key_map() -> &'static HashMap<char, (Key, bool)> {
         m.insert('|', (Key::BackSlash, true));
 
         m
-    });
+    })
 }
 
 #[derive(Debug)]

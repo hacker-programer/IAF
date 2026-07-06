@@ -1,0 +1,35 @@
+﻿cargo :     Checking iaf v0.1.0 (C:\Users\Fa\Desktop\IAF)
+En línea: 1 Carácter: 41
++ cd "C:\Users\Fa\Desktop\IAF"; $result = cargo check 2>&1 | Out-String ...
++                                         ~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (    Checking ia...Fa\Desktop\IAF):String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+warning: methods `reap` and `contains` are never used
+   --> src\state.rs:198:12
+    |
+ 93 | impl ProcessRegistry {
+    | -------------------- methods in this implementation
+...
+198 |     pub fn reap(&self) -> usize {
+    |            ^^^^
+...
+208 |     pub fn contains(&self, pid: u32) -> bool {
+    |            ^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: field `context_store` is never read
+   --> src\state.rs:245:9
+    |
+235 | pub struct AppState {
+    |            -------- field in this struct
+...
+245 |     pub context_store: Arc<Mutex<HashMap<String, ContextEntry>>>,
+    |         ^^^^^^^^^^^^^
+    |
+    = note: `AppState` has a derived impl for the trait `Clone`, but this is intentionally ignored during dead code analysis
+
+warning: `iaf` (bin "iaf") generated 2 warnings
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 8.94s
+
