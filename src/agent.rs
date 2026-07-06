@@ -788,10 +788,7 @@ pub async fn run_agent_loop(
                             "/im rustc",
                             "/im cargo",
                             "/im iaf",
-                        for pattern in &forbidden_patterns {
-                            if command_lower.contains(pattern) {
-                                return Ok(json!({
-                                    "error": format!(
+                        ];
                         for pattern in &forbidden_patterns {
                             if command_lower.contains(pattern) {
                                 return Ok(json!({
@@ -804,6 +801,8 @@ pub async fn run_agent_loop(
                                     )
                                 }).to_string());
                             }
+                        }
+                        // ========== FIN SANITIZACIÓN ==========
                         }
                         // ========== FIN SANITIZACIÓN ==========
                         // Optional timer in seconds (max 300). If provided, we run the command without the default 30s timeout
