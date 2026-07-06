@@ -704,8 +704,12 @@ pub async fn run_agent_loop(
                                 .env("GIT_TERMINAL_PROMPT", "0")
                                 .status();
                             // Autocuración SEGURA en caso de que git pull falle (remote ya verificado)
+                            if status_pull.as_ref().map(|s| !s.success()).unwrap_or(true) {
+                                println!("Advertencia: git pull falló al inicio. Iniciando autocuración SEGURA (remote verificado)...");
+                                
+                                // 1. Abortar cualquier rebase/merge en curso
+                                let _ = Command::new("git")
                                     .args(&["rebase", "--abort"])
-                                    .current_dir(&proj_path)
                                     .stdin(std::process::Stdio::null())
                                     .stdout(std::process::Stdio::null())
                                     .stderr(std::process::Stdio::null())
