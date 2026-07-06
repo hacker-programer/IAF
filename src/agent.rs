@@ -518,11 +518,11 @@ pub async fn run_agent_loop(
                 }
 
                 let call_id = tool_call["id"].as_str().unwrap_or("");
+                let func_name = tool_call["function"]["name"].as_str().unwrap_or("");
+                let args_str = tool_call["function"]["arguments"].as_str().unwrap_or("{}");
+                let args: Value = serde_json::from_str(args_str).unwrap_or(json!({}));
+
                 if func_name == "notificar_usuario" {
-                    let tipo = args["tipo"].as_str().unwrap_or("informativo");
-                    if tipo == "pregunta" {
-                        force_none_tool_choice = true;
-                    }
                 }
 
                 {
