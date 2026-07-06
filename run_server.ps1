@@ -6,6 +6,8 @@ Write-Host "==========================================================" -Foregro
 Write-Host "   Iniciador Resiliente del Servidor Agent-First (IAF)    " -ForegroundColor Cyan
 Write-Host "==========================================================" -ForegroundColor Cyan
 
+$env:CARGO_TARGET_DIR = "C:\Users\Fa\AppData\Local\Temp\cargo-target"
+
 while ($true) {
     Write-Host "`n[$(Get-Date -Format 'HH:mm:ss')] Iniciando Servidor (cargo run --release)..." -ForegroundColor Green
     

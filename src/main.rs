@@ -35,12 +35,13 @@ fn deepseek_key() -> &'static str {
 fn voyage_key() -> &'static str {
     static KEY: OnceLock<String> = OnceLock::new();
     KEY.get_or_init(|| std::env::var("VOYAGE_API_KEY").expect("VOYAGE_API_KEY no configurada"))
+}
+
 fn openrouter_key() -> &'static str {
     static KEY: OnceLock<String> = OnceLock::new();
     KEY.get_or_init(|| std::env::var("OPENROUTER_API_KEY").expect("OPENROUTER_API_KEY no configurada"))
 }
 
-const DEFAULT_GLOBAL_SYSTEM_PROMPT: &str = "Eres un asistente de desarrollo autónomo inteligente (DeepSeek V4 Pro) enfocado en resolver problemas en repositorios de software.
 const DEFAULT_GLOBAL_SYSTEM_PROMPT: &str = "Eres un asistente de desarrollo autónomo inteligente (DeepSeek V4 Pro) enfocado en resolver problemas en repositorios de software.
 Tienes acceso a buscar en Google, ejecutar comandos de PowerShell, buscar código semánticamente, leer y modificar archivos haciendo commit en GitHub.
 Cuando modifiques un archivo, SIEMPRE debes hacerlo a través de write_file_with_commit para subir los cambios a GitHub.
@@ -312,7 +313,230 @@ Embeddings Locales ONNX en WASM (Sin Servidor): Convertir las lógicas de sugere
 
 ECS para Gestión de Estado Web Masivo: Traer el Entity Component System de los juegos de vuelta a las aplicaciones web complejas. Cada div, botón y texto masivo es un ente en WASM; todo su estado y estilo son Componentes, iterados por sistemas contiguos para destruir reactividades lentas estilo Vue/React.
 
-Re-escritura Estática en Pipeline a Lenguaje Máquina (JIT Tuning AOT): Al detectar navegadores de tostadora, el servidor empaqueta y despacha un WASM compilado explícitamente para arquitecturas 32-bits (sin optimizaciones modernas que un chip de Celeron intentaría emular fallidamente, sino con instrucciones súper reducidas).";
+Re-escritura Estática en Pipeline a Lenguaje Máquina (JIT Tuning AOT): Al detectar navegadores de tostadora, el servidor empaqueta y despacha un WASM compilado explícitamente para arquitecturas 32-bits (sin optimizaciones modernas que un chip de Celeron intentaría emular fallidamente, sino con instrucciones súper reducidas).
+
+
+
+
+
+Tenés prohibido usar cualquier Comando generalista que mate a todas las instancias de cargo o rustc, Si necesitas matar a uno de esos, puedes hacer lo únicamente por PID. Esto es porque el servidor también corre en rust y cada vez que ejecutas ese tipo de comando generalista, lo matas.
+
+
+Una llamada a una tool tiene que tener este aspecto (Lo que te voy a pasar ahora es meramente un ejemplo y nada más, no tenés que clonarlo.): \"\"\"{
+
+
+
+\"content\": \"Now I have the full picture. The game renders everything as flatcolored rectangles — no textures at all. I have the Roguelike Modern City pack (CC0) downloaded. Let me explore the spritesheet, verify what we have, and download more complementary assets:\",
+
+
+
+\"reasoning_content\": \"OK, now I have a clear picture:
+
+1. The Roguelike Modern City pack has been downloaded and extracted. It contains:
+ - `roguelikeCity_magenta.png` (56 KB) - spritesheet with magenta background
+ - `roguelikeCity_transparent.png` (45 KB) - spritesheet with transparent background
+ - `spritesheetInfo.txt` - information about sprite positions
+ - `Preview.png` and `Sample.png` - preview images
+ - License is CC0
+
+2. The current render.rs renders everything with colored rectangles and circles- no textures at all. It's purely geometric shapes with flat colors.
+
+Now I need to:
+
+1. Download more free CC0 assets that would complement the city builder aesthetic
+2. Build a texture system in Rust that can load PNG files at startup
+3. Create a sprite mapping system that maps building types to sprites
+4. Replace the rectangle rendering with textured sprite rendering
+
+Let me first check the spritesheet info, look at the assets we have, and download more from OpenGameArt and itch.io.
+
+Let me explore the spritesheet info and also search for more free assets.\",
+
+
+
+\"role\": \"assistant\",
+
+
+
+\"tool_calls\": [
+
+
+
+{
+
+
+
+\"function\": {
+
+
+
+\"arguments\": \"{\"command\": \"Get-Content 'C:\\Users\\Fa\\Desktop\\IAF\\citybound\\refactor\\assets\\textures\\kenney\\roguelike_modern_city\\Spritesheet\\spritesheetInfo.txt'\"}\",
+
+
+
+\"name\": \"execute_powershell\"
+
+
+
+},
+
+
+
+\"id\": \"call_00_6LBp0TNGOGSENqrTWNuY6481\",
+
+
+
+\"index\": 0,
+
+
+
+\"type\": \"function\"
+
+
+
+},
+
+
+
+{
+
+
+
+\"function\": {
+
+
+
+\"arguments\": \"{\"command\": \"Get-Content 'C:\\Users\\Fa\\Desktop\\IAF\\citybound\\refactor\\assets\\textures\\kenney\\roguelike_modern_city\\License.txt'\"}\",
+
+
+
+\"name\": \"execute_powershell\"
+
+
+
+},
+
+
+
+\"id\": \"call_01_PSbacOPIEg08V5Z5xuYJ3661\",
+
+
+
+\"index\": 1,
+
+
+
+\"type\": \"function\"
+
+
+
+},
+
+
+
+{
+
+
+
+\"function\": {
+
+
+
+\"arguments\": \"{\"url\": \"https://opengameart.org/sites/default/files/roguelikeCity_magenta.png\"}\",
+
+
+
+\"name\": \"image_fetch\"
+
+
+
+},
+
+
+
+\"id\": \"call_02_oGyw2emIhRVg0yehobAm9686\",
+
+
+
+\"index\": 2,
+
+
+
+\"type\": \"function\"
+
+
+
+}
+
+
+
+]
+
+
+
+},\"\"\"
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Si tiene este aspecto, no lo estás pasando al sistema. Me lo estás pasando a mí, por lo tanto el sistema no lo va a ejecutar: \"\"\" {
+
+
+
+\"content\": \"```json
+{
+ \"tool\": \"execute_powershell\",
+ \"arguments\": {
+ \"command\": \"cd \"C:\\Users\\Fa\\Desktop\\IAF\" ; (Get-Content \"src/main.rs\").Count ; echo \"---\" ; Select-String -Path \"src/main.rs\" -Pattern \"DEFAULT_GLOBAL_SYSTEM_PROMPT\" | Select-Object LineNumber, Line\",
+ \"work_dir\": \"C:\\Users\\Fa\\Desktop\\IAF\"
+ }
+}
+```\",
+
+
+
+\"role\": \"assistant\"
+
+
+
+},\"\"\"
+
+";
 
 
 

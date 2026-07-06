@@ -1,0 +1,24 @@
+﻿cargo :    Compiling httparse v1.10.1
+En línea: 1 Carácter: 104
++ ... rgo-target" ; cd "C:\Users\Fa\Desktop\IAF" ; cargo check 2>&1 | Out-F ...
++                                                  ~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (   Compiling httparse v1.10.1:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+    Checking tinystr v0.8.3
+error: failed to run custom build command for `httparse v1.10.1`
+
+Caused by:
+  could not execute process `C:\Users\Fa\AppData\Local\Temp\cargo-target\debug\build\httparse-4dc4630409fa7385\build-script-build` (never executed)
+
+Caused by:
+  Una directiva de Control de aplicaciones bloque├│ este archivo. (os error 4551)
+warning: build failed, waiting for other jobs to finish...
+error[E0463]: can't find crate for `displaydoc`
+ --> C:\Users\Fa\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\tinystr-0.8.3\src\error.rs:5:5
+  |
+5 | use displaydoc::Display;
+  |     ^^^^^^^^^^ can't find crate
+
+For more information about this error, try `rustc --explain E0463`.
+error: could not compile `tinystr` (lib) due to 1 previous error
