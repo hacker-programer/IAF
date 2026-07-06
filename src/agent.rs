@@ -403,13 +403,12 @@ pub async fn run_agent_loop(
         sanitize_messages_for_api(&mut messages);
 
         // Rate-limiting: solo escribir debug_messages.json cada 5 iteraciones para reducir I/O
+        if iteration % 5 == 0 {
             let _ = fs::write(
                 state.base_workspace.join("debug_messages.json"),
                 serde_json::to_string_pretty(&messages).unwrap_or_default()
             );
         }
-
-        // Límite de seguridad: máximo 500 iteraciones para evitar bucles infinitos
         if iteration > 500 {
             let _ = fs::write(
                 state.base_workspace.join("debug_messages.json"),
