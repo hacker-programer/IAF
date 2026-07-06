@@ -1026,11 +1026,12 @@ pub async fn run_agent_loop(
                                         return Ok("Ejecución del agente interrumpida mientras esperaba respuesta del usuario.".to_string());
                                     }
                                     if !status.esperando_respuesta_usuario {
-                                        if let Some(ref respuesta) = status.respuesta_usuario {
-                                            break format!("Respuesta del usuario: {}", respuesta);
-                                        }
+                                {
+                                    let status = state.active_agent.lock().unwrap();
+                                    if status.interrupted {
+                                        state.process_registry.kill_all();
+                                        return Ok("Ejecución del agente interrumpida mientras esperaba respuesta del usuario.".to_string());
                                     }
-                                }
                             }
                         } else {
                             // Informativo: solo registrar paso
