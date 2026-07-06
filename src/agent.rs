@@ -891,8 +891,7 @@ pub async fn run_agent_loop(
                                 blocked_reason = Some(format!(
                                     "[SISTEMA] BLOQUEO DE SEGURIDAD: El sistema ha interceptado este comando porque contiene '{}'. \
                                     IMPORTANTE: Esto NO es un error tuyo. Es una protecci\u00f3n autom\u00e1tica del servidor. NO reintentes este comando. \
-                                    Busca una alternativa segura o usa la herramienta `kill_process` con el PID exacto. \
-                                    que pueda matar procesos del sistema o al servidor principal.",
+                                    Busca una alternativa segura (por ejemplo, usa la herramienta `kill_process` con el PID exacto).",
                                     pattern
                                 ));
                                 break;
