@@ -892,12 +892,11 @@ pub async fn run_agent_loop(
                             }
                         }
                         if let Some(reason) = blocked_reason {
-                        if let Some(reason) = blocked_reason {
-                        if let Some(reason) = blocked_reason {
                             json!({"error": reason}).to_string()
                         } else {
 
                         // ========== FIN SANITIZACIÓN ==========
+                        let timer_opt = args.get("timer").and_then(|v| v.as_u64());
                         if let Some(ref proj_name) = project_name {
                             let proj_path = get_project_path(&state, proj_name);
                             // Detect comandos que normalmente son de larga duración (ej. cargo run, npm start, python main.py)
