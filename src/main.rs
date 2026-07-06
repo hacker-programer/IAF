@@ -1214,7 +1214,7 @@ async fn main() {
         image_store: Arc::new(Mutex::new(HashMap::new())),
         context_store: Arc::new(Mutex::new(HashMap::new())),
         process_registry: ProcessRegistry::new(),
-    };
+        process_registry: ProcessRegistry::new(),
     };
     // Auto-descubrir proyectos locales por defecto
     discover_projects(&state);
