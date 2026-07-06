@@ -1003,6 +1003,8 @@ pub async fn run_agent_loop(
                         }
                         
                         if tipo == "pregunta" {
+                        
+                        if tipo == "pregunta" {
                             // Cambiar estado a esperando respuesta
                             {
                                 let mut status = state.active_agent.lock().unwrap();
@@ -1015,13 +1017,13 @@ pub async fn run_agent_loop(
                                     detail: format!("Esperando respuesta a la pregunta: {}", mensaje),
                                     timestamp: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs(),
                                 });
+                                if let Some(ref s_id) = session_id {
+                                    save_chat_steps_to_disk(&state, s_id, &status.steps);
+                                }
                             }
  
                             // Bloquear ciclo asíncronamente con un sleep no bloqueante de Tokio hasta que respuesta_usuario sea Some
-                            loop {
- 
-                            // Bloquear ciclo asíncronamente con un sleep no bloqueante de Tokio hasta que respuesta_usuario sea Some
-                            loop {
+                            let respuesta = loop {
                                 tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
                                 
                                 // Comprobar si se envió señal de interrupción mientras esperaba
@@ -1033,18 +1035,28 @@ pub async fn run_agent_loop(
                                     }
                                     if !status.esperando_respuesta_usuario {
                                         if let Some(ref respuesta) = status.respuesta_usuario {
-                                            break format!("Respuesta del usuario: {}", respuesta);
+                                            break respuesta.clone();
                                         }
                                     }
                                 }
-                            }
+                            };
+                            format!("Respuesta del usuario: {}", respuesta)
+                        } else {
+                            // tipo informativo
+                            {
+                                let mut status = state.active_agent.lock().unwrap();
                                 status.steps.push(crate::state::AuditStep {
                                     step_type: "informativo".to_string(),
                                     title: "Notificación del Agente".to_string(),
                                     detail: mensaje.to_string(),
                                     timestamp: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs(),
                                 });
-                                save_chat_steps_to_disk(&state, &session_id, &status.steps);
+                                if let Some(ref s_id) = session_id {
+                                    save_chat_steps_to_disk(&state, s_id, &status.steps);
+                                }
+                            }
+                            format!("Notificación enviada con éxito: {}", mensaje)
+                        }
                             }
                             format!("Notificación enviada con éxito: {}", mensaje)
                         }
