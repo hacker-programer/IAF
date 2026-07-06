@@ -1051,6 +1051,8 @@ pub async fn run_agent_loop(
                         }
                     }
                     "finalizar_tarea" => {
+                        // Limpiar todos los procesos hijo registrados antes de finalizar
+                        state.process_registry.kill_all();
                         let msg = args["mensaje_final"].as_str().unwrap_or("Tarea finalizada.").to_string();
                         final_message = Some(msg);
                         "Tarea finalizada correctamente.".to_string()
