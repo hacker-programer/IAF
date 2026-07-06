@@ -1802,33 +1802,38 @@ async fn compress_active_messages_if_needed(
                             return;
                         }
                     }
+                    // Si llegamos aquí, la compresión falló o fue incompleta
+                    // Fallback: truncar mensajes viejos de forma agresiva
+                    if messages.len() > 10 {
+                        // Mantener system prompt + últimos 4 mensajes
+                        let keep_start = 1; // system prompt
+                        let keep_end = messages.len().saturating_sub(4);
+                        if keep_end > keep_start {
+                            // Insertar un marcador de truncado
+                            let marker = json!({
+                                "role": "user",
+                                "content": "[Contexto truncado automáticamente para mantenerse dentro del límite de tokens]"
+                            });
+                            let system = messages[0].clone();
+                            let last_few: Vec<_> = messages[keep_end..].to_vec();
+                            messages.clear();
+                            messages.push(system);
+                            messages.push(marker);
+                            messages.extend(last_few);
+                        }
+                    }
+                }
+                Err(e) => {
+                    eprintln!("Advertencia: Falló la llamada a la API para comprimir contexto activo: {}", e);
+                }
+            }
+        }
+    }
+}
 
 /// Parsea una línea de comandos shell respetando comillas dobles y simples.
 /// Ej: 'gh repo create "my repo" --public' → ["gh", "repo", "create", "my repo", "--public"]
 fn parse_shell_args(input: &str) -> Vec<String> {
-    let mut args = Vec::new();
-    let mut current = String::new();
-    let mut in_single_quote = false;
-    let mut in_double_quote = false;
-    
-    for ch in input.chars() {
-        match ch {
-            '\'' if !in_double_quote => in_single_quote = !in_single_quote,
-            '"' if !in_single_quote => in_double_quote = !in_double_quote,
-            ' ' | '\t' if !in_single_quote && !in_double_quote => {
-                if !current.is_empty() {
-                    args.push(current.clone());
-                    current.clear();
-                }
-            }
-            _ => current.push(ch),
-        }
-    }
-    if !current.is_empty() {
-        args.push(current);
-    }
-    args
-}
 
 pub fn play_error_beep() {
             }
