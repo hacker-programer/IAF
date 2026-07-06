@@ -8,52 +8,59 @@
 
 ## 🐛 Bugs Conocidos y Solucionados
 
+### [2026-07-06] Mensaje "TRUNCADO POR EL SISTEMA" confundía al agente → reversión destructiva
+- **Estado**: CORREGIDO (2026-07-06)
+- **Archivo**: `src/agent.rs` (~línea 1480)
+- **Causa**: El mensaje `[TRUNCADO POR EL SISTEMA. El resultado es demasiado grande...]` era interpretado por el agente como que el archivo en disco estaba corrupto. El agente respondía ejecutando `git checkout` o `git reset --hard`, perdiendo todo el progreso.
+- **Solución**: Se cambió el mensaje a `[VISUALIZACIÓN PARCIAL — El archivo en disco NO está truncado. Solo se muestra una parte de la respuesta...]`. Además se agregó regla #4 en el system prompt que prohíbe explícitamente revertir cambios con git basándose en este mensaje.
+
+### [2026-07-06] Código duplicado por ediciones parciales (start_line/end_line)
+- **Estado**: CORREGIDO (2026-07-06)
+- **Causa**: El agente usaba `start_line`/`end_line` en `write_file_with_commit` para hacer ediciones parciales. Tras varias ediciones secuenciales al mismo archivo, los números de línea se desactualizaban, resultando en código insertado sin eliminar el original → funciones duplicadas, constantes duplicadas.
+- **Solución múltiple**:
+  1. **System prompt**: Nueva sección "REGLAS OBLIGATORIAS DE EDICIÓN DE CÓDIGO" que PROHÍBE usar start_line/end_line en write_file_with_commit. El agente DEBE escribir el archivo completo.
+  2. **validator.rs**: Nueva función `detect_duplicate_definitions()` que detecta definiciones duplicadas de `fn`, `struct`, `enum`, `trait`, `const`, `static`, `mod`.
+  3. **Regla**: Leer siempre el archivo completo antes de editarlo.
+
+### [2026-07-06] Doble `play_error_beep()` en write_handler
+- **Estado**: CORREGIDO (2026-07-06)
+- **Archivo**: `src/agent.rs`, handler `write_file_with_commit`
+- **Causa**: Código duplicado accidental: dos llamadas consecutivas a `play_error_beep()` antes de `break 'write_handler`.
+- **Solución**: Se eliminó la primera llamada redundante.
+
+### [2026-07-06] Comentario "SANITIZACIÓN DE SEGURIDAD" duplicado
+- **Estado**: CORREGIDO (2026-07-06)
+- **Archivo**: `src/agent.rs`, handler `execute_powershell`
+- **Solución**: Se eliminó la línea duplicada.
+
+### [2026-07-06] Comentario duplicado en `compress_active_messages_if_needed`
+- **Estado**: CORREGIDO (2026-07-06)
+- **Archivo**: `src/agent.rs`
+- **Solución**: Se eliminó la segunda ocurrencia de "Si llegamos aquí, la compresión falló o fue incompleta".
+
+### [2026-07-06] Doble `discover_projects()` en `main()`
+- **Estado**: CORREGIDO (2026-07-06)
+- **Archivo**: `src/main.rs`
+- **Solución**: Se eliminó la segunda llamada redundante (ya estaba corregido antes, se verificó que está limpio).
+
+### [2026-07-06] validator.rs no detectaba definiciones duplicadas
+- **Estado**: CORREGIDO (2026-07-06)
+- **Archivo**: `src/validator.rs`
+- **Antes**: Solo detectaba líneas duplicadas consecutivas y delimitadores no balanceados.
+- **Ahora**: También detecta definiciones duplicadas de funciones, structs, enums, traits, constantes y módulos mediante `detect_duplicate_definitions()`. Esta es la defensa principal contra el patrón de error #1 del agente.
+
 ### [2026-07] `git clean -fd` borraba código fuente en proyectos sin remote
 - **Estado**: CORREGIDO (2026-07-04)
 - **Archivo**: `src/agent.rs`, handler `write_file_with_commit`
-- **Causa**: La autocuración ejecutaba `git clean -fd` y `git reset --hard origin/master` sin verificar que el remote existiera.
-- **Solución**: Se agregó PASO 0 que verifica `git remote get-url origin`. Si no existe, intenta `gh repo create`. Si falla, aborta sin tocar archivos. Se eliminó `git clean -fd`.
 
 ### [2026-07] Pánico UTF-8 en truncado de pasos de auditoría
-- **Estado**: CORREGIDO
-- **Archivo**: `src/agent.rs`, función de generación de memoria de ejecución
-- **Causa**: Indexación directa por bytes (`&s[..1500]`) en strings con caracteres multi-byte (ej: `═`)
-- **Solución**: Se usa `.chars().take(1500).collect()` que es seguro para UTF-8.
-
-### [2026-07] `return Ok(...)` en handlers de herramientas terminaba la sesión del agente
 - **Estado**: CORREGIDO (2026-07-04)
-- **Archivo**: `src/agent.rs`
-- **Causa**: Múltiples handlers usaban `return Ok(...)` para reportar errores, pero en Rust esto retorna de `run_agent_loop()`, terminando la sesión completa.
-- **Solución**: Se usan labeled blocks (`'write_handler: { ... break 'write_handler error; }`) y if/else para que los errores sean resultados de herramienta.
 
-### [2026-07] `discover_projects` borraba proyectos locales (clear() destructivo)
+### [2026-07] `return Ok(...)` en handlers terminaba la sesión
 - **Estado**: CORREGIDO (2026-07-04)
-- **Archivo**: `src/agent.rs`, función `discover_projects`
-- **Causa**: `projs.clear()` eliminaba todos los proyectos, incluyendo locales agregados manualmente.
-- **Solución**: Se reemplazó `clear()` por `retain(|p| p.is_local)`, preservando proyectos locales.
 
-### [2026-07] `check_github_cli` no usaba `working_dir`
+### [2026-07] `discover_projects` borraba proyectos locales
 - **Estado**: CORREGIDO (2026-07-04)
-- **Archivo**: `src/agent.rs`, handler `check_github_cli`
-- **Causa**: Se calculaba `working_dir` pero nunca se pasaba al `Command::new("gh")`.
-- **Solución**: Se añadió `.current_dir(&working_dir)` al builder del Command.
-
-### [2026-07] `discover_projects` llamada dos veces consecutivas en `main()`
-- **Estado**: CORREGIDO (2026-07-04)
-- **Archivo**: `src/main.rs`
-- **Solución**: Se eliminó la segunda llamada redundante.
-
-### [2026-07] Código huérfano/roto en `app.js`
-- **Estado**: CORREGIDO (2026-07-04)
-- **Archivo**: `public/app.js`
-- **Causa**: Edición por rango de líneas dejó código fuera de funciones y doble handler.
-- **Solución**: Reescritura completa del archivo.
-
-### [2026-07] `DEFAULT_GLOBAL_SYSTEM_PROMPT` como `const &str` en `main.rs`
-- **Estado**: CORREGIDO (2026-07-04)
-- **Archivo**: `src/main.rs` → extraído a `prompts/default_system_prompt.txt`
-- **Causa**: ~500 líneas de prompt embebidas que inflaban el binario.
-- **Solución**: Se usa `include_str!("../prompts/default_system_prompt.txt")`.
 
 ---
 
@@ -62,22 +69,14 @@
 ### DeepSeek API
 - **URL**: `https://api.deepseek.com/v1/chat/completions`
 - **Modelo principal**: `deepseek-v4-pro` (con `thinking: {type: "enabled"}`)
-- **Modelo de compresión**: `deepseek-v4-flash` (para resúmenes de contexto)
+- **Modelo de compresión**: `deepseek-v4-flash`
 - **No soporta**: contenido multimodal `image_url` (solo texto)
-- **Rate limits**: No documentados explícitamente; implementar backoff exponencial
-
-### VoyageAI API
-- **URL**: `https://api.voyageai.com/v1/embeddings`
-- **Modelo**: `voyage-code-2`
-- **Uso**: Embeddings para búsqueda de código semántica
-- **NOTA**: El módulo `embeddings.rs` fue ELIMINADO. La búsqueda de código es puramente local (coincidencia de palabras clave).
 
 ### search_code
-- **Importante**: La herramienta `search_code` usa búsqueda LOCAL por palabras clave (NO VoyageAI embeddings).
+- La herramienta `search_code` usa búsqueda LOCAL por palabras clave (NO VoyageAI). La descripción en las tool definitions lo indica correctamente.
 
 ### GitHub CLI (gh)
-- Requerido para `fork_and_clone_repo` y para la creación automática de repositorios en `write_file_with_commit`
-- Si no está instalado, `write_file_with_commit` falla en proyectos sin remote (pero no borra archivos)
+- Requerido para `fork_and_clone_repo` y creación automática de repositorios en `write_file_with_commit`
 
 ---
 
@@ -88,46 +87,20 @@
 - Usa DeepSeek Flash para resumir historial
 - El system prompt nunca se comprime
 
-### Sanitización de mensajes para API
+### Sanitización de mensajes para API (`sanitize_messages_for_api`)
 - Convierte mensajes `tool` huérfanos a `user` para evitar errores 400 de DeepSeek
 - No modifica mensajes con `tool_calls` válidos
 
-### Escritura en disco
-- `save_chat_steps_to_disk()` escribe el archivo JSON completo en cada paso — ineficiente
-- `debug_messages.json` se escribe en cada iteración — ineficiente
-- Optimizar con escritura por lotes o rate-limiting
-
-### Validación post-escritura (NUEVO — Julio 2026)
-- **Archivo**: `src/validator.rs`
-- **Propósito**: Detectar errores comunes después de que el agente modifica archivos.
-- Detecta: líneas duplicadas consecutivas, delimitadores no balanceados (`{}`, `()`, `[]`), errores de sintaxis Rust (`rustfmt --check`) y JS (`node --check`).
-- Se integra en `write_file_with_commit` en `agent.rs`.
-- Los resultados se muestran como advertencias al modelo para que pueda autocorregirse.
-
-### Optimización de rendimiento (Julio 2026)
-- **`scraper.rs`**: Regex de limpieza HTML ahora usa `OnceLock<Regex>` (compilada una sola vez).
-- **`desktop.rs`**: `type_text` reemplazó match de ~100 brazos por `HashMap<char, (Key, bool)>` precomputado.
-- **`state.rs`**: `get_parent_pid` reemplazó `wmic` (obsoleto) por `Get-CimInstance`.
+### Validación post-escritura (`validator.rs`)
+- Detecta: líneas duplicadas consecutivas, definiciones duplicadas (fn/struct/enum/trait/const), delimitadores no balanceados
+- Se integra en `write_file_with_commit`; resultados visibles para el agente
 
 ---
 
 ## 🚨 Patrones de Error del Agente
 
-1. **Bucles de compilación**: El agente puede hacer 40+ commits para lograr que un proyecto compile
-2. **Explosión de pasos**: 2177 pasos de auditoría para 63 mensajes (ratio 34:1)
-3. **Repetición de código**: El agente a veces reescribe código que ya existe
-4. **Amnesia de contexto**: Después de compresión, puede perder detalles importantes
-
-### NUEVOS PATRONES DESCUBIERTOS (Julio 2026):
-
-5. **Duplicación al editar por rango**: Cuando el agente usa `write_file_with_commit` con `start_line`/`end_line`, frecuentemente inserta código sin eliminar el original, creando duplicados.
-   - **Mitigación**: `validator.rs` detecta líneas duplicadas consecutivas y advierte al modelo.
-
-6. **Código huérfano por rangos incorrectos**: Al editar rangos que no respetan límites de funciones/clases, quedan fragmentos de código fuera de lugar.
-   - **Mitigación**: `validator.rs` detecta delimitadores no balanceados.
-
-7. **Timeouts en comandos pesados**: `cargo build`, `cargo check` y `Get-ChildItem -Recurse` frecuentemente exceden 30s.
-   - **Mitigación**: Usar el parámetro `timer` en `execute_powershell` (mínimo 120s para compilación).
-
-8. **No verificar compilación entre ediciones**: El agente tiende a hacer múltiples ediciones consecutivas sin verificar que compilan.
-   - **Recomendación**: En el system prompt, instruir al agente a intercalar `cargo check` entre ediciones.
+1. **Duplicación al editar por rango**: ⚠️ CORREGIDO — System prompt ahora prohíbe start_line/end_line en write_file_with_commit; validator.rs detecta definiciones duplicadas.
+2. **Miedo al mensaje TRUNCADO**: ⚠️ CORREGIDO — Mensaje cambiado a "VISUALIZACIÓN PARCIAL" con aclaración explícita; regla #4 en system prompt.
+3. **No verificar compilación entre ediciones**: ⚠️ CORREGIDO — System prompt ahora exige `cargo check` post-escritura.
+4. **Código huérfano por rangos incorrectos**: ⚠️ MITIGADO — Al prohibir ediciones por rango, este problema desaparece.
+5. **Timeouts en comandos pesados**: Usar parámetro `timer` en `execute_powershell` (mínimo 120s para compilación).
