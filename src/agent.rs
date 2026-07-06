@@ -1019,26 +1019,25 @@ pub async fn run_agent_loop(
  
                             // Bloquear ciclo asíncronamente con un sleep no bloqueante de Tokio hasta que respuesta_usuario sea Some
                             loop {
+ 
+                            // Bloquear ciclo asíncronamente con un sleep no bloqueante de Tokio hasta que respuesta_usuario sea Some
+                            loop {
                                 tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
                                 
                                 // Comprobar si se envió señal de interrupción mientras esperaba
                                 {
                                     let status = state.active_agent.lock().unwrap();
                                     if status.interrupted {
-                                        return Ok("Ejecución del agente interrumpida mientras esperaba respuesta del usuario.".to_string());
-                                    }
-                                    if !status.esperando_respuesta_usuario {
-                                {
-                                    let status = state.active_agent.lock().unwrap();
-                                    if status.interrupted {
                                         state.process_registry.kill_all();
                                         return Ok("Ejecución del agente interrumpida mientras esperaba respuesta del usuario.".to_string());
                                     }
+                                    if !status.esperando_respuesta_usuario {
+                                        if let Some(ref respuesta) = status.respuesta_usuario {
+                                            break format!("Respuesta del usuario: {}", respuesta);
+                                        }
+                                    }
+                                }
                             }
-                        } else {
-                            // Informativo: solo registrar paso
-                            {
-                                let mut status = state.active_agent.lock().unwrap();
                                 status.steps.push(crate::state::AuditStep {
                                     step_type: "informativo".to_string(),
                                     title: "Notificación del Agente".to_string(),
