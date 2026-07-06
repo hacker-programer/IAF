@@ -34,8 +34,11 @@ impl DesktopController {
     /// Soporta letras (a-z, A-Z), números (0-9), espacio, y puntuación común.
     pub fn type_text(&self, text: &str) -> Result<(), SimulateError> {
         for ch in text.chars() {
+    pub fn type_text(&self, text: &str) -> Result<(), SimulateError> {
+        for ch in text.chars() {
             match ch {
                 'a'..='z' => {
+                    let key = match ch {
                         'a' => Key::KeyA, 'b' => Key::KeyB, 'c' => Key::KeyC,
                         'd' => Key::KeyD, 'e' => Key::KeyE, 'f' => Key::KeyF,
                         'g' => Key::KeyG, 'h' => Key::KeyH, 'i' => Key::KeyI,
@@ -45,7 +48,7 @@ impl DesktopController {
                         's' => Key::KeyS, 't' => Key::KeyT, 'u' => Key::KeyU,
                         'v' => Key::KeyV, 'w' => Key::KeyW, 'x' => Key::KeyX,
                         'y' => Key::KeyY, 'z' => Key::KeyZ,
-                        _ => continue,
+                        _ => unreachable!(),
                     };
                     simulate(&EventType::KeyPress(key))?;
                     simulate(&EventType::KeyRelease(key))?;
