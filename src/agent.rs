@@ -182,7 +182,6 @@ pub async fn run_agent_loop(
             }
         }),
         json!({
-            "type": "function",
         json!({
             "type": "function",
             "function": {
@@ -197,6 +196,8 @@ pub async fn run_agent_loop(
                 }
             }
         }),
+        json!({
+            "type": "function",
             "function": {
                 "name": "fork_and_clone_repo",
                 "description": "Forkea y clona un repositorio de GitHub de terceros mediante GitHub CLI (gh).",
@@ -209,7 +210,6 @@ pub async fn run_agent_loop(
                 }
             }
         }),
-        json!({
             "type": "function",
             "function": {
                 "name": "read_url",
