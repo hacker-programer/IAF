@@ -1035,9 +1035,10 @@ pub async fn run_agent_loop(
                                     Err(e) => format!("Error al conectar con la URL: {}", e),
                                 }
                             }
+                                    Err(e) => format!("Error al conectar con la URL: {}", e),
+                                }
+                            }
                             Err(e) => format!("Error inicializando cliente HTTP: {}", e),
-                        }
-                        }
                     }
                     "check_github_cli" => {
                         let command = args["command"].as_str().unwrap_or("");
