@@ -1039,6 +1039,7 @@ pub async fn run_agent_loop(
                             Err(e) => format!("Error inicializando cliente HTTP: {}", e),
                         }
                     }
+                    "check_github_cli" => {
                         let command = args["command"].as_str().unwrap_or("");
                         let working_dir = if let Some(ref proj_name) = project_name {
                             get_project_path(&state, proj_name)
