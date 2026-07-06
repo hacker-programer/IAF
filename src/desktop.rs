@@ -36,65 +36,99 @@ impl DesktopController {
     /// Soporta letras (a-z, A-Z), números (0-9), espacio, y puntuación común.
     pub fn type_text(&self, text: &str) -> Result<(), SimulateError> {
         for ch in text.chars() {
-            let key = match ch {
-                'a'..='z' => Key::from_str(&ch.to_string()),
+            match ch {
+                'a'..='z' => {
+                    let key = match ch {
+                        'a' => Key::KeyA, 'b' => Key::KeyB, 'c' => Key::KeyC,
+                        'd' => Key::KeyD, 'e' => Key::KeyE, 'f' => Key::KeyF,
+                        'g' => Key::KeyG, 'h' => Key::KeyH, 'i' => Key::KeyI,
+                        'j' => Key::KeyJ, 'k' => Key::KeyK, 'l' => Key::KeyL,
+                        'm' => Key::KeyM, 'n' => Key::KeyN, 'o' => Key::KeyO,
+                        'p' => Key::KeyP, 'q' => Key::KeyQ, 'r' => Key::KeyR,
+                        's' => Key::KeyS, 't' => Key::KeyT, 'u' => Key::KeyU,
+                        'v' => Key::KeyV, 'w' => Key::KeyW, 'x' => Key::KeyX,
+                        'y' => Key::KeyY, 'z' => Key::KeyZ,
+                        _ => continue,
+                    };
+                    simulate(&EventType::KeyPress(key))?;
+                    simulate(&EventType::KeyRelease(key))?;
+                }
                 'A'..='Z' => {
-                    // Para mayúsculas: presionar Shift + letra
                     let lower = ch.to_ascii_lowercase();
-                    let key = Key::from_str(&lower.to_string());
+                    let key = match lower {
+                        'a' => Key::KeyA, 'b' => Key::KeyB, 'c' => Key::KeyC,
+                        'd' => Key::KeyD, 'e' => Key::KeyE, 'f' => Key::KeyF,
+                        'g' => Key::KeyG, 'h' => Key::KeyH, 'i' => Key::KeyI,
+                        'j' => Key::KeyJ, 'k' => Key::KeyK, 'l' => Key::KeyL,
+                        'm' => Key::KeyM, 'n' => Key::KeyN, 'o' => Key::KeyO,
+                        'p' => Key::KeyP, 'q' => Key::KeyQ, 'r' => Key::KeyR,
+                        's' => Key::KeyS, 't' => Key::KeyT, 'u' => Key::KeyU,
+                        'v' => Key::KeyV, 'w' => Key::KeyW, 'x' => Key::KeyX,
+                        'y' => Key::KeyY, 'z' => Key::KeyZ,
+                        _ => continue,
+                    };
                     simulate(&EventType::KeyPress(Key::ShiftLeft))?;
                     simulate(&EventType::KeyPress(key))?;
                     simulate(&EventType::KeyRelease(key))?;
                     simulate(&EventType::KeyRelease(Key::ShiftLeft))?;
-                    continue;
                 }
-                '0'..='9' => Key::from_str(&ch.to_string()),
-                ' ' => Key::Space,
-                '.' => Key::Dot,
-                ',' => Key::Comma,
-                '-' => Key::Minus,
+                '0'..='9' => {
+                    let key = match ch {
+                        '0' => Key::Num0, '1' => Key::Num1, '2' => Key::Num2,
+                        '3' => Key::Num3, '4' => Key::Num4, '5' => Key::Num5,
+                        '6' => Key::Num6, '7' => Key::Num7, '8' => Key::Num8,
+                        '9' => Key::Num9,
+                        _ => continue,
+                    };
+                    simulate(&EventType::KeyPress(key))?;
+                    simulate(&EventType::KeyRelease(key))?;
+                }
+                ' ' => {
+                    simulate(&EventType::KeyPress(Key::Space))?;
+                    simulate(&EventType::KeyRelease(Key::Space))?;
+                }
+                '.' => {
+                    simulate(&EventType::KeyPress(Key::Dot))?;
+                    simulate(&EventType::KeyRelease(Key::Dot))?;
+                }
+                ',' => {
+                    simulate(&EventType::KeyPress(Key::Comma))?;
+                    simulate(&EventType::KeyRelease(Key::Comma))?;
+                }
+                '-' => {
+                    simulate(&EventType::KeyPress(Key::Minus))?;
+                    simulate(&EventType::KeyRelease(Key::Minus))?;
+                }
                 '_' => {
                     simulate(&EventType::KeyPress(Key::ShiftLeft))?;
                     simulate(&EventType::KeyPress(Key::Minus))?;
                     simulate(&EventType::KeyRelease(Key::Minus))?;
                     simulate(&EventType::KeyRelease(Key::ShiftLeft))?;
-                    continue;
                 }
-                '/' => Key::Slash,
-                '\\' => Key::BackSlash,
+                '/' => {
+                    simulate(&EventType::KeyPress(Key::Slash))?;
+                    simulate(&EventType::KeyRelease(Key::Slash))?;
+                }
+                '\\' => {
+                    simulate(&EventType::KeyPress(Key::BackSlash))?;
+                    simulate(&EventType::KeyRelease(Key::BackSlash))?;
+                }
                 ':' => {
                     simulate(&EventType::KeyPress(Key::ShiftLeft))?;
                     simulate(&EventType::KeyPress(Key::SemiColon))?;
                     simulate(&EventType::KeyRelease(Key::SemiColon))?;
                     simulate(&EventType::KeyRelease(Key::ShiftLeft))?;
-                    continue;
                 }
-                '\n' | '\r' => Key::Return,
-                '\t' => Key::Tab,
+                '\n' | '\r' => {
+                    simulate(&EventType::KeyPress(Key::Return))?;
+                    simulate(&EventType::KeyRelease(Key::Return))?;
+                }
+                '\t' => {
+                    simulate(&EventType::KeyPress(Key::Tab))?;
+                    simulate(&EventType::KeyRelease(Key::Tab))?;
+                }
                 _ => continue, // Ignorar caracteres no soportados
-            };
-            simulate(&EventType::KeyPress(key))?;
-            simulate(&EventType::KeyRelease(key))?;
+            }
         }
         Ok(())
     }
-
-    /// Abrir una imagen (o cualquier archivo) con la aplicación predeterminada del sistema.
-    pub fn open_image(&self, path: &str) -> Result<(), std::io::Error> {
-        // En Windows usamos 'cmd /c start' para abrir con el programa asociado.
-        #[cfg(target_os = "windows")]
-        {
-            Command::new("cmd")
-                .args(["/C", "start", "", path])
-                .spawn()?;
-            Ok(())
-        }
-        #[cfg(not(target_os = "windows"))]
-        {
-            // En Unix usar 'xdg-open' o 'open' (macOS).
-            let opener = if cfg!(target_os = "macos") { "open" } else { "xdg-open" };
-            Command::new(opener).arg(path).spawn()?;
-            Ok(())
-        }
-    }
-}
