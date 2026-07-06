@@ -1022,6 +1022,7 @@ pub async fn run_agent_loop(
                         let url = args["url"].as_str().unwrap_or("");
                         let client = reqwest::Client::builder()
                             .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36")
+                            .timeout(std::time::Duration::from_secs(15))
                             .build();
                         match client {
                             Ok(client) => {
@@ -1035,12 +1036,9 @@ pub async fn run_agent_loop(
                                     Err(e) => format!("Error al conectar con la URL: {}", e),
                                 }
                             }
-                                    Err(e) => format!("Error al conectar con la URL: {}", e),
-                                }
-                            }
                             Err(e) => format!("Error inicializando cliente HTTP: {}", e),
+                        }
                     }
-                    "check_github_cli" => {
                         let command = args["command"].as_str().unwrap_or("");
                         let working_dir = if let Some(ref proj_name) = project_name {
                             get_project_path(&state, proj_name)
