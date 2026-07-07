@@ -78,9 +78,9 @@ pub async fn run_agent_loop(
             // Tomar todos los pasos de auditorÃ­a desde el principio para evitar amnesia
             let start_idx = 0;
             for (i, step) in steps.iter().enumerate() {
-                // Truncar de forma segura a 1500 caracteres sin romper UTF-8
-                let detail_short = if step.detail.chars().count() > 1500 {
-                    let truncated: String = step.detail.chars().take(1500).collect();
+                // Truncar de forma segura a 20000 caracteres sin romper UTF-8
+                let detail_short = if step.detail.chars().count() > 20000 {
+                    let truncated: String = step.detail.chars().take(20000).collect();
                     format!("{}... [Truncado en memoria]", truncated)
                 } else {
                     step.detail.clone()
@@ -409,7 +409,7 @@ pub async fn run_agent_loop(
                 serde_json::to_string_pretty(&messages).unwrap_or_default()
             );
         }
-        if iteration > 500 {
+        if iteration > 2000 {
             let _ = fs::write(
                 state.base_workspace.join("debug_messages.json"),
                 serde_json::to_string_pretty(&messages).unwrap_or_default()
@@ -423,23 +423,6 @@ pub async fn run_agent_loop(
             ));
         }
 
-        // LÃ­mite de pasos de auditorÃ­a: mÃ¡ximo 10000 para evitar archivos JSON gigantes
-        {
-            let status = state.active_agent.lock().unwrap();
-            if status.steps.len() > 10000 {
-                drop(status);
-                let mut status = state.active_agent.lock().unwrap();
-                // Truncar a los Ãºltimos 5000 pasos
-                let total = status.steps.len();
-                status.steps = status.steps.split_off(total - 5000);
-                status.steps.insert(0, crate::state::AuditStep {
-                    step_type: "thinking".to_string(),
-                    title: "Pasos truncados".to_string(),
-                    detail: format!("Se eliminaron {} pasos antiguos para evitar crecimiento excesivo del archivo de auditorÃ­a.", total - 5000),
-                    timestamp: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs(),
-                });
-            }
-        }
 
         let force_none_tool_choice = false;
         let current_tool_choice = if force_none_tool_choice { "none" } else { "auto" };
@@ -1438,7 +1421,7 @@ pub async fn run_agent_loop(
                     status.steps.push(crate::state::AuditStep {
                         step_type: "tool_result".to_string(),
                         title: format!("Resultado de: {}", func_name),
-                        detail: if tool_result.len() > 300 {
+                        detail: if tool_result.len() > 20000 {
                             format!("{}... [Truncado]", safe_truncate(&tool_result, 300))
                         } else {
                             tool_result.clone()
@@ -1636,16 +1619,23 @@ fn safe_truncate(s: &str, max_bytes: usize) -> &str {
 
 fn truncate_old_tool_responses(messages: &mut Vec<serde_json::Value>) {
     let mut assistant_count = 0;
+    let mut o_assistant_count = 0;
     for i in 0..messages.len() {
         if messages[i]["role"] == "assistant" {
             assistant_count += 1;
-            // Si ha pasado por 3 o mÃ¡s iteraciones de razonamiento, truncarlo
-            if assistant_count >= 3 {
+        }
+    }
+    for i in 0..messages.len() {
+        if messages[i]["role"] == "assistant" {
+            o_assistant_count += 1;
+        } else if messages[i]["role"] == "tool" {
+            // Si ha pasado por 15 o mÃ¡s iteraciones de razonamiento, truncarlo
+            if (assistant_count - o_assistant_count) >= 15 {
                 if let Some(content_val) = messages[i].get_mut("content") {
                     if let Some(content_str) = content_val.as_str() {
                         if content_str.len() > 3000 {
                             let truncated = format!(
-                                "{}... [Truncado por el sistema tras 3 iteraciones para ahorrar contexto]",
+                                "{}... [Truncado por el sistema tras 15 iteraciones para ahorrar contexto]",
                                 safe_truncate(content_str, 2000)
                             );
                             *content_val = json!(truncated);
@@ -1674,10 +1664,10 @@ async fn compress_active_messages_if_needed(
                 "user" | "assistant" => m["content"].as_str().unwrap_or("").len(),
                 "tool" => {
                     let content_str = m["content"].as_str().unwrap_or("");
-                    if content_str.contains("Truncado por el sistema tras 3 iteraciones") {
+                    if content_str.contains("Truncado por el sistema tras 15 iteraciones") {
                         content_str.len()
                     } else {
-                        content_str.len().min(2000) // Contar solo 2000 si estÃ¡ en el periodo de gracia de 3 iteraciones
+                        content_str.len().min(2000) // Contar solo 2000 si estÃ¡ en el periodo de gracia de 15 iteraciones
                     }
                 }
                 _ => 0,
