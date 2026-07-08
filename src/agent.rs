@@ -1608,15 +1608,7 @@ pub async fn run_agent_loop(
                     save_chat_steps_to_disk(&state, &session_id, &status.steps);
                 }
 
-                let display_result = if tool_result.len() > 25000 {
-                    format!(
-                        "{}... [VISUALIZACIÓN PARCIAL — El archivo en disco NO está truncado. Solo se muestra una parte de la respuesta de la herramienta por ser demasiado grande ({} caracteres). Para leer archivos, utiliza parÃ¡metros start_line y end_line en 'read_file'. Para comandos de PowerShell, filtra la salida usando select, grep o head/tail.]",
-                        safe_truncate(&tool_result, 20000),
-                        tool_result.len()
-                    )
-                } else {
-                    tool_result.clone()
-                };
+                let display_result = state.tool_results.store(call_id, func_name, &tool_result);
 
                 tool_responses.push(json!({
                     "role": "tool",
