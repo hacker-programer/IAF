@@ -1456,13 +1456,7 @@ pub async fn run_agent_loop(
                                 // Formato array multimodal (antiguo)
                                 if let Some(content_arr) = msg["content"].as_array() {
                                     for part in content_arr {
-                                        if let Some(text) = part["text"].as_str() {
-                                            if text.contains(&marker) {
-                                                return false;
-                                            }
-                                        }
-                                    }
-                                }
+                let display_result = state.tool_results.store(call_id, func_name, &tool_result);
                                 true
                             });
                             let removed = before_len - messages.len();
