@@ -8,70 +8,59 @@
 
 ## 🐛 Bugs Conocidos y Solucionados
 
-## 🐛 Bugs Conocidos y Solucionados
+### [2026-07-08] Google Search siempre fallaba (CAPTCHA / bloqueo)
+- **Estado**: CORREGIDO (2026-07-08)
+- **Archivo**: `src/scraper.rs`
+- **Causa**: Google bloquea agresivamente las peticiones automatizadas, incluso con User-Agent de navegador real. El agente gastaba iteraciones intentando search_google sin éxito.
+- **Solución**: Se reescribió `scraper.rs` para usar **DuckDuckGo Lite** (`lite.duckduckgo.com`) como fuente principal. DDG Lite devuelve HTML simple sin JavaScript, fácil de parsear y mucho más amigable con scrapers. Google se mantiene como fallback (poco probable que funcione). La función `perform_search` ahora orquesta: DDG primero → Google fallback → DDG con mensaje de error si Google falla.
+
+### [2026-07-08] Truncado arbitrario de tool results (pérdida de información)
+- **Estado**: CORREGIDO (2026-07-08)
+- **Archivo**: `src/state.rs` (nuevo `ToolResultStore`)
+- **Causa**: Los resultados de herramientas >25K chars se truncaban con `[VISUALIZACIÓN PARCIAL...]`, perdiendo información que el agente podía necesitar. El agente no tenía control sobre qué resultados mantener.
+- **Solución**: Se creó `ToolResultStore`:
+  - Resultados pequeños (<3000 chars): se devuelven completos
+  - Resultados grandes: se almacenan bajo un ID único (call_id) y se devuelve un resumen + instrucciones de paginación
+  - El agente puede usar `fetch_tool_result(id, pagina, page_size)` para leer más
+  - El agente puede usar `release_tool_result(id)` para liberar memoria cuando ya no necesita el resultado
+  - Reemplaza el truncado arbitrario por un sistema de visibilidad controlado por el agente
+
+### [2026-07-08] Falsos positivos del validador: "definiciones duplicadas" entre diferentes impl blocks
+- **Estado**: CORREGIDO (2026-07-08)
+- **Archivo**: `src/validator.rs`
+- **Causa**: `detect_duplicate_definitions` no distinguía entre métodos de diferentes structs. `fn new()` en `impl ToolResultStore` se reportaba como duplicado de `fn new()` en `impl SubAgentManager` y `impl ProcessRegistry`.
+- **Solución**: Se modificó `detect_duplicate_definitions` para trackear el contexto de `impl` blocks:
+  1. Nueva función `extract_impl_struct_name()`: extrae el nombre del struct de una declaración `impl`
+  2. Nueva función `extract_def_name_with_context()`: prefija el nombre de la definición con `StructName::`
+  3. Stack de contextos `impl` para manejar bloques anidados
+  4. Las claves ahora son `ToolResultStore::fn new`, `SubAgentManager::fn new`, `ProcessRegistry::fn new` → no colisionan
+
+### [2026-07-08] Falsos positivos del validador: líneas duplicadas en argumentos de macros
+- **Estado**: CORREGIDO (2026-07-08)
+- **Archivo**: `src/validator.rs` (`detect_duplicate_lines`)
+- **Causa**: Argumentos repetidos en `format!()` como `call_id, call_id, call_id` se reportaban como líneas duplicadas.
+- **Solución**: Se agregó `current.ends_with(",")` al conjunto de líneas estructurales ignoradas.
 
 ### [2026-07-07] CRÍTICO: Razonamiento del modelo inyectado en archivos de código sin //
 - **Estado**: CORREGIDO (2026-07-07)
-- **Archivos**: `src/agent.rs` (~línea 600), `src/validator.rs`, `prompts/default_system_prompt.txt`
-- **Causa raíz**: El `write_handler` en `agent.rs` usaba la variable `content` del scope externo (línea 486: `message_val["content"]` = la respuesta textual del modelo, que contiene frases como "OK, ahora necesito modificar...", "Let me edit the file...") en lugar de extraer `args["content"]` (el parámetro real de la herramienta que contiene el código fuente). Esto causaba que el texto de razonamiento del agente se escribiera directamente en archivos .rs sin `//`, generando errores de compilación. El agente luego culpaba a "errores de sintaxis" sin reconocer que era su propio texto.
+- **Archivos**: `src/agent.rs`, `src/validator.rs`, `prompts/default_system_prompt.txt`
+- **Causa raíz**: El `write_handler` usaba la respuesta textual del modelo en lugar del contenido real de la herramienta.
 - **Solución múltiple (defensa en 3 capas)**:
-  1. **agent.rs**: Añadido `let content = args["content"].as_str().unwrap_or("");` para extraer el código real de los argumentos de la herramienta, sobrescribiendo la variable del scope externo.
-  2. **agent.rs**: Nueva función `detect_reasoning_in_pre_write()` — validación pre-escritura que bloquea la escritura si detecta patrones de razonamiento (como "OK, ahora", "Let me", "Voy a") en el contenido antes de tocar el archivo.
-  3. **validator.rs**: Nueva función `detect_reasoning_injection()` — validación post-escritura que escanea archivos .rs/.js/etc. buscando líneas que parecen lenguaje natural sin comentar.
-  4. **System prompt**: Nueva regla #6 en "REGLAS OBLIGATORIAS DE EDICIÓN DE CÓDIGO" que prohíbe explícitamente incluir razonamiento en el campo `content` de `write_file_with_commit`.
+  1. `agent.rs`: variable `content` extraída de `args["content"]`
+  2. `agent.rs`: `detect_reasoning_in_pre_write()` — validación pre-escritura
+  3. `validator.rs`: `detect_reasoning_injection()` — validación post-escritura
+  4. System prompt: regla #6 prohíbe razonamiento en `content`
 
 ### [2026-07-06] Mensaje "TRUNCADO POR EL SISTEMA" confundía al agente → reversión destructiva
 - **Estado**: CORREGIDO (2026-07-06)
-- **Archivo**: `src/agent.rs` (~línea 1480)
-- **Causa**: El mensaje `[TRUNCADO POR EL SISTEMA. El resultado es demasiado grande...]` era interpretado por el agente como que el archivo en disco estaba corrupto. El agente respondía ejecutando `git checkout` o `git reset --hard`, perdiendo todo el progreso.
-- **Solución**: Se cambió el mensaje a `[VISUALIZACIÓN PARCIAL — El archivo en disco NO está truncado. Solo se muestra una parte de la respuesta...]`. Además se agregó regla #4 en el system prompt que prohíbe explícitamente revertir cambios con git basándose en este mensaje.
+- **Archivo**: `src/agent.rs`
+- **Solución**: Mensaje cambiado a "VISUALIZACIÓN PARCIAL" + regla #4 en system prompt
 
 ### [2026-07-06] Código duplicado por ediciones parciales (start_line/end_line)
 - **Estado**: CORREGIDO (2026-07-06)
-- **Causa**: El agente usaba `start_line`/`end_line` en `write_file_with_commit` para hacer ediciones parciales. Tras varias ediciones secuenciales al mismo archivo, los números de línea se desactualizaban, resultando en código insertado sin eliminar el original → funciones duplicadas, constantes duplicadas.
-- **Solución múltiple**:
-  1. **System prompt**: Nueva sección "REGLAS OBLIGATORIAS DE EDICIÓN DE CÓDIGO" que PROHÍBE usar start_line/end_line en write_file_with_commit. El agente DEBE escribir el archivo completo.
-  2. **validator.rs**: Nueva función `detect_duplicate_definitions()` que detecta definiciones duplicadas de `fn`, `struct`, `enum`, `trait`, `const`, `static`, `mod`.
-  3. **Regla**: Leer siempre el archivo completo antes de editarlo.
-
-### [2026-07-06] Doble `play_error_beep()` en write_handler
-- **Estado**: CORREGIDO (2026-07-06)
-- **Archivo**: `src/agent.rs`, handler `write_file_with_commit`
-- **Causa**: Código duplicado accidental: dos llamadas consecutivas a `play_error_beep()` antes de `break 'write_handler`.
-- **Solución**: Se eliminó la primera llamada redundante.
-
-### [2026-07-06] Comentario "SANITIZACIÓN DE SEGURIDAD" duplicado
-- **Estado**: CORREGIDO (2026-07-06)
-- **Archivo**: `src/agent.rs`, handler `execute_powershell`
-- **Solución**: Se eliminó la línea duplicada.
-
-### [2026-07-06] Comentario duplicado en `compress_active_messages_if_needed`
-- **Estado**: CORREGIDO (2026-07-06)
-- **Archivo**: `src/agent.rs`
-- **Solución**: Se eliminó la segunda ocurrencia de "Si llegamos aquí, la compresión falló o fue incompleta".
-
-### [2026-07-06] Doble `discover_projects()` en `main()`
-- **Estado**: CORREGIDO (2026-07-06)
-- **Archivo**: `src/main.rs`
-- **Solución**: Se eliminó la segunda llamada redundante (ya estaba corregido antes, se verificó que está limpio).
-
-### [2026-07-06] validator.rs no detectaba definiciones duplicadas
-- **Estado**: CORREGIDO (2026-07-06)
-- **Archivo**: `src/validator.rs`
-- **Antes**: Solo detectaba líneas duplicadas consecutivas y delimitadores no balanceados.
-- **Ahora**: También detecta definiciones duplicadas de funciones, structs, enums, traits, constantes y módulos mediante `detect_duplicate_definitions()`. Esta es la defensa principal contra el patrón de error #1 del agente.
+- **Solución**: System prompt prohíbe start_line/end_line + validator.rs `detect_duplicate_definitions()`
 
 ### [2026-07] `git clean -fd` borraba código fuente en proyectos sin remote
-- **Estado**: CORREGIDO (2026-07-04)
-- **Archivo**: `src/agent.rs`, handler `write_file_with_commit`
-
-### [2026-07] Pánico UTF-8 en truncado de pasos de auditoría
-- **Estado**: CORREGIDO (2026-07-04)
-
-### [2026-07] `return Ok(...)` en handlers terminaba la sesión
-- **Estado**: CORREGIDO (2026-07-04)
-
-### [2026-07] `discover_projects` borraba proyectos locales
 - **Estado**: CORREGIDO (2026-07-04)
 
 ---
@@ -84,35 +73,47 @@
 - **Modelo de compresión**: `deepseek-v4-flash`
 - **No soporta**: contenido multimodal `image_url` (solo texto)
 
-### search_code
-- La herramienta `search_code` usa búsqueda LOCAL por palabras clave (NO VoyageAI). La descripción en las tool definitions lo indica correctamente.
+### DuckDuckGo Lite API (NUEVO)
+- **URL**: `https://lite.duckduckgo.com/lite/?q=...`
+- **Ventaja**: No requiere API key, no bloquea scrapers, HTML simple
+- **Limitación**: Resultados menos ricos que Google, ~10 por página
+- **Uso**: Fuente principal en `scraper.rs`, Google como fallback
 
-### GitHub CLI (gh)
-- Requerido para `fork_and_clone_repo` y creación automática de repositorios en `write_file_with_commit`
+### search_code
+- La herramienta `search_code` usa búsqueda LOCAL por palabras clave (NO VoyageAI).
+- La función `search_code_in_project()` en `agent.rs` ahora es **`pub`** para que `sub_agent.rs` pueda usarla.
 
 ---
 
 ## 📐 Decisiones de Arquitectura
 
-### Compresión de contexto activo
-- Se activa cuando `total_len > 500000` caracteres
-- Usa DeepSeek Flash para resumir historial
-- El system prompt nunca se comprime
+### Tool Result Store (NUEVO)
+- Reemplaza el truncado arbitrario de 25K chars
+- Sistema de IDs + paginación controlado por el agente
+- `reap_old()` para limpieza automática de resultados antiguos
 
-### Sanitización de mensajes para API (`sanitize_messages_for_api`)
-- Convierte mensajes `tool` huérfanos a `user` para evitar errores 400 de DeepSeek
-- No modifica mensajes con `tool_calls` válidos
+### Sub-Agent Manager (NUEVO)
+- Sub-agentes paralelos con límite dinámico según hardware:
+  - 2 cores → 1 sub-agente
+  - 4 cores → 2 sub-agentes
+  - 8 cores → 4 sub-agentes
+  - 16+ cores → 8 sub-agentes
+- Contexto heredado del agente principal (resumen)
+- Restricciones de path para evitar colisiones
+- Cancelación vía `AbortHandle`
 
 ### Validación post-escritura (`validator.rs`)
-- Detecta: líneas duplicadas consecutivas, definiciones duplicadas (fn/struct/enum/trait/const), delimitadores no balanceados
-- Se integra en `write_file_with_commit`; resultados visibles para el agente
+- Ahora con conciencia de contexto `impl` blocks
+- Ignora argumentos repetidos en macros (`call_id, call_id,`)
+- Tests unitarios incluidos en el mismo archivo
 
 ---
 
 ## 🚨 Patrones de Error del Agente
 
-1. **Duplicación al editar por rango**: ⚠️ CORREGIDO — System prompt ahora prohíbe start_line/end_line en write_file_with_commit; validator.rs detecta definiciones duplicadas.
-2. **Miedo al mensaje TRUNCADO**: ⚠️ CORREGIDO — Mensaje cambiado a "VISUALIZACIÓN PARCIAL" con aclaración explícita; regla #4 en system prompt.
-3. **No verificar compilación entre ediciones**: ⚠️ CORREGIDO — System prompt ahora exige `cargo check` post-escritura.
-4. **Código huérfano por rangos incorrectos**: ⚠️ MITIGADO — Al prohibir ediciones por rango, este problema desaparece.
-5. **Timeouts en comandos pesados**: Usar parámetro `timer` en `execute_powershell` (mínimo 120s para compilación).
+1. **Duplicación al editar por rango**: ⚠️ CORREGIDO — System prompt prohíbe start_line/end_line
+2. **Miedo al mensaje TRUNCADO**: ⚠️ CORREGIDO — Mensaje "VISUALIZACIÓN PARCIAL" + regla #4
+3. **No verificar compilación entre ediciones**: ⚠️ CORREGIDO — System prompt exige `cargo check`
+4. **Código huérfano por rangos incorrectos**: ⚠️ MITIGADO — Ediciones por archivo completo
+5. **Timeouts en comandos pesados**: Usar parámetro `timer` (mínimo 120s para compilación)
+6. **Falsos positivos del validador**: ⚠️ CORREGIDO — Contexto impl en definiciones, argumentos repetidos ignorados
