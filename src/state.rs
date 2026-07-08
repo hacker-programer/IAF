@@ -199,9 +199,10 @@ impl ToolResultStore {
     pub fn release(&self, call_id: &str) -> bool {
         let mut entries = self.entries.lock().unwrap();
         entries.remove(call_id).is_some()
-    }
-
     /// Libera todos los resultados más antiguos que `max_age_secs`.
+    pub fn reap_old(&self, max_age_secs: u64) -> usize {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_secs();
         let mut entries = self.entries.lock().unwrap();
@@ -209,8 +210,6 @@ impl ToolResultStore {
         entries.retain(|_, v| now - v.stored_at < max_age_secs);
         before - entries.len()
     }
-
-    /// Retorna la cantidad de resultados almacenados.
     pub fn len(&self) -> usize {
         self.entries.lock().unwrap().len()
     }
