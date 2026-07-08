@@ -596,17 +596,35 @@ pub async fn run_agent_loop(
                         let commit_msg = args["commit_message"].as_str().unwrap_or("Update by Agent");
                         let start_line_opt = args["start_line"].as_i64();
                         let end_line_opt = args["end_line"].as_i64();
+
+                        // ========== CRÍTICO: Extraer content de los argumentos de la herramienta ==========
+                        // NUNCA usar la variable 'content' del scope externo (line ~486), que es
+                        // message_val["content"] — el texto de respuesta del modelo que contiene
+                        // frases de razonamiento como "OK, ahora necesito..." o "Let me edit...".
+                        // Ese texto inyectado en archivos .rs sin // causa errores de compilación.
+                        // Este bug fue descubierto el 2026-07-07 y es la causa raíz del problema
+                        // "el agente inyecta su razonamiento dentro del código sin //".
+                        let content = args["content"].as_str().unwrap_or("");
+                        
+                        // ========== VALIDACIÓN PRE-ESCRITURA: Detectar razonamiento inyectado ==========
+                        // Si el contenido parece contener texto de razonamiento del modelo en lugar de
+                        // código real, advertir al agente para que corrija.
+                        let pre_check_warnings = detect_reasoning_in_pre_write(content, rel_path);
+                        if !pre_check_warnings.is_empty() {
+                            let warning_msg = format!(
+                                "⚠️ ADVERTENCIA PRE-ESCRITURA: El contenido a escribir en '{}' parece contener \
+                                texto de razonamiento del modelo en lugar de código puro:\n\n{}\n\n\
+                                CORRIGE EL CONTENIDO: Asegúrate de que el parámetro 'content' de \
+                                write_file_with_commit contenga SOLO el código fuente, sin frases como \
+                                'OK', 'Ahora', 'Let me', 'Voy a', etc. Si necesitás incluir explicaciones, \
+                                usá comentarios (// o /* */).",
+                                rel_path, pre_check_warnings
+                            );
+                            break 'write_handler warning_msg;
+                        }
+                        // ========== FIN VALIDACIÓN PRE-ESCRITURA ==========
                         
                         if let Some(ref proj_name) = project_name {
-                            let proj_path = get_project_path(&state, proj_name);
-                            let full_path = Path::new(&proj_path).join(rel_path);
-
-                            // --- PASO 1: Sincronizar con el repositorio remoto ANTES de realizar cualquier cambio local ---
-                            // --- PASO 0: Verificar que el repositorio tiene un remote 'origin' configurado ---
-                            // Si no existe, intentar crearlo. Si no se puede, abortar sin tocar archivos locales.
-                            let remote_check = Command::new("git")
-                                .args(&["remote", "get-url", "origin"])
-                                .current_dir(&proj_path)
                                 .stdin(std::process::Stdio::null())
                                 .stdout(std::process::Stdio::null())
                                 .stderr(std::process::Stdio::null())
