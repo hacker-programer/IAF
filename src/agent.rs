@@ -626,9 +626,20 @@ pub async fn run_agent_loop(
                         
                         if let Some(ref proj_name) = project_name {
                                 .stdin(std::process::Stdio::null())
+                        if let Some(ref proj_name) = project_name {
+                            let proj_path = get_project_path(&state, proj_name);
+                            let full_path = Path::new(&proj_path).join(rel_path);
+
+                            // --- PASO 0: Verificar que el repositorio tiene un remote 'origin' configurado ---
+                            // Si no existe, intentar crearlo. Si no se puede, abortar sin tocar archivos locales.
+                            let remote_check = Command::new("git")
+                                .args(&["remote", "get-url", "origin"])
+                                .current_dir(&proj_path)
+                                .stdin(std::process::Stdio::null())
                                 .stdout(std::process::Stdio::null())
                                 .stderr(std::process::Stdio::null())
                                 .env("GIT_TERMINAL_PROMPT", "0")
+                                .status();
                                 .status();
 
                             let has_remote = remote_check.as_ref().map(|s| s.success()).unwrap_or(false);
