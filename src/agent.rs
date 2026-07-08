@@ -348,10 +348,10 @@ pub async fn run_agent_loop(
                 }
             }
         }),
-        }),
         json!({
             "type": "function",
             "function": {
+                "name": "kill_process",
                 "name": "kill_process",
                 "description": "Mata de forma segura un proceso que fue spawnado previamente con execute_powershell. Solo puede matar procesos registrados internamente (los que vos mismo spawnaste). Recibe el PID exacto devuelto por execute_powershell. IMPORTANTE: Esta es la ÚNICA forma permitida de matar procesos. No uses taskkill ni Stop-Process.",
                 "parameters": {
