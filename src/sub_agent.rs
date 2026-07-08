@@ -110,14 +110,19 @@ pub fn spawn_sub_agent(
         task_description,
         allowed_paths_display,
         id_short,
+        id_short,
         id_short
     ))
+}
+
+/// Verifica que una ruta está dentro de los paths permitidos.
+/// Si allowed_paths está vacío, se permite todo.
+pub fn is_path_allowed(file_path: &str, allowed_paths: &[String]) -> bool {
+    if allowed_paths.is_empty() {
+        return true;
+    }
 
     let path = Path::new(file_path);
-    let normalized = path.to_string_lossy().to_lowercase();
-
-    for allowed in allowed_paths {
-        let allowed_norm = allowed.to_lowercase();
         if normalized.starts_with(&allowed_norm) {
             return true;
         }
