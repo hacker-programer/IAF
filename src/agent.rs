@@ -1984,6 +1984,8 @@ fn truncate_for_display_reasoning(s: &str, max_len: usize) -> String {
 }
 
 /// Parsea una línea de comandos shell respetando comillas dobles y simples.
+/// Ej: 'gh repo create "my repo" --public' → ["gh", "repo", "create", "my repo", "--public"]
+fn parse_shell_args(input: &str) -> Vec<String> {
     let mut args = Vec::new();
     let mut current = String::new();
     let mut in_single_quote = false;
