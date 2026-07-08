@@ -128,7 +128,10 @@ impl ToolResultStore {
     }
 
     /// Guarda un resultado completo y retorna un resumen truncado para el agente.
-    /// El resumen incluye el ID para que el agente pueda paginar después.
+    /// Guarda un resultado completo y lo retorna ENTERO al agente.
+    /// NO se trunca nada. El agente recibe el resultado completo y decide
+    /// cuándo liberarlo con release_tool_result.
+    /// Se adjunta un footer informativo con el ID por si quiere liberarlo después.
     pub fn store(&self, call_id: &str, tool_name: &str, full_content: &str) -> String {
         let entry = StoredToolResult {
             call_id: call_id.to_string(),
@@ -140,7 +143,6 @@ impl ToolResultStore {
                 .as_secs(),
         };
 
-        let _total_len = full_content.len();
         let total_chars = full_content.chars().count();
 
         {
@@ -148,25 +150,17 @@ impl ToolResultStore {
             entries.insert(call_id.to_string(), entry);
         }
 
-        // Si el resultado es pequeño (< 3000 chars), devolverlo completo
-        if total_chars <= 3000 {
-            return full_content.to_string();
-        }
-
-        // Si es grande, devolver resumen + instrucciones de paginación
-        let preview: String = full_content.chars().take(2000).collect();
-        let pages = (total_chars as f64 / 2000.0).ceil() as usize;
-
+        // Siempre devolver el contenido COMPLETO. El agente decide cuándo liberar.
+        // Solo se añade un footer informativo con el ID para que sepa que puede
+        // usar release_tool_result cuando ya no necesite este resultado.
         format!(
-            "{}\n\n╔══════════════════════════════════════════════════════════╗\n\
-             ║  RESULTADO GRANDE — {} caracteres totales (~{} páginas)    ║\n\
-             ║  ID: {}                                            ║\n\
-             ║  Usa fetch_tool_result(\"{}\", pagina, 2000)         ║\n\
-             ║  para leer más. Usa release_tool_result(\"{}\")      ║\n\
-             ║  cuando ya no necesites este resultado.             ║\n\
-             ╚══════════════════════════════════════════════════════════╝",
-            preview,
+            "{}\n\n[ID: {} | {} caracteres | usa release_tool_result(\"{}\") cuando ya no necesites este resultado]",
+            full_content,
+            call_id,
             total_chars,
+            call_id
+        )
+    }
             pages,
             call_id,
             call_id,
