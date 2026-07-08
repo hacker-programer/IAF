@@ -10,9 +10,10 @@ use std::fs;
 use std::path::Path;
 use base64::{engine::general_purpose, Engine as _};
 use uuid::Uuid;
+
+const DEEPSEEK_API_URL: &str = "https://api.deepseek.com/v1/chat/completions";
+
 pub async fn run_agent_loop(
-    session_messages: Vec<crate::state::ChatMessage>,
-    project_name: Option<String>,
     state: AppState,
     deepseek_key: &str,
     voyage_key: &str,
