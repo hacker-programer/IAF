@@ -140,7 +140,7 @@ impl ToolResultStore {
                 .as_secs(),
         };
 
-        let total_len = full_content.len();
+        let _total_len = full_content.len();
         let total_chars = full_content.chars().count();
 
         {
