@@ -357,13 +357,14 @@ pub async fn run_agent_loop(
                     "type": "object",
                     "properties": {
                         "pid": { "type": "integer", "description": "PID del proceso a matar, tal como fue devuelto por execute_powershell." }
-                    },
                     "required": ["pid"]
                 }
             }
-        })
         }),
         json!({
+            "type": "function",
+            "function": {
+                "name": "fetch_tool_result",
             "type": "function",
             "function": {
                 "name": "fetch_tool_result",
