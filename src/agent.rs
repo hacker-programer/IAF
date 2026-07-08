@@ -1126,10 +1126,9 @@ pub async fn run_agent_loop(
                             state.sub_agents.status_summary()
                         } else {
                             let agents = state.sub_agents.agents.lock().unwrap();
-                            let found = agents.iter().find(|(id, _)| id == sub_id || id.starts_with(sub_id));
                             let found = agents.iter().find(|(id, _)| *id == sub_id || id.starts_with(sub_id));
+                            match found {
                                 Some((id, agent)) => {
-                                    let status_str = match &agent.status {
                                         crate::state::SubAgentStatus::Running => "EN EJECUCION".to_string(),
                                         crate::state::SubAgentStatus::Completed => "COMPLETADO".to_string(),
                                         crate::state::SubAgentStatus::Failed(e) => format!("FALLO: {}", e),
