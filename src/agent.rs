@@ -1146,10 +1146,11 @@ pub async fn run_agent_loop(
                                     format!("Sub-agente [{}]:\n  Tarea: {}\n  Estado: {}\n  Paths: {}{}",
                                         id, agent.task_description, status_str, paths_display, result_text)
                                 }
+                                None => format!("No se encontró sub-agente con ID '{}'. Usa check_sub_agent sin argumentos para ver todos.", sub_id),
+                            }
+                        }
                     }
                     "kill_sub_agent" => {
-                        let sub_id = args["sub_agent_id"].as_str().unwrap_or("");
-                        if sub_id.is_empty() {
                             json!({"error": "sub_agent_id es requerido."}).to_string()
                         } else {
                             let agents = state.sub_agents.agents.lock().unwrap();
