@@ -625,8 +625,6 @@ pub async fn run_agent_loop(
                         // ========== FIN VALIDACIÓN PRE-ESCRITURA ==========
                         
                         if let Some(ref proj_name) = project_name {
-                                .stdin(std::process::Stdio::null())
-                        if let Some(ref proj_name) = project_name {
                             let proj_path = get_project_path(&state, proj_name);
                             let full_path = Path::new(&proj_path).join(rel_path);
 
@@ -639,7 +637,6 @@ pub async fn run_agent_loop(
                                 .stdout(std::process::Stdio::null())
                                 .stderr(std::process::Stdio::null())
                                 .env("GIT_TERMINAL_PROMPT", "0")
-                                .status();
                                 .status();
 
                             let has_remote = remote_check.as_ref().map(|s| s.success()).unwrap_or(false);
