@@ -177,10 +177,6 @@ impl ToolResultStore {
                 page, total_pages, total_pages.saturating_sub(1)
             ));
         }
-
-        let start = page * page_size;
-        let end = std::cmp::min(start + page_size, total_chars);
-        let start = page * page_size;
         let start = page * page_size;
         let end = std::cmp::min(start + page_size, total_chars);
         let chunk: String = chars[start..end].iter().collect();
