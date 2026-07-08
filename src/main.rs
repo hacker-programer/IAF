@@ -20,10 +20,11 @@ mod scraper;
 mod validator;
 mod desktop;
 mod state;
+mod sub_agent;
 
 use crate::desktop::DesktopController;
 use crate::agent::{discover_projects, run_agent_loop};
-use crate::state::{AppState, Project, PromptConfig, ActiveAgentStatus, ProcessRegistry};
+use crate::state::{AppState, Project, PromptConfig, ActiveAgentStatus, ProcessRegistry, ToolResultStore, SubAgentManager};
 
 use std::sync::OnceLock;
 
@@ -58,7 +59,7 @@ pub struct LocalProjectRequest {
 async fn add_local_project(State(state): State<AppState>, Json(payload): Json<LocalProjectRequest>) -> impl IntoResponse {
     let path = PathBuf::from(&payload.path);
     if !path.exists() || !path.is_dir() {
-        return Json(json!({ "status": "error", "message": "El directorio especificado no existe o no es una carpeta vÃ¡lida." }));
+        return Json(json!({ "status": "error", "message": "El directorio especificado no existe o no es una carpeta válida." }));
     }
 
     let mut projs = state.projects.lock().unwrap();
@@ -73,8 +74,8 @@ async fn add_local_project(State(state): State<AppState>, Json(payload): Json<Lo
         is_local: true,
     });
 
-    // Guardar en la configuraciÃ³n local de proyectos si se desea, o persistirlo dinÃ¡micamente
-    // AquÃ­ actualizamos el archivo de prompts/config para guardar los proyectos locales
+    // Guardar en la configuración local de proyectos si se desea, o persistirlo dinámicamente
+    // Aquí actualizamos el archivo de prompts/config para guardar los proyectos locales
     let config_dir = state.base_workspace.join(".config");
     let local_config_path = config_dir.join("local_projects.json");
     let _ = fs::write(&local_config_path, serde_json::to_string_pretty(&*projs).unwrap());
@@ -120,10 +121,10 @@ async fn get_chat_session(State(state): State<AppState>, AxumPath(id): AxumPath<
             }
         }
     }
-    Json(json!({ "status": "error", "message": "No se encontrÃ³ el chat." }))
+    Json(json!({ "status": "error", "message": "No se encontró el chat." }))
 }
 
-// AuditorÃ­a e InterrupciÃ³n endpoints
+// Auditoría e Interrupción endpoints
 async fn get_agent_status(State(state): State<AppState>) -> impl IntoResponse {
     let status = state.active_agent.lock().unwrap().clone();
     Json(json!({
@@ -145,15 +146,17 @@ async fn interrupt_agent(State(state): State<AppState>) -> impl IntoResponse {
         status.interrupted = true;
         status.esperando_respuesta_usuario = false;
         status.esperando_aprobacion_plan = false;
+        // Cancelar todos los sub-agentes
+        state.sub_agents.cancel_all();
         status.steps.push(crate::state::AuditStep {
             step_type: "error".to_string(),
             title: "Interrumpido por el usuario".to_string(),
-            detail: "Se enviÃ³ una seÃ±al manual de interrupciÃ³n.".to_string(),
+            detail: "Se envió una señal manual de interrupción.".to_string(),
             timestamp: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs(),
         });
-        Json(json!({ "status": "ok", "message": "Agente marcado para interrupciÃ³n." }))
+        Json(json!({ "status": "ok", "message": "Agente marcado para interrupción." }))
     } else {
-        Json(json!({ "status": "error", "message": "El agente no estÃ¡ corriendo." }))
+        Json(json!({ "status": "error", "message": "El agente no está corriendo." }))
     }
 }
 
@@ -169,7 +172,7 @@ async fn respond_to_agent(State(state): State<AppState>, Json(payload): Json<Res
         status.respuesta_usuario = Some(payload.respuesta);
         status.esperando_respuesta_usuario = false;
         
-        // Guardar la respuesta del usuario en el archivo JSON de la conversaciÃ³n
+        // Guardar la respuesta del usuario en el archivo JSON de la conversación
         if let Some(ref session_id) = status.current_session_id {
             let chat_file = state.base_workspace.join(".config").join("chats").join(format!("{}.json", session_id));
             if chat_file.exists() {
@@ -188,7 +191,7 @@ async fn respond_to_agent(State(state): State<AppState>, Json(payload): Json<Res
         
         Json(json!({ "status": "ok", "message": "Respuesta enviada al agente." }))
     } else {
-        Json(json!({ "status": "error", "message": "El agente no estÃ¡ esperando respuesta." }))
+        Json(json!({ "status": "error", "message": "El agente no está esperando respuesta." }))
     }
 }
 
@@ -205,21 +208,22 @@ async fn approve_agent_plan(State(state): State<AppState>, Json(payload): Json<A
             status.steps.push(crate::state::AuditStep {
                 step_type: "thinking".to_string(),
                 title: "Plan Aprobado".to_string(),
-                detail: "El usuario aprobÃ³ el plan propuesto. Continuando...".to_string(),
+                detail: "El usuario aprobó el plan propuesto. Continuando...".to_string(),
                 timestamp: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs(),
             });
         } else {
             status.interrupted = true;
+            state.sub_agents.cancel_all();
             status.steps.push(crate::state::AuditStep {
                 step_type: "error".to_string(),
                 title: "Plan Rechazado".to_string(),
-                detail: "El usuario rechazÃ³ el plan. EjecuciÃ³n cancelada.".to_string(),
+                detail: "El usuario rechazó el plan. Ejecución cancelada.".to_string(),
                 timestamp: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs(),
             });
         }
         Json(json!({ "status": "ok" }))
     } else {
-        Json(json!({ "status": "error", "message": "El agente no estÃ¡ esperando aprobaciÃ³n de plan." }))
+        Json(json!({ "status": "error", "message": "El agente no está esperando aprobación de plan." }))
     }
 }
 
@@ -258,9 +262,9 @@ async fn refine_prompt_endpoint(State(state): State<AppState>, Json(payload): Js
     };
 
     // Obtener Memorias locales del archivo MEMORIES.md del proyecto si existe
-    let mut memories_content = "No hay archivo MEMORIES.md registrado en este proyecto aÃºn.".to_string();
+    let mut memories_content = "No hay archivo MEMORIES.md registrado en este proyecto aún.".to_string();
     if let Some(ref proj_name) = payload.project_name {
-        // Buscar ruta fÃ­sica de la carpeta del proyecto
+        // Buscar ruta física de la carpeta del proyecto
         let projs = state.projects.lock().unwrap();
         let proj_path_opt = projs.iter().find(|p| p.name == *proj_name).map(|p| p.path.clone());
         let final_proj_path = proj_path_opt.unwrap_or_else(|| state.base_workspace.join(proj_name).to_string_lossy().to_string());
@@ -272,7 +276,7 @@ async fn refine_prompt_endpoint(State(state): State<AppState>, Json(payload): Js
             }
         }
     } else {
-        // Comprobar si existe en la raÃ­z base_workspace por defecto
+        // Comprobar si existe en la raíz base_workspace por defecto
         let memories_path = state.base_workspace.join("MEMORIES.md");
         if memories_path.exists() {
             if let Ok(content) = fs::read_to_string(memories_path) {
@@ -282,14 +286,14 @@ async fn refine_prompt_endpoint(State(state): State<AppState>, Json(payload): Js
     }
 
     let refine_system_prompt = format!("Eres un refinador experto en prompts de IA. Tu objetivo es estructurar, mejorar y corregir prompts.
-Debes mantener estrictamente el formato estructurado en 5 bloques en espaÃ±ol:
+Debes mantener estrictamente el formato estructurado en 5 bloques en español:
 1. Rol y Contexto (Rol de programador principal en Rust/JS/HTML).
-2. Meta TÃ©cnica RÃ­gida (QuÃ© se quiere hacer exactamente).
-3. Restricciones y Reglas (Prohibido asumir, prohibido crear APIs externas innecesarias, cÃ³digo optimizado obligatoriamente para correr en un Pentium de 4GB RAM y 2 cores).
-4. Formato de Salida (CÃ³digo limpio, comentarios inline).
+2. Meta Técnica Rígida (Qué se quiere hacer exactamente).
+3. Restricciones y Reglas (Prohibido asumir, prohibido crear APIs externas innecesarias, código optimizado obligatoriamente para correr en un Pentium de 4GB RAM y 2 cores).
+4. Formato de Salida (Código limpio, comentarios inline).
 5. Datos de Soporte (Mencionar archivos relevantes).
 
-Se te provee el SYSTEM PROMPT global y local del proyecto que guiarÃ¡ al agente principal, junto a las MEMORIAS locales persistentes de limitaciones tÃ©cnicas del proyecto:
+Se te provee el SYSTEM PROMPT global y local del proyecto que guiará al agente principal, junto a las MEMORIAS locales persistentes de limitaciones técnicas del proyecto:
 
 ---
 **[SYSTEM PROMPT DEL AGENTE PRINCIPAL (GLOBAL + LOCAL)]**
@@ -301,26 +305,26 @@ Se te provee el SYSTEM PROMPT global y local del proyecto que guiarÃ¡ al agent
 {}
 ---
 
-Si el usuario te provee un prompt base y una retroalimentaciÃ³n/instrucciÃ³n adicional de ajuste, debes aplicarla sobre el prompt base y devolver el prompt final estructurado entero.
-Adicionalmente, se te inyectarÃ¡ el historial reciente del chat para que entiendas de quÃ© elementos o archivos (como 'el botÃ³n azul') se venÃ­a hablando en mensajes anteriores, de modo que el prompt refinado mantenga la coherencia total. No agregues introducciones ni explicaciones; empieza directamente con el prompt final estructurado.", system_prompt_context, memories_content);
+Si el usuario te provee un prompt base y una retroalimentación/instrucción adicional de ajuste, debes aplicarla sobre el prompt base y devolver el prompt final estructurado entero.
+Adicionalmente, se te inyectará el historial reciente del chat para que entiendas de qué elementos o archivos (como 'el botón azul') se venía hablando en mensajes anteriores, de modo que el prompt refinado mantenga la coherencia total. No agregues introducciones ni explicaciones; empieza directamente con el prompt final estructurado.", system_prompt_context, memories_content);
 
     let mut api_messages = vec![
         json!({ "role": "system", "content": refine_system_prompt }),
     ];
 
-    // Cargar historial de chat si session_id estÃ¡ presente para dar contexto al refinador
+    // Cargar historial de chat si session_id está presente para dar contexto al refinador
     if let Some(ref s_id) = payload.session_id {
         let chat_file = state.base_workspace.join(".config").join("chats").join(format!("{}.json", s_id));
         if chat_file.exists() {
             if let Ok(content) = fs::read_to_string(&chat_file) {
                 if let Ok(session) = serde_json::from_str::<crate::state::ChatSession>(&content) {
-                    // Tomar los Ãºltimos 6 mensajes para no saturar el contexto de refinado
+                    // Tomar los últimos 6 mensajes para no saturar el contexto de refinado
                     let start_idx = session.messages.len().saturating_sub(6);
                     for m in &session.messages[start_idx..] {
                         let role = if m.role == "agent" { "assistant" } else { "user" };
-                        // Sanitizar para evitar meter el reporte de auditorÃ­a completo
-                        let clean_content = if m.content.contains("**[AuditorÃ­a de Herramientas Ejecutadas]**") {
-                            m.content.split("**[AuditorÃ­a de Herramientas Ejecutadas]**").next().unwrap_or("").trim().to_string()
+                        // Sanitizar para evitar meter el reporte de auditoría completo
+                        let clean_content = if m.content.contains("**[Auditoría de Herramientas Ejecutadas]**") {
+                            m.content.split("**[Auditoría de Herramientas Ejecutadas]**").next().unwrap_or("").trim().to_string()
                         } else {
                             m.content.clone()
                         };
@@ -335,7 +339,7 @@ Adicionalmente, se te inyectarÃ¡ el historial reciente del chat para que entie
 
     if let Some(ref fb) = payload.feedback {
         if !fb.trim().is_empty() {
-            api_messages.push(json!({ "role": "user", "content": format!("InstrucciÃ³n adicional de modificaciÃ³n:\n```\n{}\n```", fb) }));
+            api_messages.push(json!({ "role": "user", "content": format!("Instrucción adicional de modificación:\n```\n{}\n```", fb) }));
         }
     }
 
@@ -356,7 +360,7 @@ Adicionalmente, se te inyectarÃ¡ el historial reciente del chat para que entie
                 let refined = res_val["choices"][0]["message"]["content"].as_str().unwrap_or(&payload.prompt).to_string();
                 Json(json!({ "status": "ok", "refined": refined }))
             } else {
-                Json(json!({ "status": "error", "message": "Error decodificando respuesta de refinaciÃ³n." }))
+                Json(json!({ "status": "error", "message": "Error decodificando respuesta de refinación." }))
             }
         }
         Err(e) => {
@@ -379,12 +383,12 @@ async fn chat_endpoint(State(state): State<AppState>, Json(payload): Json<ChatIn
     let _ = fs::create_dir_all(&chats_dir);
     let chat_file = chats_dir.join(format!("{}.json", session_id));
 
-    // 2. Cargar sesiÃ³n existente o crear una nueva
+    // 2. Cargar sesión existente o crear una nueva
     let mut session = if chat_file.exists() {
         if let Ok(content) = fs::read_to_string(&chat_file) {
             serde_json::from_str::<crate::state::ChatSession>(&content).unwrap_or_else(|_| crate::state::ChatSession {
                 id: session_id.clone(),
-                title: "Nueva conversaciÃ³n".to_string(),
+                title: "Nueva conversación".to_string(),
                 messages: Vec::new(),
                 project_name: payload.project_name.clone(),
                 steps: None,
@@ -392,20 +396,20 @@ async fn chat_endpoint(State(state): State<AppState>, Json(payload): Json<ChatIn
         } else {
             crate::state::ChatSession {
                 id: session_id.clone(),
-                title: "Nueva conversaciÃ³n".to_string(),
+                title: "Nueva conversación".to_string(),
                 messages: Vec::new(),
                 project_name: payload.project_name.clone(),
                 steps: None,
             }
         }
     } else {
-        // Generar tÃ­tulo descriptivo conciso usando DeepSeek V4 Flash
+        // Generar título descriptivo conciso usando DeepSeek V4 Flash
         let client = reqwest::Client::builder()
             .timeout(std::time::Duration::from_secs(30))
             .build()
             .unwrap_or_default();
         let prompt_title = format!(
-            "Analiza el siguiente mensaje de usuario y genera un tÃ­tulo descriptivo muy corto (mÃ¡ximo 4 palabras) en espaÃ±ol que resuma el tema. No agregues comillas ni explicaciones:\n\n\"{}\"",
+            "Analiza el siguiente mensaje de usuario y genera un título descriptivo muy corto (máximo 4 palabras) en español que resuma el tema. No agregues comillas ni explicaciones:\n\n\"{}\"",
             payload.message
         );
         
@@ -457,151 +461,62 @@ async fn chat_endpoint(State(state): State<AppState>, Json(payload): Json<ChatIn
     {
         let mut handle_opt = state.abort_handle.lock().unwrap();
         if let Some(ref handle) = *handle_opt {
-            println!("Abortando agente activo anterior debido a la recepciÃ³n de un nuevo mensaje de usuario...");
+            println!("Abortando agente activo anterior debido a nuevo mensaje...");
             handle.abort();
         }
         *handle_opt = None;
     }
 
-    // 5. Preparar el agente activo
+    // Cancelar sub-agentes de sesión anterior
+    state.sub_agents.cancel_all();
+
+    // Resetear interrupción para nuevo agente
     {
         let mut status = state.active_agent.lock().unwrap();
-        status.running = true;
         status.interrupted = false;
+        status.esperando_respuesta_usuario = false;
+        status.esperando_aprobacion_plan = false;
+        status.running = false;
+        status.steps = Vec::new();
+        status.pregunta_usuario = None;
+        status.respuesta_usuario = None;
+        status.plan_propuesto = None;
+        status.thinking_content = Vec::new();
         status.current_session_id = Some(session_id.clone());
-        
-        // Mantener e inyectar el historial acumulado de pasos en la consola en lugar de borrarlo
-        status.steps.clear();
-        if let Some(ref prev_steps) = session.steps {
-            status.steps.extend(prev_steps.clone());
-        }
-        
-        status.steps.push(crate::state::AuditStep {
-            step_type: "thinking".to_string(),
-            title: "Reanudando Agente".to_string(),
-            detail: format!("Procesando nueva instrucciÃ³n en la conversaciÃ³n activa. Proyecto: {:?}", payload.project_name),
-            timestamp: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs(),
-        });
     }
 
-    // 6. Correr el bucle del agente asÃ­ncronamente o en este hilo pero reportando pasos
-    // Para que no bloquee y permita interrupciones en tiempo real, lo ejecutamos asÃ­ncronamente en una tarea de Tokio
     let state_clone = state.clone();
-    let project_name_clone = payload.project_name.clone();
     let session_id_clone = session_id.clone();
-    let session_messages_clone = session.messages.clone();
 
     let handle = tokio::spawn(async move {
-        // Envolver run_agent_loop en su propio tokio::spawn para aislar y atrapar pÃ¡nicos
-        let agent_task = tokio::spawn(run_agent_loop(
-            session_messages_clone,
-            project_name_clone,
-            state_clone.clone(),
+        let result = run_agent_loop(
+            Vec::new(), // Vacío, el prompt se construye internamente
+            payload.project_name.clone(),
+            state_clone,
             deepseek_key(),
             voyage_key(),
             openrouter_key(),
             Some(session_id_clone.clone()),
-        ));
-        let run_result = match agent_task.await {
-            Ok(Ok(reply)) => Ok(reply),
-            Ok(Err(e)) => Err(format!("Error de ejecuciÃ³n: {}", e)),
-            Err(join_err) => {
-                if join_err.is_panic() {
-                    // Obtener el payload del pÃ¡nico
-                    let panic_any = join_err.into_panic();
-                    // Convertir el payload a String segura
-                    let panic_detail = if let Some(s) = panic_any.downcast_ref::<&str>() {
-                        s.to_string()
-                    } else if let Some(s) = panic_any.downcast_ref::<String>() {
-                        s.clone()
-                    } else if let Some(b) = panic_any.downcast_ref::<Vec<u8>>() {
-                        // Convertir bytes a UTFâ€‘8 con pÃ©rdida de datos si es necesario
-                        String::from_utf8_lossy(b).to_string()
-                    } else {
-                        // Fallback: representaciÃ³n de depuraciÃ³n
-                        format!("{:?}", panic_any)
-                    };
-                    // Guardar en archivo de log persistente
-                    let logs_dir = state_clone.base_workspace.join(".config").join("logs");
-                    let _ = std::fs::create_dir_all(&logs_dir);
-                    let log_path = logs_dir.join("panic.log");
-                    let _ = std::fs::OpenOptions::new()
-                        .create(true)
-                        .append(true)
-                        .open(&log_path)
-                        .and_then(|mut file| {
-                            use std::io::Write;
-                            writeln!(
-                                file,
-                                "[{}] PÃ¡nico crÃ­tico en el agente: {}",
-                                chrono::Utc::now().to_rfc3339(),
-                                panic_detail,
-                            )
+        ).await;
+
+        match result {
+            Ok(msg) => {
+                println!("Bucle del agente finalizado exitosamente.");
+                let chat_file = tokio::task::block_in_place(|| std::path::PathBuf::from("c:\\Users\\Fa\\Desktop\\IAF").join(".config").join("chats").join(format!("{}.json", session_id_clone)));
+                if let Ok(content) = tokio::task::block_in_place(|| std::fs::read_to_string(&chat_file)) {
+                    if let Ok(mut session) = serde_json::from_str::<crate::state::ChatSession>(&content) {
+                        session.messages.push(crate::state::ChatMessage {
+                            role: "agent".to_string(),
+                            content: msg,
+                            timestamp: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs(),
                         });
-                    Err(format!("PÃ¡nico crÃ­tico en el agente: {}", panic_detail))
-                } else {
-                    Err(format!("Error crÃ­tico en la tarea de ejecuciÃ³n del agente: {}", join_err))
+                        let _ = tokio::task::block_in_place(|| std::fs::write(&chat_file, serde_json::to_string_pretty(&session).unwrap()));
+                    }
                 }
             }
-
-        };
-
-        let (agent_reply, is_success) = match run_result {
-            Ok(reply) => (reply, true),
-            Err(err_msg) => {
-                eprintln!("{}", err_msg);
-                crate::agent::play_error_beep();
-                (err_msg, false)
+            Err(e) => {
+                eprintln!("Error en bucle del agente: {}", e);
             }
-        };
-
-        // Registrar paso de finalizaciÃ³n o error en memoria
-        {
-            let mut status = state_clone.active_agent.lock().unwrap();
-            status.running = false;
-            if is_success {
-                status.steps.push(crate::state::AuditStep {
-                    step_type: "done".to_string(),
-                    title: "EjecuciÃ³n finalizada".to_string(),
-                    detail: "El agente terminÃ³ de responder y procesar herramientas.".to_string(),
-                    timestamp: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs(),
-                });
-            } else {
-                status.steps.push(crate::state::AuditStep {
-                    step_type: "error".to_string(),
-                    title: "Error en ejecuciÃ³n".to_string(),
-                    detail: agent_reply.clone(),
-                    timestamp: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs(),
-                });
-            }
-        }
-
-        // Guardar respuesta en la sesiÃ³n junto a la consola de auditorÃ­a
-        let chat_file_async = state_clone.base_workspace.join(".config").join("chats").join(format!("{}.json", session_id_clone));
-        if let Ok(content) = fs::read_to_string(&chat_file_async) {
-            if let Ok(mut current_session) = serde_json::from_str::<crate::state::ChatSession>(&content) {
-                // Obtener los pasos detallados de auditorÃ­a de herramientas (incluido el paso de finalizaciÃ³n/error)
-                let active_steps = {
-                    let status = state_clone.active_agent.lock().unwrap();
-                    status.steps.clone()
-                };
-
-                // Guardar los pasos de la auditorÃ­a directamente de manera persistente en la sesiÃ³n
-                current_session.steps = Some(active_steps);
-
-                current_session.messages.push(crate::state::ChatMessage {
-                    role: "agent".to_string(),
-                    content: agent_reply,
-                    timestamp: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs(),
-                });
-                let _ = fs::write(&chat_file_async, serde_json::to_string_pretty(&current_session).unwrap());
-            }
-        }
-
-        // Limpiar el abort handle al finalizar
-        {
-            let mut handle_opt = state_clone.abort_handle.lock().unwrap();
-            *handle_opt = None;
         }
     });
 
@@ -613,76 +528,253 @@ async fn chat_endpoint(State(state): State<AppState>, Json(payload): Json<ChatIn
     Json(json!({ "status": "ok", "session_id": session_id }))
 }
 
-async fn captcha_status(State(state): State<AppState>) -> impl IntoResponse {
-    let cap = state.pending_captcha.lock().unwrap().clone();
-    Json(cap)
-}
+// ============================================================================
+// CAPTCHA Endpoints
+// ============================================================================
 
+async fn captcha_status(State(state): State<AppState>) -> impl IntoResponse {
+    let captcha = state.pending_captcha.lock().unwrap().clone();
+    match captcha {
+        Some(req) if req.solved_content.is_none() => {
+            Json(json!({ "status": "pending", "id": req.id, "url": req.url }))
+        }
+        _ => {
+            Json(json!({ "status": "none" }))
+        }
+    }
+}
 
 #[derive(Deserialize)]
 struct CaptchaSolveRequest {
     id: String,
-    solved_content: String,
+    content: String,
 }
 
 async fn captcha_solve(State(state): State<AppState>, Json(payload): Json<CaptchaSolveRequest>) -> impl IntoResponse {
-    let mut cap = state.pending_captcha.lock().unwrap();
-    if let Some(ref mut req) = *cap {
+    let mut captcha = state.pending_captcha.lock().unwrap();
+    if let Some(ref mut req) = *captcha {
         if req.id == payload.id {
-            req.solved_content = Some(payload.solved_content.clone());
+            req.solved_content = Some(payload.content);
             return Json(json!({ "status": "ok" }));
         }
     }
-    Json(json!({ "status": "error", "message": "No se encontró el CAPTCHA o el ID no coincide." }))
+    Json(json!({ "status": "error", "message": "Captcha no encontrado o ya resuelto." }))
 }
 
+// ============================================================================
+// Desktop control handlers
+// ============================================================================
 
-// Captcha handling removed (unused)
-
-// --- Handlers de control de escritorio ---
 #[derive(Deserialize)]
-struct MoveMouseRequest { x: i32, y: i32 }
+struct MoveMouseRequest { x: f64, y: f64 }
 
 async fn move_mouse_handler(State(state): State<AppState>, Json(payload): Json<MoveMouseRequest>) -> impl IntoResponse {
-    let controller = state.desktop.lock().unwrap();
-    match controller.move_mouse(payload.x, payload.y) {
-        Ok(_) => Json(json!({ "status": "ok" })),
-        Err(e) => Json(json!({ "status": "error", "message": format!("{}", e) })),
-    }
+    let mut desktop = state.desktop.lock().unwrap();
+    desktop.move_to(payload.x, payload.y);
+    Json(json!({ "status": "ok" }))
 }
 
 #[derive(Deserialize)]
-struct ClickRequest { button: String }
+struct ClickRequest { button: Option<String> }
 
 async fn click_handler(State(state): State<AppState>, Json(payload): Json<ClickRequest>) -> impl IntoResponse {
-    let controller = state.desktop.lock().unwrap();
-    match controller.click(&payload.button) {
-        Ok(_) => Json(json!({ "status": "ok" })),
-        Err(e) => Json(json!({ "status": "error", "message": format!("{}", e) })),
-    }
+    let mut desktop = state.desktop.lock().unwrap();
+    desktop.click(&payload.button.unwrap_or_else(|| "left".to_string()));
+    Json(json!({ "status": "ok" }))
 }
 
 #[derive(Deserialize)]
 struct TypeTextRequest { text: String }
 
 async fn type_text_handler(State(state): State<AppState>, Json(payload): Json<TypeTextRequest>) -> impl IntoResponse {
-    let controller = state.desktop.lock().unwrap();
-    match controller.type_text(&payload.text) {
-        Ok(_) => Json(json!({ "status": "ok" })),
-        Err(e) => Json(json!({ "status": "error", "message": format!("{}", e) })),
-    }
+    let mut desktop = state.desktop.lock().unwrap();
+    desktop.type_text(&payload.text);
+    Json(json!({ "status": "ok" }))
 }
 
 #[derive(Deserialize)]
-struct LaunchRequest { path: String }
+struct LaunchRequest { executable: String, args: Option<Vec<String>>, work_dir: Option<String> }
 
 async fn launch_handler(State(state): State<AppState>, Json(payload): Json<LaunchRequest>) -> impl IntoResponse {
-    let controller = state.desktop.lock().unwrap();
-    match controller.launch_executable(&payload.path) {
+    let mut desktop = state.desktop.lock().unwrap();
+    match desktop.launch(&payload.executable, payload.args.as_deref().unwrap_or(&[]), payload.work_dir.as_deref()) {
         Ok(pid) => Json(json!({ "status": "ok", "pid": pid })),
-        Err(e) => Json(json!({ "status": "error", "message": format!("{}", e) })),
+        Err(e) => Json(json!({ "status": "error", "message": e })),
     }
 }
+
+// ============================================================================
+// Project management
+// ============================================================================
+
+#[derive(Deserialize)]
+struct ForkRequest {
+    repo_url: String,
+    name: Option<String>,
+}
+
+async fn fork_project(State(state): State<AppState>, Json(payload): Json<ForkRequest>) -> impl IntoResponse {
+    let repo_url = payload.repo_url.trim();
+    let project_name = payload.name.unwrap_or_else(|| {
+        repo_url
+            .split('/')
+            .last()
+            .unwrap_or("repo")
+            .replace(".git", "")
+            .to_string()
+    });
+
+    let project_dir = state.base_workspace.join(&project_name);
+    
+    if project_dir.exists() {
+        return Json(json!({ "status": "error", "message": format!("El proyecto '{}' ya existe localmente.", project_name) }));
+    }
+
+    // Forkear usando gh cli
+    let fork_output = std::process::Command::new("gh")
+        .args(&["repo", "fork", repo_url, "--clone", "--default-branch-only"])
+        .current_dir(&state.base_workspace)
+        .output();
+
+    match fork_output {
+        Ok(output) => {
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            
+            if output.status.success() {
+                let mut projs = state.projects.lock().unwrap();
+                if !projs.iter().any(|p| p.name == project_name) {
+                    projs.push(Project {
+                        name: project_name.clone(),
+                        path: project_dir.to_string_lossy().to_string(),
+                        is_local: false,
+                    });
+                    let config_dir = state.base_workspace.join(".config");
+                    let local_config_path = config_dir.join("local_projects.json");
+                    let _ = fs::write(&local_config_path, serde_json::to_string_pretty(&*projs).unwrap());
+                }
+                Json(json!({ "status": "ok", "message": format!("Fork y clon exitoso.\nstdout: {}\nstderr: {}", stdout, stderr) }))
+            } else {
+                Json(json!({ "status": "error", "message": format!("Error en fork: {}\n{}", stdout, stderr) }))
+            }
+        }
+        Err(e) => {
+            Json(json!({ "status": "error", "message": format!("Error ejecutando gh: {}", e) }))
+        }
+    }
+}
+
+async fn get_projects(State(state): State<AppState>) -> impl IntoResponse {
+    let projs = state.projects.lock().unwrap().clone();
+    Json(projs)
+}
+
+#[derive(Deserialize)]
+struct SavePromptsRequest {
+    global: Option<String>,
+    project_prompts: Option<HashMap<String, String>>,
+}
+
+async fn get_prompts(State(state): State<AppState>) -> impl IntoResponse {
+    let prompts = state.prompts.lock().unwrap().clone();
+    Json(json!({
+        "global_default": prompts.global_default,
+        "global_current": prompts.global_current,
+        "projects": prompts.projects,
+    }))
+}
+
+async fn save_prompts(State(state): State<AppState>, Json(payload): Json<SavePromptsRequest>) -> impl IntoResponse {
+    let mut prompts = state.prompts.lock().unwrap();
+    if let Some(ref new_global) = payload.global {
+        prompts.global_current = new_global.clone();
+    }
+    if let Some(project_map) = &payload.project_prompts {
+        for (name, prompt) in project_map {
+            prompts.projects.insert(name.clone(), prompt.clone());
+        }
+    }
+
+    let config_path = state.config_path.clone();
+    let _ = fs::write(&config_path, serde_json::to_string_pretty(&*prompts).unwrap());
+    Json(json!({ "status": "ok" }))
+}
+
+async fn reset_global_prompt(State(state): State<AppState>) -> impl IntoResponse {
+    let mut prompts = state.prompts.lock().unwrap();
+    prompts.global_current = prompts.global_default.clone();
+    let config_path = state.config_path.clone();
+    let _ = fs::write(&config_path, serde_json::to_string_pretty(&*prompts).unwrap());
+    Json(json!({ "status": "ok", "message": "Prompt global restaurado al valor por defecto." }))
+}
+
+async fn summarize_chat_steps(State(state): State<AppState>, AxumPath(id): AxumPath<String>) -> impl IntoResponse {
+    let chat_file = state.base_workspace.join(".config").join("chats").join(format!("{}.json", id));
+    if !chat_file.exists() {
+        return Json(json!({ "status": "error", "message": "Chat no encontrado." }));
+    }
+
+    let session = match std::fs::read_to_string(&chat_file)
+        .ok()
+        .and_then(|c| serde_json::from_str::<crate::state::ChatSession>(&c).ok())
+    {
+        Some(s) => s,
+        None => return Json(json!({ "status": "error", "message": "No se pudo leer la sesión." })),
+    };
+
+    let steps = session.steps.unwrap_or_default();
+    if steps.is_empty() {
+        return Json(json!({ "status": "ok", "resumen": "No hay pasos registrados para esta conversación." }));
+    }
+
+    let steps_text: String = steps.iter()
+        .map(|s| format!("[{}] {}: {}", s.step_type, s.title, s.detail))
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(60))
+        .build()
+        .unwrap_or_default();
+
+    let response = client
+        .post("https://api.deepseek.com/v1/chat/completions")
+        .header("Authorization", format!("Bearer {}", deepseek_key()))
+        .header("Content-Type", "application/json")
+        .json(&json!({
+            "model": "deepseek-v4-flash",
+            "messages": [
+                {
+                    "role": "system",
+                    "content": "Eres un resumidor técnico de auditorías de agentes de IA. Resume los pasos de ejecución de forma concisa pero técnicamente precisa. Agrupa acciones similares. Enumera los archivos modificados y las decisiones clave tomadas. Responde en español."
+                },
+                {
+                    "role": "user",
+                    "content": format!("Resume estos pasos de auditoría:\n\n{}", steps_text)
+                }
+            ]
+        }))
+        .send()
+        .await;
+
+    match response {
+        Ok(res) => {
+            if let Ok(res_val) = res.json::<serde_json::Value>().await {
+                let summary = res_val["choices"][0]["message"]["content"].as_str().unwrap_or("No se pudo generar resumen.").to_string();
+                Json(json!({ "status": "ok", "resumen": summary }))
+            } else {
+                Json(json!({ "status": "error", "message": "Error decodificando respuesta." }))
+            }
+        }
+        Err(e) => {
+            Json(json!({ "status": "error", "message": format!("Error: {}", e) }))
+        }
+    }
+}
+
+// ============================================================================
+// MAIN — Inicialización del servidor
+// ============================================================================
 
 #[tokio::main]
 async fn main() {
@@ -730,10 +822,11 @@ async fn main() {
         image_store: Arc::new(Mutex::new(HashMap::new())),
         context_store: Arc::new(Mutex::new(HashMap::new())),
         process_registry: ProcessRegistry::new(),
+        tool_results: ToolResultStore::new(),
+        sub_agents: SubAgentManager::new(),
     };
     // Auto-descubrir proyectos locales por defecto
     discover_projects(&state);
-    // Auto-descubrir proyectos locales por defecto
 
     let cors = CorsLayer::permissive();
 
@@ -779,173 +872,7 @@ async fn main() {
             println!("El servidor de Axum se detuvo de forma limpia (Ok).");
         }
         Err(e) => {
-            eprintln!("El servidor de Axum terminÃ³ con un error: {}", e);
+            eprintln!("Error en el servidor de Axum: {}", e);
         }
     }
 }
-
-async fn get_projects(State(state): State<AppState>) -> impl IntoResponse {
-    let projs = state.projects.lock().unwrap().clone();
-    Json(projs)
-}
-
-#[derive(Deserialize)]
-struct ForkRequest {
-    repo_url: String,
-}
-
-async fn fork_project(State(state): State<AppState>, Json(payload): Json<ForkRequest>) -> impl IntoResponse {
-    let output = std::process::Command::new("gh")
-        .args(&["repo", "fork", &payload.repo_url, "--clone"])
-        .current_dir(&state.base_workspace)
-        .output();
-
-    match output {
-        Ok(out) => {
-            let stdout = String::from_utf8_lossy(&out.stdout).to_string();
-            let stderr = String::from_utf8_lossy(&out.stderr).to_string();
-        discover_projects(&state);
-            Json(json!({ "status": "ok", "stdout": stdout, "stderr": stderr }))
-        }
-        Err(e) => {
-            Json(json!({ "status": "error", "message": format!("Error corriendo gh CLI: {}", e) }))
-        }
-    }
-}
-
-async fn get_prompts(State(state): State<AppState>) -> impl IntoResponse {
-    let p = state.prompts.lock().unwrap().clone();
-    Json(p)
-}
-
-#[derive(Deserialize)]
-struct SavePromptsRequest {
-    global_current: String,
-    projects: HashMap<String, String>,
-}
-
-
-async fn save_prompts(State(state): State<AppState>, Json(payload): Json<SavePromptsRequest>) -> impl IntoResponse {
-    let mut prompts = state.prompts.lock().unwrap();
-    prompts.global_current = payload.global_current;
-    prompts.projects = payload.projects;
-    let _ = fs::write(&state.config_path, serde_json::to_string_pretty(&*prompts).unwrap());
-    Json(json!({ "status": "ok" }))
-}
-
-async fn reset_global_prompt(State(state): State<AppState>) -> impl IntoResponse {
-    let mut prompts = state.prompts.lock().unwrap();
-    prompts.global_current = prompts.global_default.clone();
-    let _ = fs::write(&state.config_path, serde_json::to_string_pretty(&*prompts).unwrap());
-    Json(json!({ "status": "ok", "global_current": prompts.global_current.clone() }))
-}
-
-async fn summarize_chat_steps(
-    State(state): State<AppState>,
-    AxumPath(session_id): AxumPath<String>,
-) -> impl IntoResponse {
-    let chats_dir = state.base_workspace.join(".config").join("chats");
-    let chat_file = chats_dir.join(format!("{}.json", session_id));
-
-    if !chat_file.exists() {
-        return Json(json!({ "status": "error", "message": "No se encontrÃ³ la sesiÃ³n de chat." }));
-    }
-
-    let mut session = match fs::read_to_string(&chat_file) {
-        Ok(content) => match serde_json::from_str::<crate::state::ChatSession>(&content) {
-            Ok(s) => s,
-            Err(_) => return Json(json!({ "status": "error", "message": "Error al deserializar la sesiÃ³n." })),
-        },
-        Err(e) => return Json(json!({ "status": "error", "message": format!("Error leyendo sesiÃ³n: {}", e) })),
-    };
-
-    let steps_to_summarize = session.steps.clone().unwrap_or_default();
-    if steps_to_summarize.is_empty() {
-        return Json(json!({ "status": "error", "message": "No hay pasos que resumir en esta sesiÃ³n." }));
-    }
-
-    let mut steps_text = String::new();
-    for (i, step) in steps_to_summarize.iter().enumerate() {
-        steps_text.push_str(&format!(
-            "Paso #{}: Tipo={}, TÃ­tulo={}\nDetalle: {}\n\n",
-            i + 1, step.step_type, step.title, step.detail
-        ));
-    }
-
-    let mut messages_text = String::new();
-    for msg in &session.messages {
-        messages_text.push_str(&format!("{}: {}\n\n", msg.role, msg.content));
-    }
-
-    let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(120))
-        .build()
-        .unwrap_or_else(|_| reqwest::Client::new());
-
-    let payload = json!({
-        "model": "deepseek-v4-flash",
-        "messages": [
-            {
-                "role": "system",
-                "content": "Eres un auditor tÃ©cnico experto. Tu tarea es resumir el proceso de auditorÃ­a y los pasos de ejecuciÃ³n que te provee el usuario, teniendo en cuenta la conversaciÃ³n. El objetivo principal de este resumen es reducir drÃ¡sticamente el tamaÃ±o del contexto de ejecuciÃ³n del agente autÃ³nomo para ahorrar costos de tokens y optimizar su memoria a largo plazo, permitiÃ©ndole continuar su ejecuciÃ³n de forma fluida. Tu resumen en espaÃ±ol DEBE responder obligatoriamente de manera estructurada a: 1. Â¿QuÃ© estaba haciendo el agente en ese mismo instante? 2. Â¿Por quÃ© lo hacÃ­a? 3. Â¿QuÃ© le faltaba por hacer? 4. Â¿CuÃ¡l era el objetivo final y quÃ© objetivos secundarios ya se cumplieron? 5. SOBRE TODO, el 'CÃ“MO': Detalla minuciosamente el mÃ©todo tÃ©cnico empleado (herramientas usadas, archivos especÃ­ficos modificados o leÃ­dos, y resultados de compilaciÃ³n/operaciones). Redacta el contenido en formato markdown tÃ©cnico, muy directo y sin introducciones."
-            },
-            {
-                "role": "user",
-                "content": format!(
-                    "--- HISTORIAL DE CONVERSACIÃ“N ---\n{}\n\n--- PASOS DETALLADOS A RESUMIR ---\n{}",
-                    messages_text,
-                    steps_text
-                )
-            }
-        ]
-    });
-
-    match client
-        .post("https://api.deepseek.com/v1/chat/completions")
-        .header("Authorization", format!("Bearer {}", deepseek_key()))
-        .header("Content-Type", "application/json")
-        .json(&payload)
-        .send()
-        .await
-    {
-        Ok(resp) => {
-            if resp.status().is_success() {
-                if let Ok(res_val) = resp.json::<serde_json::Value>().await {
-                    if let Some(summary_text) = res_val["choices"][0]["message"]["content"].as_str() {
-                        let new_step = crate::state::AuditStep {
-                            step_type: "thinking".to_string(),
-                            title: "Resumen de Contexto (Forzado)".to_string(),
-                            detail: summary_text.to_string(),
-                            timestamp: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs(),
-                        };
-                        
-                        session.steps = Some(vec![new_step.clone()]);
-                        
-                        session.messages.push(crate::state::ChatMessage {
-                            role: "agent".to_string(),
-                            content: format!("--- RESUMEN DE PASOS DE AUDITORÃA ---\n{}", summary_text),
-                            timestamp: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs(),
-                        });
-                        
-                        let _ = fs::write(&chat_file, serde_json::to_string_pretty(&session).unwrap());
-                        
-                        {
-                            let mut active = state.active_agent.lock().unwrap();
-                            if active.current_session_id.as_deref() == Some(&session.id) {
-                                active.steps = vec![new_step];
-                            }
-                        }
-
-                        return Json(json!({ "status": "ok", "summary": summary_text }));
-                    }
-                }
-            }
-            Json(json!({ "status": "error", "message": "Error al leer la respuesta de la API de DeepSeek." }))
-        }
-        Err(e) => {
-            Json(json!({ "status": "error", "message": format!("Error de conexiÃ³n: {}", e) }))
-        }
-    }
-}
-
-
