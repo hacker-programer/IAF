@@ -1537,7 +1537,7 @@ pub fn discover_projects(state: &AppState) {
     }
 }
 
-async fn search_code_in_project(proj_path: &str, query: &str, voyage_key: &str) -> Result<String, Box<dyn Error + Send + Sync>> {
+pub async fn search_code_in_project(proj_path: &str, query: &str, voyage_key: &str) -> Result<String, Box<dyn Error + Send + Sync>> {
     semantic_code_search(proj_path, query, voyage_key).await
 }
 
