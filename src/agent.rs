@@ -1149,7 +1149,7 @@ pub async fn run_agent_loop(
                         } else {
                             let agents = state.sub_agents.agents.lock().unwrap();
                             let found = agents.iter().find(|(id, _)| id == sub_id || id.starts_with(sub_id)).map(|(id, _)| id.clone());
-                            drop(agents);
+                            let found = agents.iter().find(|(id, _)| *id == sub_id || id.starts_with(sub_id)).map(|(id, _)| id.clone());
                             match found {
                                 Some(full_id) => {
                                     if state.sub_agents.cancel(&full_id) {
