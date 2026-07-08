@@ -360,14 +360,13 @@ pub async fn run_agent_loop(
                     },
                     "required": ["pid"]
                 }
-            }
+                }
             }
         }),
         json!({
             "type": "function",
             "function": {
                 "name": "fetch_tool_result",
-                "description": "Recupera una página del resultado completo de una herramienta previamente ejecutada. Usa esto cuando un resultado fue demasiado grande y se te mostró solo un resumen con un ID. page es 0-indexado y page_size es en caracteres (máximo 5000).",
                 "parameters": {
                     "type": "object",
                     "properties": {
