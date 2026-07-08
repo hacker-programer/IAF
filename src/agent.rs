@@ -1077,10 +1077,87 @@ pub async fn run_agent_loop(
                     "kill_process" => {
                         let pid = args["pid"].as_u64().unwrap_or(0) as u32;
                         if pid == 0 {
-                            json!({"error": "PID invÃ¡lido: debe ser un entero positivo."}).to_string()
+                            json!({"error": "PID inválido: debe ser un entero positivo."}).to_string()
                         } else {
-                            // Usar el ProcessRegistry para matar de forma segura
                             state.process_registry.safe_kill(pid)
+                        }
+                    }
+                    "fetch_tool_result" => {
+                        let call_id = args["call_id"].as_str().unwrap_or("");
+                        let page = args["page"].as_u64().unwrap_or(0) as usize;
+                        let page_size = args["page_size"].as_u64().unwrap_or(2000).min(5000) as usize;
+                        if call_id.is_empty() {
+                            json!({"error": "call_id es requerido."}).to_string()
+                        } else {
+                            match state.tool_results.fetch_page(call_id, page, page_size) {
+                                Some(content) => content,
+                                None => format!("No se encontró el resultado '{}'. Resultados almacenados: {}.", call_id, state.tool_results.len()),
+                            }
+                        }
+                    }
+                    "release_tool_result" => {
+                        let call_id = args["call_id"].as_str().unwrap_or("");
+                        if call_id.is_empty() {
+                            json!({"error": "call_id es requerido."}).to_string()
+                        } else if state.tool_results.release(call_id) {
+                            format!("Resultado '{}' liberado. Restantes: {}.", call_id, state.tool_results.len())
+                        } else {
+                            format!("No se encontró el resultado '{}'.", call_id)
+                        }
+                    }
+                    "spawn_sub_agent" => {
+                        let task_description = args["task_description"].as_str().unwrap_or("");
+                        let allowed_paths: Vec<String> = args["allowed_paths"].as_array()
+                            .map(|a| a.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect())
+                            .unwrap_or_default();
+                        let context_summary = args["context_summary"].as_str().map(|s| s.to_string());
+                        if task_description.is_empty() {
+                            json!({"error": "task_description es requerido."}).to_string()
+                        } else {
+                            match sub_agent::spawn_sub_agent(&state, task_description, project_name.clone(), allowed_paths, context_summary, deepseek_key.to_string()) {
+                                Ok(msg) => msg,
+                                Err(e) => format!("Error spawneando sub-agente: {}", e),
+                            }
+                        }
+                    }
+                    "check_sub_agent" => {
+                        let sub_id = args["sub_agent_id"].as_str().unwrap_or("");
+                        if sub_id.is_empty() {
+                            state.sub_agents.status_summary()
+                        } else {
+                            let agents = state.sub_agents.agents.lock().unwrap();
+                            let found = agents.iter().find(|(id, _)| *id == sub_id || id.starts_with(sub_id));
+                            match found {
+                                Some((id, agent)) => {
+                                    let status_str = match &agent.status {
+                                        crate::state::SubAgentStatus::Running => "EN EJECUCION".to_string(),
+                                        crate::state::SubAgentStatus::Completed => "COMPLETADO".to_string(),
+                                        crate::state::SubAgentStatus::Failed(e) => format!("FALLO: {}", e),
+                                        crate::state::SubAgentStatus::Cancelled => "CANCELADO".to_string(),
+                                    };
+                                    let paths_display = if agent.allowed_paths.is_empty() { "acceso completo".to_string() } else { agent.allowed_paths.join(", ") };
+                                    let result_text = agent.result.as_ref().map(|r| format!("\nResultado:\n{}", r)).unwrap_or_default();
+                                    format!("Sub-agente [{}]:\n  Tarea: {}\n  Estado: {}\n  Paths: {}{}", id, agent.task_description, status_str, paths_display, result_text)
+                                }
+                                None => format!("No se encontró sub-agente con ID '{}'.", sub_id),
+                            }
+                        }
+                    }
+                    "kill_sub_agent" => {
+                        let sub_id = args["sub_agent_id"].as_str().unwrap_or("");
+                        if sub_id.is_empty() {
+                            json!({"error": "sub_agent_id es requerido."}).to_string()
+                        } else {
+                            let agents = state.sub_agents.agents.lock().unwrap();
+                            let found = agents.iter().find(|(id, _)| *id == sub_id || id.starts_with(sub_id)).map(|(id, _)| id.clone());
+                            drop(agents);
+                            match found {
+                                Some(full_id) => {
+                                    if state.sub_agents.cancel(&full_id) { format!("Sub-agente [{}] cancelado.", sub_id) }
+                                    else { format!("El sub-agente [{}] no estaba en ejecución o ya terminó.", sub_id) }
+                                }
+                                None => format!("No se encontró sub-agente con ID '{}'.", sub_id),
+                            }
                         }
                     }
                     "fork_and_clone_repo" => {
