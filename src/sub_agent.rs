@@ -121,12 +121,14 @@ pub fn is_path_allowed(file_path: &str, allowed_paths: &[String]) -> bool {
     if allowed_paths.is_empty() {
         return true;
     }
-
     let path = Path::new(file_path);
+    let normalized = path.to_string_lossy().to_lowercase();
+
+    for allowed in allowed_paths {
+        let allowed_norm = allowed.to_lowercase();
         if normalized.starts_with(&allowed_norm) {
             return true;
         }
-        // También permitir si el path normalizado contiene el path permitido
         if allowed_norm.contains(&normalized) || normalized.contains(&allowed_norm) {
             return true;
         }
