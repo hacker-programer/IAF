@@ -361,9 +361,83 @@ pub async fn run_agent_loop(
                     "required": ["pid"]
                 }
             }
+            }
+        }),
+        json!({
+            "type": "function",
+            "function": {
+                "name": "fetch_tool_result",
+                "description": "Recupera una página del resultado completo de una herramienta previamente ejecutada. Usa esto cuando un resultado fue demasiado grande y se te mostró solo un resumen con un ID. page es 0-indexado y page_size es en caracteres (máximo 5000).",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "call_id": { "type": "string", "description": "El ID del resultado de herramienta (aparece en el resumen truncado)." },
+                        "page": { "type": "integer", "description": "Número de página (0-indexado)." },
+                        "page_size": { "type": "integer", "description": "Tamaño de página en caracteres (máx 5000, default 2000)." }
+                    },
+                    "required": ["call_id", "page"]
+                }
+            }
+        }),
+        json!({
+            "type": "function",
+            "function": {
+                "name": "release_tool_result",
+                "description": "Libera de la memoria el resultado completo de una herramienta que ya no necesitas. Úsalo después de haber leído todo lo que necesitabas de un resultado grande. Esto ayuda a mantener bajo el uso de RAM.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "call_id": { "type": "string", "description": "El ID del resultado a liberar." }
+                    },
+                    "required": ["call_id"]
+                }
+            }
+        }),
+        json!({
+            "type": "function",
+            "function": {
+                "name": "spawn_sub_agent",
+                "description": "Spawnea un sub-agente para trabajar en paralelo en una tarea independiente. El sub-agente hereda un resumen del contexto actual y puede tener acceso restringido a ciertos archivos/directorios para evitar colisiones. Ideal para paralelizar trabajo (ej: uno corrige bugs mientras otro escribe tests).",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "task_description": { "type": "string", "description": "Descripción clara y concisa de la tarea a realizar." },
+                        "allowed_paths": { "type": "array", "items": { "type": "string" }, "description": "Archivos/directorios a los que el sub-agente tiene acceso. Vacío = acceso completo." },
+                        "context_summary": { "type": "string", "description": "Resumen del contexto que el sub-agente necesita saber." }
+                    },
+                    "required": ["task_description"]
+                }
+            }
+        }),
+        json!({
+            "type": "function",
+            "function": {
+                "name": "check_sub_agent",
+                "description": "Verifica el estado y resultado de un sub-agente. Usa el ID devuelto por spawn_sub_agent. Si ya terminó, obtendrás su resultado final. Si no se especifica ID, muestra todos los sub-agentes.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "sub_agent_id": { "type": "string", "description": "ID del sub-agente (primeros 8 caracteres del UUID). Vacío = mostrar todos." }
+                    },
+                    "required": []
+                }
+            }
+        }),
+        json!({
+            "type": "function",
+            "function": {
+                "name": "kill_sub_agent",
+                "description": "Cancela un sub-agente en ejecución. Úsalo si el sub-agente ya no es necesario o si necesitas liberar un slot para spawnear otro.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "sub_agent_id": { "type": "string", "description": "ID del sub-agente a cancelar." }
+                    },
+                    "required": ["sub_agent_id"]
+                }
+            }
         })
     ];
-
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(600))
         .tcp_keepalive(std::time::Duration::from_secs(30))
