@@ -1850,7 +1850,140 @@ async fn compress_active_messages_if_needed(
 }
 /// Parsea una lÃ­nea de comandos shell respetando comillas dobles y simples.
 /// Ej: 'gh repo create "my repo" --public' â†’ ["gh", "repo", "create", "my repo", "--public"]
-fn parse_shell_args(input: &str) -> Vec<String> {
+/// Detecta si el contenido a escribir en un archivo contiene texto de razonamiento
+/// del modelo en lugar de código fuente puro. Busca patrones de lenguaje natural
+/// que NO están dentro de comentarios (// o /* */).
+///
+/// Esta es una defensa contra el bug donde el modelo inyecta su razonamiento
+/// (ej. "OK, ahora necesito modificar esta función...") directamente en archivos .rs
+/// sin marcadores de comentario, causando errores de compilación.
+fn detect_reasoning_in_pre_write(content: &str, rel_path: &str) -> String {
+    // Solo aplicar a archivos de código fuente
+    let is_code_file = rel_path.ends_with(".rs") || rel_path.ends_with(".js") 
+        || rel_path.ends_with(".ts") || rel_path.ends_with(".py")
+        || rel_path.ends_with(".c") || rel_path.ends_with(".cpp")
+        || rel_path.ends_with(".h") || rel_path.ends_with(".hpp")
+        || rel_path.ends_with(".java") || rel_path.ends_with(".go")
+        || rel_path.ends_with(".toml") || rel_path.ends_with(".json");
+    
+    if !is_code_file {
+        return String::new();
+    }
+    
+    // Si el archivo está vacío o solo tiene whitespace, no hay problema
+    if content.trim().is_empty() {
+        return String::new();
+    }
+    
+    // Patrones de razonamiento típicos del modelo (español e inglés)
+    let reasoning_patterns: &[&str] = &[
+        // Español
+        "OK, ahora", "Ok, ahora", "Vale, ahora", "Bien, ahora",
+        "Ahora necesito", "Ahora voy a", "Voy a modificar", "Voy a editar",
+        "Voy a crear", "Voy a añadir", "Voy a escribir",
+        "Primero,", "En primer lugar,", "Para empezar,",
+        "El problema es que", "La causa es", "El bug está en",
+        "He detectado", "He encontrado", "He visto",
+        "Necesito arreglar", "Necesito corregir", "Necesito cambiar",
+        "Déjame ver", "Déjame revisar", "Déjame analizar",
+        "Permíteme", "Permítanme",
+        "Analizando el", "Revisando el", "Examinando el",
+        "Esto debería", "Esto podría", "Esto hará",
+        "La solución es", "La corrección es",
+        "Según el", "De acuerdo al", "Basado en",
+        // Inglés
+        "OK, now", "Ok, now", "Alright, now", "Well, now",
+        "Now I need to", "Now I'll", "Now I will",
+        "I need to fix", "I need to change", "I need to edit",
+        "I'll modify", "I'll edit", "I'll create", "I'll add", "I'll write",
+        "I will modify", "I will edit", "I will create",
+        "Let me see", "Let me check", "Let me analyze", "Let me review",
+        "Let me look", "Let me read", "Let me edit", "Let me fix",
+        "Let me think", "Let me verify", "Let me examine",
+        "Let's start", "Let's begin", "Let's fix",
+        "First,", "Firstly,", "To start,",
+        "The problem is", "The issue is", "The bug is",
+        "I've detected", "I've found", "I've seen",
+        "This should", "This could", "This will",
+        "The solution is", "The fix is",
+        "Looking at the", "Checking the", "Examining the",
+        "According to", "Based on",
+        "So the", "So now", "So I",
+        "Wait,", "Actually,", "Hmm,",
+    ];
+    
+    let mut warnings = Vec::new();
+    let lines: Vec<&str> = content.lines().collect();
+    
+    for (line_num, line) in lines.iter().enumerate() {
+        let trimmed = line.trim();
+        
+        // Ignorar líneas vacías
+        if trimmed.is_empty() {
+            continue;
+        }
+        
+        // Ignorar líneas que ya están comentadas
+        if trimmed.starts_with("//") || trimmed.starts_with("/*") 
+            || trimmed.starts_with("*") || trimmed.starts_with("*/")
+            || trimmed.starts_with("#") || trimmed.starts_with("<!--")
+            || trimmed.starts_with("///") || trimmed.starts_with("//!") 
+        {
+            continue;
+        }
+        
+        // Verificar si la línea comienza con algún patrón de razonamiento
+        for pattern in reasoning_patterns {
+            if trimmed.starts_with(pattern) || trimmed.to_lowercase().starts_with(&pattern.to_lowercase()) {
+                // Verificar que no es código válido disfrazado
+                // Si la línea contiene caracteres típicos de código, podría ser un falso positivo
+                let looks_like_code = trimmed.contains('(') || trimmed.contains('{') 
+                    || trimmed.contains(';') || trimmed.contains("fn ")
+                    || trimmed.contains("let ") || trimmed.contains("pub ")
+                    || trimmed.contains("use ") || trimmed.contains("mod ")
+                    || trimmed.contains("struct ") || trimmed.contains("enum ")
+                    || trimmed.contains("impl ") || trimmed.contains("const ")
+                    || trimmed.contains("import ") || trimmed.contains("from ")
+                    || trimmed.contains("def ") || trimmed.contains("class ")
+                    || trimmed.contains("function ") || trimmed.contains("var ")
+                    || trimmed.contains("const ") || trimmed.contains("return ");
+                
+                if !looks_like_code {
+                    warnings.push(format!(
+                        "Línea {}: \"{}\" — parece texto de razonamiento, no código. \
+                        Si es intencional, usa // para comentarlo.",
+                        line_num + 1, 
+                        truncate_for_display_reasoning(trimmed, 80)
+                    ));
+                    break; // Una advertencia por línea es suficiente
+                }
+            }
+        }
+    }
+    
+    if warnings.is_empty() {
+        return String::new();
+    }
+    
+    // Limitar a 5 advertencias para no saturar
+    let total = warnings.len();
+    if warnings.len() > 5 {
+        warnings.truncate(5);
+        warnings.push(format!("... y {} líneas sospechosas más.", total - 5));
+    }
+    
+    warnings.join("\n")
+}
+
+fn truncate_for_display_reasoning(s: &str, max_len: usize) -> String {
+    if s.chars().count() <= max_len {
+        s.to_string()
+    } else {
+        format!("{}...", s.chars().take(max_len).collect::<String>())
+    }
+}
+
+/// Parsea una línea de comandos shell respetando comillas dobles y simples.
     let mut args = Vec::new();
     let mut current = String::new();
     let mut in_single_quote = false;
