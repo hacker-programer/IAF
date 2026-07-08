@@ -1135,11 +1135,17 @@ pub async fn run_agent_loop(
                                         crate::state::SubAgentStatus::Failed(e) => format!("FALLO: {}", e),
                                         crate::state::SubAgentStatus::Cancelled => "CANCELADO".to_string(),
                                     };
-                                    format!("Sub-agente [{}]:\n  Tarea: {}\n  Estado: {}\n  Paths: {}{}", id, agent.task_description, status_str, if agent.allowed_paths.is_empty() { "acceso completo" } else { &agent.allowed_paths.join(", ") }, result_text)
+                                    let paths_display = if agent.allowed_paths.is_empty() {
+                                        "acceso completo".to_string()
+                                    } else {
+                                        agent.allowed_paths.join(", ")
+                                    };
+                                    let result_text = agent.result.as_ref()
+                                        .map(|r| format!("\nResultado:\n{}", r))
+                                        .unwrap_or_default();
+                                    format!("Sub-agente [{}]:\n  Tarea: {}\n  Estado: {}\n  Paths: {}{}",
+                                        id, agent.task_description, status_str, paths_display, result_text)
                                 }
-                                None => format!("No se encontrÃƒÆ’Ã‚Â³ sub-agente con ID '{}'. Usa check_sub_agent sin argumentos para ver todos.", sub_id),
-                            }
-                        }
                     }
                     "kill_sub_agent" => {
                         let sub_id = args["sub_agent_id"].as_str().unwrap_or("");
