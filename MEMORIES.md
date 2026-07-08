@@ -8,6 +8,18 @@
 
 ## 🐛 Bugs Conocidos y Solucionados
 
+## 🐛 Bugs Conocidos y Solucionados
+
+### [2026-07-07] CRÍTICO: Razonamiento del modelo inyectado en archivos de código sin //
+- **Estado**: CORREGIDO (2026-07-07)
+- **Archivos**: `src/agent.rs` (~línea 600), `src/validator.rs`, `prompts/default_system_prompt.txt`
+- **Causa raíz**: El `write_handler` en `agent.rs` usaba la variable `content` del scope externo (línea 486: `message_val["content"]` = la respuesta textual del modelo, que contiene frases como "OK, ahora necesito modificar...", "Let me edit the file...") en lugar de extraer `args["content"]` (el parámetro real de la herramienta que contiene el código fuente). Esto causaba que el texto de razonamiento del agente se escribiera directamente en archivos .rs sin `//`, generando errores de compilación. El agente luego culpaba a "errores de sintaxis" sin reconocer que era su propio texto.
+- **Solución múltiple (defensa en 3 capas)**:
+  1. **agent.rs**: Añadido `let content = args["content"].as_str().unwrap_or("");` para extraer el código real de los argumentos de la herramienta, sobrescribiendo la variable del scope externo.
+  2. **agent.rs**: Nueva función `detect_reasoning_in_pre_write()` — validación pre-escritura que bloquea la escritura si detecta patrones de razonamiento (como "OK, ahora", "Let me", "Voy a") en el contenido antes de tocar el archivo.
+  3. **validator.rs**: Nueva función `detect_reasoning_injection()` — validación post-escritura que escanea archivos .rs/.js/etc. buscando líneas que parecen lenguaje natural sin comentar.
+  4. **System prompt**: Nueva regla #6 en "REGLAS OBLIGATORIAS DE EDICIÓN DE CÓDIGO" que prohíbe explícitamente incluir razonamiento en el campo `content` de `write_file_with_commit`.
+
 ### [2026-07-06] Mensaje "TRUNCADO POR EL SISTEMA" confundía al agente → reversión destructiva
 - **Estado**: CORREGIDO (2026-07-06)
 - **Archivo**: `src/agent.rs` (~línea 1480)
