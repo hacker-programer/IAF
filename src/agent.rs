@@ -1128,13 +1128,14 @@ pub async fn run_agent_loop(
                             let agents = state.sub_agents.agents.lock().unwrap();
                             let found = agents.iter().find(|(id, _)| *id == sub_id || id.starts_with(sub_id));
                             match found {
+                            match found {
                                 Some((id, agent)) => {
+                                    let status_str = match &agent.status {
                                         crate::state::SubAgentStatus::Running => "EN EJECUCION".to_string(),
                                         crate::state::SubAgentStatus::Completed => "COMPLETADO".to_string(),
                                         crate::state::SubAgentStatus::Failed(e) => format!("FALLO: {}", e),
                                         crate::state::SubAgentStatus::Cancelled => "CANCELADO".to_string(),
                                     };
-                                    let result_text = agent.result.as_ref().map(|r| format!("\nResultado:\n{}", r)).unwrap_or_default();
                                     format!("Sub-agente [{}]:\n  Tarea: {}\n  Estado: {}\n  Paths: {}{}", id, agent.task_description, status_str, if agent.allowed_paths.is_empty() { "acceso completo" } else { &agent.allowed_paths.join(", ") }, result_text)
                                 }
                                 None => format!("No se encontrÃƒÆ’Ã‚Â³ sub-agente con ID '{}'. Usa check_sub_agent sin argumentos para ver todos.", sub_id),
