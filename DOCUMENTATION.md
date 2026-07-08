@@ -1,7 +1,8 @@
 # DOCUMENTATION.md — Mapa Técnico del Proyecto IAF
 
 > **IAF (Intelligent Agent Framework)** — Framework de agente autónomo en Rust + Axum + DeepSeek API.
-> Servidor HTTP que orquesta un agente de desarrollo de software con herramientas.
+> Servidor HTTP que orquesta un agente de desarrollo de software con herramientas,
+> sub-agentes paralelos y almacenamiento de resultados con IDs.
 
 ---
 
@@ -9,176 +10,189 @@
 
 | Archivo | Líneas | Rol |
 |---------|--------|-----|
-| `src/main.rs` | 951 | Servidor HTTP (Axum), endpoints REST, inicialización |
-| `src/agent.rs` | 1940 | Bucle principal del agente, herramientas, loop de ejecución |
-| `src/state.rs` | 254 | Estructuras de datos compartidas (AppState, ChatSession, etc.) |
-| `src/validator.rs` | 230 | Validación post-escritura (detección de duplicados, delimitadores) |
-| `src/scraper.rs` | 80 | Búsqueda en Google vía scraping + limpieza HTML |
+| `src/main.rs` | 976 | Servidor HTTP (Axum), endpoints REST, inicialización |
+| `src/agent.rs` | 2088 | Bucle principal del agente, herramientas, loop de ejecución |
+| `src/state.rs` | 647 | Estructuras de datos compartidas (AppState, ToolResultStore, SubAgentManager) |
+| `src/validator.rs` | 508 | Validación post-escritura (duplicados, delimitadores, contexto impl) |
+| `src/scraper.rs` | 170 | Búsqueda web vía DuckDuckGo Lite + fallback Google |
+| `src/sub_agent.rs` | 520 | Ejecución paralela de sub-agentes con restricciones de path |
 | `src/desktop.rs` | 165 | Control de mouse/teclado (rdev), lanzamiento de ejecutables |
-| `prompts/default_system_prompt.txt` | 505 | System prompt global del agente (reglas, técnicas de optimización) |
+| `prompts/default_system_prompt.txt` | 517 | System prompt global del agente (reglas, técnicas de optimización) |
 
 ---
 
 ## 🧩 Estructuras de Datos Principales (`src/state.rs`)
 
-| Estructura | Línea | Descripción |
-|-----------|-------|-------------|
-| `Project` | ~8 | `name: String, path: String, is_local: bool` — Proyecto registrado |
-| `PromptConfig` | ~14 | `global_default, global_current: String, projects: HashMap<String, String>` |
-| `ChatMessage` | ~21 | `role: String, content: String, timestamp: u64` |
-| `ChatSession` | ~27 | `id, title, messages: Vec<ChatMessage>, project_name, steps` |
-| `AuditStep` | ~35 | `step_type, title, detail, timestamp` — Paso de auditoría |
-| `ActiveAgentStatus` | ~42 | `running, interrupted, esperando_respuesta_usuario, steps, current_session_id` |
-| `ContextEntry` | ~55 | `id, entry_type, summary, full_content, created_at` |
-| `CaptchaRequest` | ~62 | `id, sitekey, url, solved_content` |
-| `ProcessRegistry` | ~73 | `spawned: Arc<Mutex<HashSet<u32>>>, server_pid: u32` — Registro seguro de PIDs |
-| `AppState` | ~230 | Estado global: `config_path, prompts, projects, base_workspace, active_agent, process_registry, image_store, context_store` |
+| Estructura | Línea aprox. | Descripción |
+|-----------|-------------|-------------|
+| `Project` | ~13 | `name: String, path: String, is_local: bool` — Proyecto registrado |
+| `PromptConfig` | ~19 | `global_default, global_current: String, projects: HashMap<String, String>` |
+| `ChatMessage` | ~33 | `role: String, content: String, timestamp: u64` |
+| `ChatSession` | ~39 | `id, title, messages: Vec<ChatMessage>, project_name, steps` |
+| `AuditStep` | ~49 | `step_type, title, detail, timestamp` — Paso de auditoría |
+| `ActiveAgentStatus` | ~56 | `running, interrupted, esperando_respuesta_usuario, steps, current_session_id` |
+| `ContextEntry` | ~72 | `id, entry_type, summary, full_content, created_at` |
+| `CaptchaRequest` | ~80 | `id, sitekey, url, solved_content` |
+| **`ToolResultStore`** | ~97 | **Almacena resultados completos de herramientas con IDs. Reemplaza el truncado arbitrario.** |
+| `StoredToolResult` | ~103 | `call_id, tool_name, full_content, stored_at` — Una entrada del store |
+| **`SubAgentHandle`** | ~192 | Handle para gestionar un sub-agente (id, task, status, abort_handle) |
+| **`SubAgentStatus`** | ~184 | Enum: `Running, Completed, Failed(String), Cancelled` |
+| **`SubAgentManager`** | ~218 | Gestor de sub-agentes paralelos con límite dinámico según hardware |
+| `ProcessRegistry` | ~465 | `spawned: Arc<Mutex<HashSet<u32>>>, server_pid: u32` — Registro seguro de PIDs |
+| `AppState` | ~624 | Estado global con todos los campos anteriores |
 
-### Funciones clave en `state.rs`:
+### ToolResultStore (NUEVO — 2026-07-08)
 
-| Función | Línea | Descripción |
-|---------|-------|-------------|
-| `ProcessRegistry::new()` | ~95 | Crea registro con PID del servidor cacheado |
-| `ProcessRegistry::register(pid)` | ~101 | Registra un PID como spawnado por el agente |
-| `ProcessRegistry::safe_kill(pid)` | ~107 | Mata un proceso con 3 pasos de validación: (1) en registro, (2) parent PID == server PID, (3) taskkill |
-| `ProcessRegistry::kill_all()` | ~176 | Mata todos los procesos registrados que sigan siendo hijos |
-| `ProcessRegistry::reap()` | ~193 | Limpia procesos ya terminados del registro |
-| `get_parent_pid(pid)` | ~210 | Obtiene ParentProcessId vía PowerShell `Get-Process` |
+| Método | Línea | Descripción |
+|--------|-------|-------------|
+| `store(call_id, tool_name, full_content) -> String` | ~119 | Guarda resultado completo. Si >3000 chars, devuelve resumen + ID + instrucciones de paginación |
+| `fetch_page(call_id, page, page_size) -> Option<String>` | ~162 | Recupera una página del resultado por ID |
+| `release(call_id) -> bool` | ~199 | Libera un resultado de memoria por ID |
+| `reap_old(max_age_secs) -> usize` | ~205 | Limpia resultados más antiguos que N segundos |
+| `len() -> usize` | ~217 | Cantidad de resultados almacenados |
+
+### SubAgentManager (NUEVO — 2026-07-08)
+
+| Método | Línea | Descripción |
+|--------|-------|-------------|
+| `new() -> Self` | ~231 | Detecta hardware para escalar dinámicamente paralelismo (1 en 2 cores, hasta 8 en 16+) |
+| `register(id, task, project, paths, context, handle)` | ~248 | Registra un sub-agente como Running |
+| `update_status(id, status, result)` | ~266 | Actualiza estado de un sub-agente |
+| `cancel(id) -> bool` | ~275 | Cancela un sub-agente por ID |
+| `cancel_all()` | ~291 | Cancela todos los sub-agentes activos |
+| `running_count() -> usize` | ~306 | Sub-agentes actualmente en ejecución |
+| `can_spawn() -> bool` | ~313 | true si hay capacidad para más sub-agentes |
+| `status_summary() -> String` | ~318 | Reporte formateado del estado de todos los sub-agentes |
+| `reap_old(max_age_secs) -> usize` | ~427 | Limpia sub-agentes terminados antiguos |
 
 ---
 
 ## 🧠 Bucle del Agente (`src/agent.rs`)
 
 ### Constantes
-- `DEEPSEEK_API_URL`: `"https://api.deepseek.com/v1/chat/completions"` (línea ~11)
+- `DEEPSEEK_API_URL`: `"https://api.deepseek.com/v1/chat/completions"` (línea ~15)
 
-### Función principal: `run_agent_loop()` (línea ~13)
+### Función principal: `run_agent_loop()` (línea ~18)
 Flujo:
 1. Carga system prompt global + local del proyecto
 2. Añade directiva DOCUMENTATION.md y nota de contexto
 3. Construye array `messages` con historial de chat + memoria de ejecución reciente
-4. Define `tools` (16 herramientas en JSON Schema)
-5. Loop principal:
-   - Verifica interrupción
-   - `compress_active_messages_if_needed()` — comprime contexto si >500K chars
-   - `sanitize_messages_for_api()` — sana tool messages huérfanos
-   - Llama a DeepSeek API con reintentos (hasta 3)
-   - Procesa tool_calls: ejecuta cada herramienta, trunca resultados >25K chars
-   - Si `final_message` es Some, retorna Ok
+4. Define `tools` (16 herramientas en JSON Schema + nuevas de sub-agentes)
+5. Loop principal con compresión de contexto, sanitización y rate-limiting
 
-### Herramientas implementadas (handlers en el match de `tool_result`):
+### Herramientas implementadas:
 
-| Herramienta | Línea aprox. | Descripción |
-|------------|-------------|-------------|
-| `search_google` | ~570 | Llama a `perform_search()`, maneja CAPTCHA |
-| `read_file` | ~590 | Lee archivo con/sin rango de líneas |
-| `write_file_with_commit` | ~620 | Bloque `'write_handler`: sincroniza git (pull), escribe, add, commit, push. Con autocuración git. |
-| `execute_powershell` | ~730 | Ejecuta comandos PowerShell con sanitización de seguridad (bloquea taskkill/Stop-Process). Spawnea procesos largos. |
-| `search_code` | ~810 | `search_code_in_project()` → `semantic_code_search()` |
-| `kill_process` | ~820 | `ProcessRegistry::safe_kill()` |
-| `fork_and_clone_repo` | ~830 | `gh repo fork --clone` |
-| `read_url` | ~850 | HTTP GET + `scraper_clean_tags()` |
-| `check_github_cli` | ~870 | `gh` CLI genérico |
-| `notificar_usuario` | ~890 | Pausa el agente para pregunta o envía notificación |
-| `finalizar_tarea` | ~960 | Asigna `final_message`, mata procesos hijo |
-| `image_fetch` | ~970 | Descarga imagen, guarda en `assets/images/` |
-| `image_view` | ~1020 | Codifica en Base64, analiza con Qwen2.5-VL vía OpenRouter |
-| `image_release` | ~1100 | Elimina marcadores de imagen del contexto |
-| `git_resolve_divergence` | ~1140 | `keep_local` (push --force), `keep_remote` (reset --hard), `merge_both` |
-| `analyze_images` | ~1180 | Análisis multimodal con Qwen2.5-VL vía OpenRouter |
+| Herramienta | Descripción |
+|------------|-------------|
+| `search_google` | Búsqueda web vía **DuckDuckGo Lite** (primario) + Google (fallback) |
+| `read_file` | Lee archivo con/sin rango de líneas |
+| `write_file_with_commit` | Escribe archivo + git add/commit/push + validación post-escritura |
+| `execute_powershell` | Ejecuta comandos PowerShell con sanitización de seguridad |
+| `search_code` | Búsqueda local de palabras clave en código |
+| `kill_process` | Mata procesos vía ProcessRegistry::safe_kill() |
+| `fork_and_clone_repo` | `gh repo fork --clone` |
+| `read_url` | HTTP GET + scraper_clean_tags() |
+| `check_github_cli` | `gh` CLI genérico |
+| `notificar_usuario` | Pausa el agente para pregunta o envía notificación |
+| `finalizar_tarea` | Asigna final_message, mata procesos hijo |
+| `image_fetch` / `image_view` / `image_release` | Manejo de imágenes |
+| `analyze_images` | Análisis multimodal con Qwen2.5-VL |
+| `git_resolve_divergence` | Resuelve divergencias git |
 
-### Funciones auxiliares:
+### Funciones exportadas:
 
 | Función | Línea | Descripción |
 |---------|-------|-------------|
-| `save_chat_steps_to_disk()` | 1487 | Persiste pasos de auditoría en archivo JSON del chat |
-| `get_project_path()` | 1501 | Resuelve ruta de proyecto por nombre |
-| `discover_projects()` | 1509 | Escanea `base_workspace` en busca de proyectos |
-| `search_code_in_project()` | 1533 | Wrapper que llama a `semantic_code_search()` |
-| `semantic_code_search()` | 1537 | Búsqueda local de texto (NO VoyageAI). Puntúa por coincidencia exacta + keywords. |
-| `safe_truncate()` | ~1580 | Trunca string en boundary UTF-8 seguro |
-| `truncate_old_tool_responses()` | ~1590 | Trunca tool responses antiguos (>3 iteraciones) a 2000 chars |
-| `compress_active_messages_if_needed()` | 1662 | Si contexto >500K chars, comprime con DeepSeek V4 Flash |
-| `parse_shell_args()` | 1847 | Tokenizador de shell respetando comillas |
-| `play_error_beep()` | 1872 | Beep del sistema (Windows: `[System.Console]::Beep`) |
-| `sanitize_messages_for_api()` | 1886 | Corrige tool messages huérfanos (sin tool_call_id padre) |
+| `run_agent_loop()` | ~18 | Bucle principal del agente |
+| `discover_projects()` | ~1518 | Escanea base_workspace en busca de proyectos |
+| **`search_code_in_project()`** | ~1612 | **Búsqueda local (ahora `pub` para sub_agent.rs)** |
+| `semantic_code_search()` | ~1623 | Búsqueda por palabras clave con scoring |
+| `save_chat_steps_to_disk()` | ~1498 | Persiste pasos de auditoría |
 
 ---
 
-## 🌐 Servidor HTTP (`src/main.rs`)
+## 🔍 Sub-Agent System (`src/sub_agent.rs`)
 
-### Endpoints REST:
-
-| Ruta | Método | Handler | Línea | Descripción |
-|------|--------|---------|-------|-------------|
-| `/api/projects` | GET | `get_projects` | ~870 | Lista proyectos |
-| `/api/projects/fork` | POST | `fork_project` | ~880 | Fork + clone |
-| `/api/projects/local` | POST | `add_local_project` | ~57 | Añade proyecto local |
-| `/api/prompts` | GET/POST | `get_prompts`/`save_prompts` | ~900 | CRUD de prompts |
-| `/api/prompts/reset` | POST | `reset_global_prompt` | ~920 | Restaura prompt default |
-| `/api/chat` | POST | `chat_endpoint` | ~360 | **Principal**: inicia/continúa chat del agente |
-| `/api/chats` | GET | `get_chats` | ~85 | Lista sesiones de chat |
-| `/api/chats/:id` | GET | `get_chat_session` | ~100 | Obtiene sesión específica |
-| `/api/chats/:id/summarize_steps` | POST | `summarize_chat_steps` | ~930 | Resume pasos de auditoría |
-| `/api/agent/status` | GET | `get_agent_status` | ~110 | Estado del agente |
-| `/api/agent/interrupt` | POST | `interrupt_agent` | ~120 | Interrumpe ejecución |
-| `/api/agent/responder` | POST | `respond_to_agent` | ~140 | Responde pregunta del agente |
-| `/api/agent/aprobar_plan` | POST | `approve_agent_plan` | ~170 | Aprueba/rechaza plan |
-| `/api/prompts/refine` | POST | `refine_prompt_endpoint` | ~200 | Refina prompt con IA |
-| `/api/captcha/status` | GET | `captcha_status` | ~750 | Estado de CAPTCHA |
-| `/api/captcha/solve` | POST | `captcha_solve` | ~760 | Resuelve CAPTCHA |
-| `/api/desktop/move` | POST | `move_mouse_handler` | ~780 | Mueve mouse |
-| `/api/desktop/click` | POST | `click_handler` | ~790 | Click mouse |
-| `/api/desktop/type` | POST | `type_text_handler` | ~800 | Escribe texto |
-| `/api/desktop/launch` | POST | `launch_handler` | ~810 | Lanza ejecutable |
-
-### Flujo de `chat_endpoint` (línea ~360):
-1. Determina/genera session_id
-2. Carga/crea ChatSession, genera título con DeepSeek V4 Flash
-3. Guarda mensaje del usuario
-4. Cancela agente anterior si existe
-5. Configura ActiveAgentStatus (running=true, inyecta steps previos)
-6. Spawnea `run_agent_loop()` en tarea Tokio con manejo de pánico
-7. Al finalizar, guarda respuesta + auditoría en ChatSession
-
----
-
-## ✅ Validador (`src/validator.rs`)
-
-### Función principal: `validate_file_after_write()` (línea ~46)
-- **Detección de líneas duplicadas consecutivas** (`detect_duplicate_lines`, línea ~100)
-  - Ignora líneas estructurales: `}`, `)`, `]`, `//`, `};`, `});`
-- **Verificación de delimitadores balanceados** (`check_balanced_delimiters`, línea ~140)
-  - Stack-based: `{}`, `()`, `[]`
-- **Verificación de sintaxis por lenguaje**:
-  - `.rs`: `check_rust_common_errors()` — detecta bloques `unsafe`
-  - `.js`: `node --check`
+| Función | Línea | Descripción |
+|---------|-------|-------------|
+| `spawn_sub_agent()` | ~38 | Spawnea un sub-agente con límite de paralelismo |
+| `is_path_allowed()` | ~98 | Verifica restricciones de path |
+| `run_sub_agent()` | ~135 | Ejecuta el loop del sub-agente (máx 15 iteraciones) |
+| `build_sub_agent_tools()` | ~302 | Subconjunto restringido de herramientas |
+| `execute_sub_agent_tool()` | ~385 | Ejecuta herramientas con verificación de path |
 
 ---
 
 ## 🔍 Scraper (`src/scraper.rs`)
 
-- `perform_search()`: Busca en Google, detecta CAPTCHA, extrae títulos `<h3>`
-- `scraper_clean_tags()`: Limpia tags HTML con regex precompilada (`OnceLock<Regex>`)
+| Función | Línea | Descripción |
+|---------|-------|-------------|
+| **`perform_search()`** | ~15 | **Usa DuckDuckGo Lite como fuente principal, Google como fallback** |
+| `search_duckduckgo()` | ~42 | Búsqueda en lite.duckduckgo.com (HTML simple, sin CAPTCHA) |
+| `search_google()` | ~112 | Fallback: Google (probablemente falle por bloqueo) |
+| `scraper_clean_tags()` | ~168 | Limpia tags HTML con regex precomputada en OnceLock |
 
 ---
 
-## 🖥️ Desktop Controller (`src/desktop.rs`)
+## ✅ Validador (`src/validator.rs`)
 
-- `DesktopController`: `children: Mutex<Vec<Child>>`
-- `move_mouse(x, y)`: `rdev::simulate(MouseMove)`
-- `click(button)`: `rdev::simulate(ButtonPress/Release)`
-- `type_text(text)`: LUT `char_to_key_map()` precomputada con `OnceLock`
-- `launch_executable(path)`: `Command::new(path).spawn()`
+| Función | Línea | Descripción |
+|---------|-------|-------------|
+| `validate_file_after_write()` | ~55 | Orquesta todas las validaciones |
+| `detect_duplicate_lines()` | ~112 | Detecta líneas consecutivas idénticas (ignora argumentos repetidos) |
+| `check_balanced_delimiters()` | ~155 | Verifica balanceo de `{}`, `()`, `[]` |
+| `check_rust_common_errors()` | ~198 | Detecta bloques `unsafe` |
+| **`detect_duplicate_definitions()`** | ~218 | **Detecta definiciones duplicadas CON contexto impl (arreglado 2026-07-08)** |
+| `extract_impl_struct_name()` | ~287 | Extrae nombre de struct de `impl` block |
+| `extract_def_name_with_context()` | ~303 | Extrae nombre de definición con prefijo de impl |
+| `detect_reasoning_injection()` | ~323 | Detecta texto de razonamiento sin comentar |
+
+**Corrección de falsos positivos (2026-07-08):** `detect_duplicate_definitions` ahora trackea bloques `impl` para distinguir métodos de diferentes structs. `fn new()` en `impl ToolResultStore` no se confunde con `fn new()` en `impl SubAgentManager`.
 
 ---
 
-## 🐛 Bugs Conocidos (ver MEMORIES.md para detalles)
+## 🌐 Servidor HTTP (`src/main.rs`)
 
-1. **CRÍTICO**: Mensaje "TRUNCADO POR EL SISTEMA" confunde al agente → reversión destructiva
-2. **ALTO**: Código duplicado por ediciones parciales con start_line/end_line
-3. **ALTO**: validator.rs no ejecuta `cargo check` post-escritura
-4. **MEDIO**: Doble `play_error_beep()` en write_handler
-5. **MEDIO**: Doble `discover_projects()` en main.rs
-6. **MEDIO**: Comentario "SANITIZACIÓN DE SEGURIDAD" duplicado
-7. **BAJO**: Mojibake UTF-8 en strings literales del código fuente
+### Endpoints REST (principales):
+
+| Ruta | Método | Handler | Descripción |
+|------|--------|---------|-------------|
+| `/api/projects` | GET | `get_projects` | Lista proyectos |
+| `/api/projects/fork` | POST | `fork_project` | Fork + clone |
+| `/api/projects/local` | POST | `add_local_project` | Añade proyecto local |
+| `/api/prompts` | GET/POST | `get_prompts`/`save_prompts` | CRUD de prompts |
+| `/api/prompts/reset` | POST | `reset_global_prompt` | Restaura prompt default |
+| `/api/chat` | POST | `chat_endpoint` | Principal: inicia/continúa chat del agente |
+| `/api/chats` | GET | `get_chats` | Lista sesiones de chat |
+| `/api/chats/:id` | GET | `get_chat_session` | Obtiene sesión específica |
+| `/api/chats/:id/summarize_steps` | POST | `summarize_chat_steps` | Resume pasos de auditoría |
+| `/api/agent/status` | GET | `get_agent_status` | Estado del agente |
+| `/api/agent/interrupt` | POST | `interrupt_agent` | Interrumpe ejecución |
+| `/api/agent/responder` | POST | `respond_to_agent` | Responde pregunta del agente |
+| `/api/agent/aprobar_plan` | POST | `approve_agent_plan` | Aprueba/rechaza plan |
+
+---
+
+## 🐛 Bugs Conocidos y Solucionados (MEMORIES.md)
+
+Ver `MEMORIES.md` para el registro completo. Cambios recientes:
+
+### [2026-07-08] Falsos positivos en validator.rs: definiciones duplicadas entre impl blocks
+- **Estado**: CORREGIDO
+- **Causa**: `detect_duplicate_definitions` no distinguía entre `impl ToolResultStore::fn new` y `impl SubAgentManager::fn new`
+- **Solución**: Se agregó trackeo de contexto `impl` con `extract_impl_struct_name()` y `extract_def_name_with_context()`
+
+### [2026-07-08] Google Search siempre fallaba
+- **Estado**: CORREGIDO
+- **Causa**: Google bloquea agresivamente scrapers
+- **Solución**: `scraper.rs` ahora usa DuckDuckGo Lite como fuente principal, con Google como fallback
+
+### [2026-07-08] Truncado arbitrario de tool results
+- **Estado**: CORREGIDO
+- **Causa**: Resultados grandes se truncaban a 25K chars, perdiendo información
+- **Solución**: `ToolResultStore` con sistema de IDs y paginación. El agente decide cuándo liberar.
+
+### [2026-07-08] Sin capacidad de paralelismo
+- **Estado**: CORREGIDO
+- **Causa**: Solo un agente secuencial
+- **Solución**: `SubAgentManager` + `sub_agent.rs`. Sub-agentes con restricciones de path y contexto heredado.
