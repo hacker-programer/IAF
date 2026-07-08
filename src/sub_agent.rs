@@ -47,7 +47,6 @@ pub fn spawn_sub_agent(
             *sub_agents.max_parallel.lock().unwrap()
         ));
     }
-
     let id = Uuid::new_v4().to_string();
     let id_short = &id[..8];
 
@@ -58,6 +57,14 @@ pub fn spawn_sub_agent(
         project_name: project_name.clone(),
         id: id.clone(),
     };
+
+    // Clonar lo necesario antes de mover ctx al async block
+    let allowed_paths_display = if ctx.allowed_paths.is_empty() {
+        "acceso completo".to_string()
+    } else {
+        ctx.allowed_paths.join(", ")
+    };
+    let summary_clone = ctx.summary.clone();
 
     let state_clone = state.clone();
     let deepseek_key_clone = deepseek_key.clone();
@@ -89,7 +96,7 @@ pub fn spawn_sub_agent(
         task_description.to_string(),
         project_name,
         allowed_paths,
-        Some(ctx.summary.clone()),
+        Some(summary_clone),
         Some(handle.abort_handle()),
     );
 
@@ -101,18 +108,10 @@ pub fn spawn_sub_agent(
          Usa kill_sub_agent(\"{}\") para cancelarlo.",
         id_short,
         task_description,
-        if ctx.allowed_paths.is_empty() { "acceso completo" } else { &ctx.allowed_paths.join(", ") },
+        allowed_paths_display,
         id_short,
         id_short
     ))
-}
-
-/// Verifica que una ruta está dentro de los paths permitidos.
-/// Si allowed_paths está vacío, se permite todo.
-pub fn is_path_allowed(file_path: &str, allowed_paths: &[String]) -> bool {
-    if allowed_paths.is_empty() {
-        return true; // Acceso completo
-    }
 
     let path = Path::new(file_path);
     let normalized = path.to_string_lossy().to_lowercase();
