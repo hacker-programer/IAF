@@ -127,7 +127,6 @@ impl ToolResultStore {
         }
     }
 
-    /// Guarda un resultado completo y retorna un resumen truncado para el agente.
     /// Guarda un resultado completo y lo retorna ENTERO al agente.
     /// NO se trunca nada. El agente recibe el resultado completo y decide
     /// cuándo liberarlo con release_tool_result.
@@ -165,19 +164,12 @@ impl ToolResultStore {
     /// Recupera una página del resultado almacenado.
     /// page es 0-indexado, page_size en caracteres.
     pub fn fetch_page(&self, call_id: &str, page: usize, page_size: usize) -> Option<String> {
+        let entries = self.entries.lock().unwrap();
+        let entry = entries.get(call_id)?;
 
         let chars: Vec<char> = entry.full_content.chars().collect();
         let total_chars = chars.len();
         let total_pages = (total_chars as f64 / page_size as f64).ceil() as usize;
-
-        if page >= total_pages {
-            return Some(format!(
-                "Página {} fuera de rango. El resultado tiene {} páginas (0-{}).",
-                page, total_pages, total_pages.saturating_sub(1)
-            ));
-        }
-
-        let start = page * page_size;
         let end = std::cmp::min(start + page_size, total_chars);
         let chunk: String = chars[start..end].iter().collect();
 
