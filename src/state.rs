@@ -199,11 +199,7 @@ impl ToolResultStore {
     }
 
     /// Libera todos los resultados más antiguos que `max_age_secs`.
-        entries.remove(call_id).is_some()
-    /// Libera todos los resultados más antiguos que `max_age_secs`.
     pub fn reap_old(&self, max_age_secs: u64) -> usize {
-        let now = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_secs();
         let mut entries = self.entries.lock().unwrap();
