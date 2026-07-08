@@ -200,6 +200,8 @@ impl ToolResultStore {
 
     /// Libera todos los resultados más antiguos que `max_age_secs`.
     pub fn reap_old(&self, max_age_secs: u64) -> usize {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_secs();
         let mut entries = self.entries.lock().unwrap();
@@ -207,11 +209,11 @@ impl ToolResultStore {
         entries.retain(|_, v| now - v.stored_at < max_age_secs);
         before - entries.len()
     }
+
     pub fn len(&self) -> usize {
         self.entries.lock().unwrap().len()
     }
 }
-
 // ============================================================================
 // Sub-Agent Manager — Múltiples agentes en paralelo
 // ============================================================================
