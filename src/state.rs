@@ -180,7 +180,11 @@ impl ToolResultStore {
 
         let start = page * page_size;
         let end = std::cmp::min(start + page_size, total_chars);
+        let start = page * page_size;
+        let end = std::cmp::min(start + page_size, total_chars);
         let chunk: String = chars[start..end].iter().collect();
+
+        Some(format!(
             "--- Página {}/{} (caracteres {}-{} de {}) ---\n{}",
             page + 1,
             total_pages,
@@ -190,10 +194,6 @@ impl ToolResultStore {
             chunk
         ))
     }
-
-    /// Libera un resultado de la memoria.
-    pub fn release(&self, call_id: &str) -> bool {
-        let mut entries = self.entries.lock().unwrap();
         entries.remove(call_id).is_some()
     }
 
