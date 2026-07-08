@@ -152,7 +152,7 @@ impl ToolResultStore {
 
         // Siempre devolver el contenido COMPLETO. El agente decide cuándo liberar.
         // Solo se añade un footer informativo con el ID para que sepa que puede
-        // usar release_tool_result cuando ya no necesite este resultado.
+        // usar release_tool_result cuando ya no necesites este resultado.
         format!(
             "{}\n\n[ID: {} | {} caracteres | usa release_tool_result(\"{}\") cuando ya no necesites este resultado]",
             full_content,
@@ -161,18 +161,10 @@ impl ToolResultStore {
             call_id
         )
     }
-            pages,
-            call_id,
-            call_id,
-            call_id
-        )
-    }
 
     /// Recupera una página del resultado almacenado.
     /// page es 0-indexado, page_size en caracteres.
     pub fn fetch_page(&self, call_id: &str, page: usize, page_size: usize) -> Option<String> {
-        let entries = self.entries.lock().unwrap();
-        let entry = entries.get(call_id)?;
 
         let chars: Vec<char> = entry.full_content.chars().collect();
         let total_chars = chars.len();
