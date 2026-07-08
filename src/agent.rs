@@ -1147,7 +1147,6 @@ pub async fn run_agent_loop(
                             json!({"error": "sub_agent_id es requerido."}).to_string()
                         } else {
                             let agents = state.sub_agents.agents.lock().unwrap();
-                            let found = agents.iter().find(|(id, _)| id == sub_id || id.starts_with(sub_id)).map(|(id, _)| id.clone());
                             let found = agents.iter().find(|(id, _)| *id == sub_id || id.starts_with(sub_id)).map(|(id, _)| id.clone());
                             match found {
                                 Some(full_id) => {
