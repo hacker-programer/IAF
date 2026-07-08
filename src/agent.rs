@@ -368,9 +368,7 @@ pub async fn run_agent_loop(
             "type": "function",
             "function": {
                 "name": "fetch_tool_result",
-            "function": {
-                "name": "fetch_tool_result",
-                "description": "Recupera una pÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡gina del resultado completo de una herramienta previamente ejecutada. Usa esto cuando un resultado fue demasiado grande y se te mostrÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³ solo un resumen con un ID. page es 0-indexado.",
+                "description": "Recupera una página del resultado completo de una herramienta previamente ejecutada. Usa esto cuando un resultado fue demasiado grande y se te mostró solo un resumen con un ID. page es 0-indexado.",
                 "parameters": {
                     "type": "object",
                     "properties": {
