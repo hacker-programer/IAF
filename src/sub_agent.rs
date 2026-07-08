@@ -6,11 +6,10 @@
 //! - Contexto heredado (resumen del agente principal)
 //! - Canal de resultados para comunicación asíncrona
 
-use std::sync::Arc;
 use std::path::Path;
 use serde_json::{json, Value};
 use uuid::Uuid;
-use crate::state::{AppState, SubAgentStatus, SubAgentManager};
+use crate::state::{AppState, SubAgentStatus};
 
 /// Contexto que el agente principal pasa a un sub-agente.
 #[derive(Clone)]
@@ -133,8 +132,6 @@ pub fn is_path_allowed(file_path: &str, allowed_paths: &[String]) -> bool {
 }
 
 /// Ejecuta un sub-agente con un conjunto limitado de iteraciones.
-/// El sub-agente tiene acceso a las mismas herramientas pero con
-/// restricciones de path y un límite de iteraciones más bajo.
 async fn run_sub_agent(
     state: &AppState,
     ctx: SubAgentContext,
@@ -191,7 +188,7 @@ async fn run_sub_agent(
             ));
         }
 
-        // Check interruption
+        // Verificar interrupción
         {
             let status = state.active_agent.lock().unwrap();
             if status.interrupted {
@@ -281,9 +278,7 @@ async fn run_sub_agent(
             let content = message_val["content"].as_str().unwrap_or("");
             messages.push(message_val.clone());
 
-            // Si el sub-agente responde sin tool calls, probablemente terminó
             if !content.is_empty() {
-                // Verificar si parece un mensaje final
                 if content.contains("finalizar_tarea") || content.contains("tarea completada")
                     || content.contains("Tarea finalizada") || content.contains("he terminado")
                 {
@@ -294,7 +289,6 @@ async fn run_sub_agent(
                     ));
                 }
 
-                // Darle otra oportunidad de usar herramientas
                 messages.push(json!({
                     "role": "user",
                     "content": "Si has terminado tu tarea, llama a finalizar_tarea. Si no, continúa trabajando con las herramientas disponibles."
@@ -456,14 +450,12 @@ async fn execute_sub_agent_tool(
                 let proj_path = get_project_path_from_state(state, proj_name);
                 let full_path = Path::new(&proj_path).join(rel_path);
 
-                // Crear directorios padres si no existen
                 if let Some(parent) = full_path.parent() {
                     let _ = std::fs::create_dir_all(parent);
                 }
 
                 match std::fs::write(&full_path, content) {
                     Ok(_) => {
-                        // Intentar git add + commit + push
                         let _ = std::process::Command::new("git")
                             .args(&["add", rel_path])
                             .current_dir(&proj_path)
@@ -495,7 +487,6 @@ async fn execute_sub_agent_tool(
         "execute_powershell" => {
             let command = args["command"].as_str().unwrap_or("");
 
-            // Sanitización de seguridad básica
             let cmd_lower = command.to_lowercase();
             if cmd_lower.contains("taskkill") || cmd_lower.contains("stop-process") {
                 return "[BLOQUEADO] Comando potencialmente peligroso bloqueado.".to_string();
@@ -535,7 +526,7 @@ async fn execute_sub_agent_tool(
             let query = args["query"].as_str().unwrap_or("");
             if let Some(ref proj_name) = ctx.project_name {
                 let proj_path = get_project_path_from_state(state, proj_name);
-                match crate::agent::semantic_search_in_project(&proj_path, query).await {
+                match crate::agent::search_code_in_project(&proj_path, query, "").await {
                     Ok(results) => results,
                     Err(e) => format!("Error en búsqueda: {}", e),
                 }
