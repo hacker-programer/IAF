@@ -110,7 +110,6 @@ pub fn spawn_sub_agent(
         task_description,
         allowed_paths_display,
         id_short,
-        id_short,
         id_short
     ))
 }
