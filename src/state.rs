@@ -249,10 +249,9 @@ pub enum SubAgentStatus {
 
 /// Handle para gestionar un sub-agente en ejecución.
 #[derive(Clone)]
+/// Handle para gestionar un sub-agente en ejecución.
+#[derive(Clone, Serialize, Deserialize)]
 pub struct SubAgentHandle {
-    /// ID único del sub-agente.
-    pub id: String,
-    /// Descripción de la tarea asignada.
     pub task_description: String,
     /// Nombre del proyecto en el que trabaja.
     pub project_name: Option<String>,
