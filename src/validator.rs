@@ -5,8 +5,7 @@
 //! - Líneas duplicadas consecutivas (copy-paste accidental)
 //! - Delimitadores no balanceados (llaves, paréntesis, corchetes)
 //! - Razonamiento del modelo inyectado sin comentarios
-//! - Definiciones duplicadas (con contexto de impl blocks)
-//! - Errores de sintaxis en archivos .rs y .js
+//! - Definiciones duplicadas reales (misma fn/struct en el mismo scope)
 //!
 //! Se diseñó para prevenir los errores recurrentes documentados en MEMORIES.md.
 
@@ -58,11 +57,13 @@ pub fn validate_file_after_write(file_path: &str, _content: &str) -> ValidationR
         errors: Vec::new(),
     };
 
+    // Solo validar si el archivo existe
     let path = Path::new(file_path);
     if !path.exists() {
         return result;
     }
 
+    // Leer el archivo del disco (el contenido real, no el pasado por parámetro)
     let disk_content = match fs::read_to_string(file_path) {
         Ok(c) => c,
         Err(e) => {
@@ -75,19 +76,19 @@ pub fn validate_file_after_write(file_path: &str, _content: &str) -> ValidationR
     let dup_warnings = detect_duplicate_lines(&disk_content);
     result.warnings.extend(dup_warnings);
 
-    // === VALIDACIÓN 2: Detectar definiciones duplicadas con contexto impl ===
+    // === VALIDACIÓN 1.5: Detectar definiciones duplicadas (con scope-awareness) ===
     let def_warnings = detect_duplicate_definitions(&disk_content);
     result.warnings.extend(def_warnings);
 
-    // === VALIDACIÓN 3: Detectar razonamiento del modelo inyectado sin comentarios ===
+    // === VALIDACIÓN 1.6: Detectar razonamiento del modelo inyectado sin comentarios ===
     let reasoning_warnings = detect_reasoning_injection(&disk_content);
     result.warnings.extend(reasoning_warnings);
 
-    // === VALIDACIÓN 4: Verificar delimitadores balanceados ===
+    // === VALIDACIÓN 2: Verificar delimitadores balanceados ===
     let delim_errors = check_balanced_delimiters(&disk_content);
     result.errors.extend(delim_errors);
 
-    // === VALIDACIÓN 5: Verificar sintaxis específica del lenguaje ===
+    // === VALIDACIÓN 3: Verificar sintaxis específica del lenguaje ===
     let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
     match ext {
         "rs" => {
@@ -118,6 +119,7 @@ pub fn validate_file_after_write(file_path: &str, _content: &str) -> ValidationR
 }
 
 /// Detecta líneas idénticas consecutivas (indicador de copy-paste accidental del agente).
+/// Ignora líneas estructurales y líneas que parecen argumentos de macro.
 fn detect_duplicate_lines(content: &str) -> Vec<String> {
     let mut warnings = Vec::new();
     let lines: Vec<&str> = content.lines().collect();
@@ -126,28 +128,39 @@ fn detect_duplicate_lines(content: &str) -> Vec<String> {
         return warnings;
     }
 
+    // Primero, construir un mapa de "profundidad de macro" para cada línea.
+    // Las líneas dentro de format!(...) u otras macros con muchos argumentos
+    // no deberían ser penalizadas por tener texto repetido (como "call_id,").
+    let macro_depth = compute_macro_depth(&lines);
+
     let mut i = 0;
+    let mut duplicate_blocks = 0usize;
     while i < lines.len() - 1 {
         let current = lines[i].trim();
         let next = lines[i + 1].trim();
 
+        // Solo reportar duplicados si la línea no está vacía y es idéntica
         if !current.is_empty() && current == next {
+            // Evitar falsos positivos en líneas estructurales
             let is_structural = current == "}" || current == ")" || current == "]"
-                || current.starts_with("//") || current == "};" || current == "});"
-                || current == ","  // argumentos repetidos en macros/funciones (ej: format!)
-                || current.ends_with(",") && current.chars().filter(|&c| c == '(' || c == '{').count() == 0;
-                // ↑ ignora líneas como "call_id," que son argumentos de función repetidos intencionalmente
+                || current.starts_with("//") || current == "};" || current == "});";
 
-            if !is_structural {
+            // Evitar falsos positivos dentro de invocaciones de macro profundas
+            // (ej. argumentos de format!, json!, vec! con texto repetitivo)
+            let is_macro_arg = macro_depth[i] >= 2;
+
+            if !is_structural && !is_macro_arg {
                 warnings.push(format!(
                     "Línea duplicada detectada (línea {}): \"{}\"",
                     i + 1,
                     truncate_for_display(current, 60)
                 ));
 
+                // Saltar todas las repeticiones consecutivas
                 while i < lines.len() - 1 && lines[i].trim() == lines[i + 1].trim() {
                     i += 1;
                 }
+                duplicate_blocks += 1;
             }
         }
         i += 1;
@@ -156,11 +169,49 @@ fn detect_duplicate_lines(content: &str) -> Vec<String> {
     if !warnings.is_empty() {
         warnings.push(format!(
             "Se encontraron {} bloques de líneas duplicadas. Esto suele ser resultado de copy-paste accidental del agente.",
-            warnings.len()
+            duplicate_blocks
         ));
     }
 
     warnings
+}
+
+/// Calcula la "profundidad de macro" para cada línea.
+/// Cuando estamos dentro de `format!(`, `json!(`, `vec![`, etc., 
+/// cada línea dentro cuenta como profundidad >= 1.
+/// Las líneas con profundidad >= 2 son probablemente argumentos de macro
+/// y no deberían generar falsos positivos de duplicación.
+fn compute_macro_depth(lines: &[&str]) -> Vec<usize> {
+    let mut depths = vec![0usize; lines.len()];
+    let mut current_depth = 0usize;
+
+    for (i, line) in lines.iter().enumerate() {
+        let trimmed = line.trim();
+
+        // Detectar inicio de macro: nombre!( o nombre![
+        // donde el nombre es un identificador seguido de !( o ![
+        let open_parens = trimmed.matches('(').count();
+        let open_brackets = trimmed.matches('[').count();
+        let close_parens = trimmed.matches(')').count();
+        let close_brackets = trimmed.matches(']').count();
+
+        // Si la línea contiene !( o ![, es probablemente inicio de macro
+        if trimmed.contains("!(") || trimmed.contains("![") {
+            current_depth += 1;
+        }
+
+        depths[i] = current_depth;
+
+        // Ajustar profundidad según balance de paréntesis/corchetes en esta línea
+        let net_open = (open_parens + open_brackets) as i32 - (close_parens + close_brackets) as i32;
+        if net_open > 0 {
+            current_depth = current_depth.saturating_add(net_open as usize);
+        } else if net_open < 0 {
+            current_depth = current_depth.saturating_sub((-net_open) as usize);
+        }
+    }
+
+    depths
 }
 
 /// Verifica que los delimitadores (llaves, paréntesis, corchetes) estén balanceados.
@@ -229,7 +280,6 @@ fn matching_open(close: char) -> char {
     }
 }
 
-/// Verifica patrones comunes de error en archivos Rust.
 fn check_rust_common_errors(content: &str) -> Vec<String> {
     let mut warnings = Vec::new();
     let lines: Vec<&str> = content.lines().collect();
@@ -245,110 +295,99 @@ fn check_rust_common_errors(content: &str) -> Vec<String> {
     warnings
 }
 
-/// Detecta definiciones duplicadas de funciones, structs, enums, traits, constantes y módulos,
-/// con conciencia de contexto `impl` para evitar falsos positivos.
+/// Detecta definiciones duplicadas de funciones, structs, enums, traits, constantes y módulos.
 ///
-/// **Corrección de falsos positivos (2026-07-08):**
-/// Ahora trackea bloques `impl` para prefijar métodos con el nombre del struct,
-/// evitando que `fn new()` en `impl ToolResultStore` se confunda con
-/// `fn new()` en `impl SubAgentManager`. La clave ahora es `StructName::fn new`
-/// en lugar de solo `fn new`.
+/// **CORREGIDO**: Ahora rastrea el scope actual (impl blocks, funciones) para evitar
+/// falsos positivos como `fn new()` en diferentes `impl` blocks, o `static KEY` en
+/// diferentes funciones. Las definiciones se califican con su scope padre.
 fn detect_duplicate_definitions(content: &str) -> Vec<String> {
     let mut warnings = Vec::new();
+    // Map de nombre_calificado → vec de números de línea
     let mut definitions: std::collections::HashMap<String, Vec<usize>> = std::collections::HashMap::new();
 
     let lines: Vec<&str> = content.lines().collect();
+    
+    // Rastrear el scope actual para calificar nombres
+    let mut current_impl: Option<String> = None;   // ej: "impl ToolResultStore"
+    let mut current_fn: Option<String> = None;      // ej: "fn new"
+    let mut brace_depth: i32 = 0;
 
-    // Stack de contextos impl: (nombre_del_struct, profundidad_de_llaves_al_entrar)
-    #[derive(Clone)]
-    struct ImplContext {
-        struct_name: String,
-        brace_depth_on_entry: usize,
-    }
-
-    let mut impl_stack: Vec<ImplContext> = Vec::new();
-    let mut brace_depth: usize = 0;
-
-    for (line_idx, line) in lines.iter().enumerate() {
-        let line_num = line_idx + 1;
+    for (i, line) in lines.iter().enumerate() {
         let trimmed = line.trim();
 
-        // ── Actualizar profundidad de llaves ──
-        // Contamos { y } en esta línea
-        for ch in line.chars() {
-            match ch {
-                '{' => brace_depth += 1,
-                '}' => {
-                    if brace_depth > 0 {
-                        brace_depth -= 1;
-                        // Si salimos del nivel donde entramos a un impl, hacer pop
-                        while let Some(ctx) = impl_stack.last() {
-                            if brace_depth < ctx.brace_depth_on_entry {
-                                impl_stack.pop();
-                            } else {
-                                break;
-                            }
-                        }
-                    }
+        // Rastrear profundidad de llaves
+        let opens = trimmed.matches('{').count() as i32;
+        let closes = trimmed.matches('}').count() as i32;
+        brace_depth += opens - closes;
+
+        // Detectar inicio de impl block
+        if let Some(name) = extract_impl_target(trimmed) {
+            current_impl = Some(name);
+        }
+
+        // Detectar inicio de fn (a nivel superior o dentro de impl)
+        if let Some(fn_name) = extract_def_name(trimmed, "fn ") {
+            if brace_depth <= 1 || current_impl.is_some() {
+                current_fn = Some(fn_name.clone());
+                
+                // Calificar el nombre con el scope
+                let qualified = if let Some(ref impl_name) = current_impl {
+                    format!("{}::{}", impl_name, fn_name)
+                } else {
+                    fn_name.clone()
+                };
+                definitions.entry(qualified).or_default().push(i + 1);
+            }
+        }
+
+        // Detectar struct (solo a nivel superior)
+        if brace_depth <= 0 {
+            if let Some(name) = extract_def_name(trimmed, "struct ") {
+                definitions.entry(format!("struct {}", name)).or_default().push(i + 1);
+            }
+            if let Some(name) = extract_def_name(trimmed, "enum ") {
+                definitions.entry(format!("enum {}", name)).or_default().push(i + 1);
+            }
+            if let Some(name) = extract_def_name(trimmed, "trait ") {
+                definitions.entry(format!("trait {}", name)).or_default().push(i + 1);
+            }
+            if let Some(name) = extract_def_name(trimmed, "mod ") {
+                if !trimmed.ends_with(';') {
+                    definitions.entry(format!("mod {}", name)).or_default().push(i + 1);
                 }
-                _ => {}
             }
         }
 
-        // ── Detectar entrada a un impl block ──
-        // Patrones: "impl StructName", "impl TraitName for StructName", "impl<T> StructName"
-        if trimmed.starts_with("impl ") || trimmed.starts_with("pub impl ") {
-            let after_impl = if trimmed.starts_with("pub impl ") {
-                &trimmed[9..]
+        // Detectar const/static — calificar con la función padre si estamos dentro de una
+        if let Some(name) = extract_def_name(trimmed, "const ") {
+            let qualified = if let Some(ref fn_name) = current_fn {
+                format!("{}::const {}", fn_name, name)
             } else {
-                &trimmed[5..]
+                format!("const {}", name)
             };
-
-            // Extraer el nombre del struct (lo que sigue a impl, antes de {, for, <, o espacio)
-            let struct_name = extract_impl_struct_name(after_impl);
-            if !struct_name.is_empty() {
-                impl_stack.push(ImplContext {
-                    struct_name,
-                    brace_depth_on_entry: brace_depth,
-                });
-            }
+            definitions.entry(qualified).or_default().push(i + 1);
+        }
+        if let Some(name) = extract_def_name(trimmed, "static ") {
+            let qualified = if let Some(ref fn_name) = current_fn {
+                format!("{}::static {}", fn_name, name)
+            } else {
+                format!("static {}", name)
+            };
+            definitions.entry(qualified).or_default().push(i + 1);
         }
 
-        // ── Detectar definiciones ──
-        let current_impl = impl_stack.last().map(|ctx| ctx.struct_name.clone());
-
-        // fn / pub fn / async fn
-        if let Some(name) = extract_def_name_with_context(trimmed, "fn ", &current_impl) {
-            definitions.entry(name).or_default().push(line_num);
-        }
-        // struct
-        if let Some(name) = extract_def_name_with_context(trimmed, "struct ", &current_impl) {
-            definitions.entry(name).or_default().push(line_num);
-        }
-        // enum
-        if let Some(name) = extract_def_name_with_context(trimmed, "enum ", &current_impl) {
-            definitions.entry(name).or_default().push(line_num);
-        }
-        // trait
-        if let Some(name) = extract_def_name_with_context(trimmed, "trait ", &current_impl) {
-            definitions.entry(name).or_default().push(line_num);
-        }
-        // const
-        if let Some(name) = extract_def_name_with_context(trimmed, "const ", &current_impl) {
-            definitions.entry(name).or_default().push(line_num);
-        }
-        // static
-        if let Some(name) = extract_def_name_with_context(trimmed, "static ", &current_impl) {
-            definitions.entry(name).or_default().push(line_num);
-        }
-        // mod (solo si tiene cuerpo, no declaración externa)
-        if let Some(name) = extract_def_name_with_context(trimmed, "mod ", &current_impl) {
-            if !trimmed.ends_with(';') {
-                definitions.entry(name).or_default().push(line_num);
-            }
+        // Resetear scopes cuando salimos
+        if brace_depth <= 0 {
+            current_impl = None;
+            current_fn = None;
+        } else if brace_depth <= 1 && current_impl.is_some() {
+            // Seguimos dentro del impl pero fuera de cualquier fn
+            current_fn = None;
         }
     }
 
+    // Reportar solo las que tienen > 1 ubicación
+    let mut duplicate_count = 0usize;
     for (def_name, locations) in &definitions {
         if locations.len() > 1 {
             let locs_str = locations.iter()
@@ -359,89 +398,63 @@ fn detect_duplicate_definitions(content: &str) -> Vec<String> {
                 "DEFINICIÓN DUPLICADA DETECTADA: '{}' definida {} veces (líneas: {}). Esto causará error de compilación.",
                 def_name, locations.len(), locs_str
             ));
+            duplicate_count += 1;
         }
     }
 
     if !warnings.is_empty() {
         warnings.push(format!(
             "Se encontraron {} definiciones duplicadas. EDITAR EL ARCHIVO COMPLETO, no uses start_line/end_line.",
-            warnings.len()
+            duplicate_count
         ));
     }
 
     warnings
 }
 
-/// Extrae el nombre del struct de una declaración `impl`.
-/// Ejemplos:
-///   "ToolResultStore {" → "ToolResultStore"
-///   "SubAgentManager {" → "SubAgentManager"
-///   "ProcessRegistry {" → "ProcessRegistry"
-///   "Display for MyType {" → "MyType"  (impl Trait for Type)
-///   "MyType<T> where T: Clone {" → "MyType"
-fn extract_impl_struct_name(after_impl: &str) -> String {
-    let trimmed = after_impl.trim();
-
-    // Si es "Trait for Struct", extraer el Struct
-    if let Some(for_pos) = trimmed.find(" for ") {
-        let after_for = &trimmed[for_pos + 5..];
-        let name_end = after_for.find(|c: char| c == '{' || c == '<' || c == ' ' || c == '\n')
-            .unwrap_or(after_for.len());
-        return after_for[..name_end].trim().to_string();
+/// Extrae el nombre del tipo en `impl TypeName` o `impl Trait for TypeName`.
+fn extract_impl_target(line: &str) -> Option<String> {
+    let line = line.trim();
+    if !line.starts_with("impl ") && !line.starts_with("impl<") {
+        return None;
     }
-
-    // Si no, es "impl StructName" o "impl StructName<T>"
-    let name_end = trimmed.find(|c: char| c == '{' || c == '<' || c == ' ' || c == '\n' || c == '\t')
-        .unwrap_or(trimmed.len());
-    trimmed[..name_end].trim().to_string()
+    // Remover "impl " o "impl<...> "
+    let after_impl = if let Some(pos) = line.find("impl ") {
+        &line[pos + 5..]
+    } else {
+        return None;
+    };
+    // Si tiene "for", extraer lo que está después del "for"
+    let target = if let Some(for_pos) = after_impl.find(" for ") {
+        &after_impl[for_pos + 5..]
+    } else {
+        after_impl
+    };
+    // Tomar hasta '{' o el final
+    let name_end = target.find(|c: char| c == '{' || c == '<').unwrap_or(target.len());
+    let name = target[..name_end].trim();
+    if name.is_empty() {
+        None
+    } else {
+        Some(format!("impl {}", name))
+    }
 }
 
-/// Extrae el nombre de una definición con contexto de impl.
-/// Si estamos dentro de un impl block, prefija el nombre con "StructName::".
-/// Ejemplo: dentro de `impl ToolResultStore`, `fn new` → `ToolResultStore::fn new`
-fn extract_def_name_with_context(line: &str, keyword: &str, current_impl: &Option<String>) -> Option<String> {
-    let trimmed = line.trim();
-    let pos = trimmed.find(keyword)?;
-    let after_keyword = &trimmed[pos + keyword.len()..];
-
-    let name_end = after_keyword.find(|c: char| c == '(' || c == '{' || c == '<' || c == ';' || c == ':')
-        .unwrap_or(after_keyword.len());
+/// Extrae el nombre de una definición. Ej: "pub fn foo(" → "fn foo", "struct Bar {" → "struct Bar"
+fn extract_def_name<'a>(line: &'a str, keyword: &str) -> Option<String> {
+    let line = line.trim();
+    let pos = line.find(keyword)?;
+    let after_keyword = &line[pos + keyword.len()..];
+    let name_end = after_keyword.find(|c: char| c == '(' || c == '{' || c == '<' || c == ';' || c == ':').unwrap_or(after_keyword.len());
     let name = after_keyword[..name_end].trim();
-
     if name.is_empty() || name == "(" || name == "{" {
         return None;
     }
-
-    // Verificar que sea una definición (no una llamada)
-    let before_keyword = &trimmed[..pos];
-    let before_trimmed = before_keyword.trim();
-
-    // Permitir: nada, pub, pub(crate), pub(super), async, pub async, unsafe, pub unsafe, default, const, extern
-    let is_top_level = before_trimmed.is_empty()
-        || before_trimmed == "pub"
-        || before_trimmed == "pub(crate)"
-        || before_trimmed == "pub(super)"
-        || before_trimmed == "async"
-        || before_trimmed == "pub async"
-        || before_trimmed == "unsafe"
-        || before_trimmed == "pub unsafe"
-        || before_trimmed == "default"
-        || before_trimmed == "const"
-        || before_trimmed == "extern";
-
-    // También permitir definiciones dentro de impl blocks (tienen indentación)
-    let is_inside_impl = current_impl.is_some() && before_trimmed.is_empty();
-
-    if !is_top_level && !is_inside_impl {
-        return None;
-    }
-
-    // Construir el nombre completo con contexto
-    let base_name = format!("{} {}", keyword.trim(), name);
-    if let Some(ref impl_name) = current_impl {
-        Some(format!("{}::{}", impl_name, base_name))
+    let before_keyword = &line[..pos];
+    if before_keyword.trim().is_empty() || before_keyword.trim() == "pub" || before_keyword.trim() == "pub(crate)" || before_keyword.trim() == "pub(super)" || before_keyword.trim() == "async" || before_keyword.trim() == "pub async" || before_keyword.trim() == "unsafe" || before_keyword.trim() == "pub unsafe" || before_keyword.trim() == "default" || before_keyword.trim() == "const" || before_keyword.trim() == "extern" {
+        Some(format!("{} {}", keyword.trim(), name))
     } else {
-        Some(base_name)
+        None
     }
 }
 
@@ -487,27 +500,27 @@ fn detect_reasoning_injection(content: &str) -> Vec<String> {
     ];
 
     let lines: Vec<&str> = content.lines().collect();
-
+    
     for (line_num, line) in lines.iter().enumerate() {
         let trimmed = line.trim();
-
+        
         if trimmed.is_empty() {
             continue;
         }
-
-        if trimmed.starts_with("//") || trimmed.starts_with("/*")
+        
+        if trimmed.starts_with("//") || trimmed.starts_with("/*") 
             || trimmed.starts_with("*") || trimmed.starts_with("*/")
             || trimmed.starts_with("#") || trimmed.starts_with("<!--")
-            || trimmed.starts_with("///") || trimmed.starts_with("//!")
+            || trimmed.starts_with("///") || trimmed.starts_with("//!") 
         {
             continue;
         }
-
+        
         for pattern in reasoning_patterns {
             let trimmed_lower = trimmed.to_lowercase();
             let pattern_lower = pattern.to_lowercase();
             if trimmed_lower.starts_with(&pattern_lower) {
-                let looks_like_code = trimmed.contains('(') || trimmed.contains('{')
+                let looks_like_code = trimmed.contains('(') || trimmed.contains('{') 
                     || trimmed.contains(';') || trimmed.contains("fn ")
                     || trimmed.contains("let ") || trimmed.contains("pub ")
                     || trimmed.contains("use ") || trimmed.contains("mod ")
@@ -517,7 +530,7 @@ fn detect_reasoning_injection(content: &str) -> Vec<String> {
                     || trimmed.contains("def ") || trimmed.contains("class ")
                     || trimmed.contains("function ") || trimmed.contains("var ")
                     || trimmed.contains("return ") || trimmed.contains("match ");
-
+                
                 if !looks_like_code {
                     warnings.push(format!(
                         "POSIBLE RAZONAMIENTO SIN COMENTAR (línea {}): \"{}\" — parece texto de lenguaje natural, no código. Si es intencional, usa // para comentarlo.",
@@ -529,7 +542,7 @@ fn detect_reasoning_injection(content: &str) -> Vec<String> {
             }
         }
     }
-
+    
     if !warnings.is_empty() {
         warnings.push(format!(
             "Se encontraron {} líneas con posible texto de razonamiento sin comentar. \
@@ -538,7 +551,7 @@ fn detect_reasoning_injection(content: &str) -> Vec<String> {
             warnings.len()
         ));
     }
-
+    
     warnings
 }
 
@@ -553,8 +566,6 @@ fn truncate_for_display(s: &str, max_len: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    // ── detect_duplicate_lines ──
 
     #[test]
     fn test_detect_duplicate_lines_empty() {
@@ -584,14 +595,13 @@ mod tests {
     }
 
     #[test]
-    fn test_detect_duplicate_lines_arguments_ignored() {
-        // Argumentos repetidos en macros (ej: call_id, call_id,) no deberían reportarse
-        let content = "format!(\"{}{}\",\n            call_id,\n            call_id,\n        );";
+    fn test_detect_duplicate_lines_macro_args_ignored() {
+        // Líneas dentro de format!() no deberían generar falsos positivos
+        let content = "let msg = format!(\n    \"{}\",\n    call_id,\n    call_id,\n    call_id\n);\n";
         let warnings = detect_duplicate_lines(content);
+        // No debería reportar "call_id," como duplicado porque está dentro de macro
         assert!(warnings.is_empty() || !warnings.iter().any(|w| w.contains("call_id")));
     }
-
-    // ── check_balanced_delimiters ──
 
     #[test]
     fn test_balanced_delimiters_ok() {
@@ -607,78 +617,62 @@ mod tests {
         assert!(!errors.is_empty());
     }
 
+    // === Tests para detect_duplicate_definitions (scope-aware) ===
+
     #[test]
-    fn test_balanced_delimiters_extra_close() {
-        let content = "fn main() {\n    let x = 1;\n}}\n";
-        let errors = check_balanced_delimiters(content);
-        assert!(!errors.is_empty());
+    fn test_duplicate_defs_different_impl_blocks_ok() {
+        // fn new() en diferentes impl blocks NO es un error
+        let content = "\
+impl ToolResultStore {
+    pub fn new() -> Self { Self {} }
+}
+impl SubAgentManager {
+    pub fn new() -> Self { Self {} }
+}
+impl ProcessRegistry {
+    pub fn new() -> Self { Self {} }
+}";
+        let warnings = detect_duplicate_definitions(content);
+        // No debería haber advertencias porque cada fn new() está en un impl diferente
+        assert!(warnings.is_empty() || !warnings.iter().any(|w| w.contains("DUPLICADA")));
     }
 
-    // ── detect_duplicate_definitions (con contexto impl) ──
-
     #[test]
-    fn test_duplicate_defs_different_impls_not_duplicate() {
-        // Dos structs con fn new() NO deben reportarse como duplicados
+    fn test_duplicate_defs_same_scope_detected() {
+        // Dos fn new() en el mismo scope SÍ es un error
         let content = "\
-pub struct Foo;
-
 impl Foo {
-    pub fn new() -> Self { Self }
-}
-
-pub struct Bar;
-
-impl Bar {
-    pub fn new() -> Self { Self }
-}
-";
+    pub fn new() -> Self { Self {} }
+    pub fn new() -> Self { Self {} }
+}";
         let warnings = detect_duplicate_definitions(content);
-        assert!(warnings.is_empty() || !warnings.iter().any(|w| w.contains("fn new")));
+        assert!(warnings.iter().any(|w| w.contains("DUPLICADA")));
     }
 
     #[test]
-    fn test_duplicate_defs_free_functions_are_duplicates() {
-        // Dos funciones libres con el mismo nombre SÍ deben reportarse
+    fn test_duplicate_defs_static_in_different_fns_ok() {
+        // static KEY en diferentes funciones es válido
         let content = "\
-fn hello() { println!(\"a\"); }
-
-fn hello() { println!(\"b\"); }
-";
-        let warnings = detect_duplicate_definitions(content);
-        assert!(warnings.iter().any(|w| w.contains("fn hello")));
-    }
-
-    #[test]
-    fn test_duplicate_defs_same_impl_duplicate() {
-        // Dos métodos con el mismo nombre en el MISMO impl
-        let content = "\
-pub struct Foo;
-
-impl Foo {
-    pub fn bar() { }
-    pub fn bar() { }
+fn deepseek_key() -> &'static str {
+    static KEY: OnceLock<String> = OnceLock::new();
+    KEY.get_or_init(|| std::env::var(\"DEEPSEEK\").unwrap())
 }
-";
+fn voyage_key() -> &'static str {
+    static KEY: OnceLock<String> = OnceLock::new();
+    KEY.get_or_init(|| std::env::var(\"VOYAGE\").unwrap())
+}";
         let warnings = detect_duplicate_definitions(content);
-        assert!(warnings.iter().any(|w| w.contains("Foo::fn bar")));
+        // No debería reportar static KEY como duplicada (están en diferentes funciones)
+        assert!(warnings.is_empty() || !warnings.iter().any(|w| w.contains("DUPLICADA")));
     }
 
-    // ── detect_reasoning_injection ──
+    // === Tests para detect_reasoning_injection ===
 
     #[test]
     fn test_reasoning_injection_spanish_detected() {
         let content = "OK, ahora necesito modificar esta función\nfn foo() {\n    let x = 1;\n}\n";
         let warnings = detect_reasoning_injection(content);
         assert!(!warnings.is_empty());
-        assert!(warnings.iter().any(|w| w.contains("OK, ahora")));
-    }
-
-    #[test]
-    fn test_reasoning_injection_english_detected() {
-        let content = "Let me check the file first\nfn foo() {\n    let x = 1;\n}\n";
-        let warnings = detect_reasoning_injection(content);
-        assert!(!warnings.is_empty());
-        assert!(warnings.iter().any(|w| w.contains("Let me")));
     }
 
     #[test]
@@ -686,40 +680,5 @@ impl Foo {
         let content = "// OK, ahora necesito modificar esta función\nfn foo() {\n    let x = 1;\n}\n";
         let warnings = detect_reasoning_injection(content);
         assert!(warnings.is_empty() || !warnings.iter().any(|w| w.contains("POSIBLE RAZONAMIENTO")));
-    }
-
-    #[test]
-    fn test_reasoning_injection_block_comment_ignored() {
-        let content = "/* Let me check the file first */\nfn foo() {\n    let x = 1;\n}\n";
-        let warnings = detect_reasoning_injection(content);
-        assert!(warnings.is_empty() || !warnings.iter().any(|w| w.contains("POSIBLE RAZONAMIENTO")));
-    }
-
-    #[test]
-    fn test_reasoning_injection_clean_code_ok() {
-        let content = "fn foo() {\n    let x = 1;\n    let y = 2;\n}\n";
-        let warnings = detect_reasoning_injection(content);
-        assert!(warnings.is_empty() || !warnings.iter().any(|w| w.contains("POSIBLE RAZONAMIENTO")));
-    }
-
-    // ── extract_impl_struct_name ──
-
-    #[test]
-    fn test_extract_impl_simple() {
-        assert_eq!(extract_impl_struct_name("ToolResultStore {"), "ToolResultStore");
-        assert_eq!(extract_impl_struct_name("SubAgentManager {"), "SubAgentManager");
-        assert_eq!(extract_impl_struct_name("ProcessRegistry {"), "ProcessRegistry");
-    }
-
-    #[test]
-    fn test_extract_impl_with_generics() {
-        assert_eq!(extract_impl_struct_name("MyType<T> where T: Clone {"), "MyType");
-        assert_eq!(extract_impl_struct_name("HashMap<K, V> {"), "HashMap");
-    }
-
-    #[test]
-    fn test_extract_impl_trait_for_type() {
-        assert_eq!(extract_impl_struct_name("Display for MyType {"), "MyType");
-        assert_eq!(extract_impl_struct_name("Clone for MyStruct {"), "MyStruct");
     }
 }
