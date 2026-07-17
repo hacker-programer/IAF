@@ -1022,6 +1022,7 @@ fn build_app(state: AppState, is_port_80: bool) -> Router {
         .route("/api/auth/verify", post(verify))
         .route("/api/auth/keygen", get(keygen))
         .route("/api/auth/logout", post(logout))
+        .route("/api/auth/sign", post(sign_nonce))
         .route("/api/projects", get(get_projects))
         .route("/api/agent/status", get(get_agent_status))
         .route("/api/chat", post(chat_endpoint))
