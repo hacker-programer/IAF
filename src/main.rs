@@ -537,8 +537,7 @@ async fn study_build_prompt(
     };
 
     let base = if let Some(ref pid) = payload.project_id {
-        let projects = state.study_engine.projects.lock();
-        projects.get(pid)
+        let projects = state.study_engine.projects.lock().unwrap();
             .and_then(|p| p.study_prompt.clone())
             .unwrap_or_else(|| STUDY_SYSTEM_PROMPT.to_string())
     } else {
