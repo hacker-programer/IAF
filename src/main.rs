@@ -996,7 +996,7 @@ async fn get_agent_status(State(state): State<AppState>) -> impl IntoResponse {
 // MAIN — Doble Puerto
 // ============================================================================
 
-fn build_app(state: AppState, is_port_80: bool) -> Router {
+fn build_app(state: AppState, _is_port_80: bool) -> Router {
     let cors = CorsLayer::permissive();
 
     // Rutas comunes (ambos puertos)
