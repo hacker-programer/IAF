@@ -1,5 +1,5 @@
 use axum::{
-    extract::{State, Json, Path as AxumPath, Query},
+    extract::{State, Json, Path as AxumPath},
     response::IntoResponse,
     routing::{get, post, put, delete},
     Router,
