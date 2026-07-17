@@ -252,9 +252,8 @@ async fn keygen() -> impl IntoResponse {
 struct LogoutRequest {
     token: String,
 }
+}
 
-async fn logout(State(state): State<AppState>, Json(payload): Json<LogoutRequest>) -> impl IntoResponse {
-    state.session_store.revoke_token(&payload.token);
 async fn logout(State(state): State<AppState>, Json(payload): Json<LogoutRequest>) -> impl IntoResponse {
     state.session_store.revoke_token(&payload.token);
     Json(json!({ "status": "ok", "message": "Sesión cerrada." }))
@@ -262,10 +261,52 @@ async fn logout(State(state): State<AppState>, Json(payload): Json<LogoutRequest
 
 /// Helper para que los scripts .ps1 firmen nonces localmente.
 /// Recibe la clave privada (hex) y el nonce (base64), devuelve la firma (base64).
-/// Solo funciona desde localhost para seguridad.
 #[derive(Deserialize)]
 struct SignRequest {
     private_key: String,
+    nonce: String,
+}
+
+async fn sign_nonce(Json(payload): Json<SignRequest>) -> impl IntoResponse {
+    use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
+    let nonce_bytes = match BASE64.decode(&payload.nonce) {
+        Ok(b) => b,
+        Err(e) => return Json(json!({ "status": "error", "message": format!("Nonce inválido: {}", e) })),
+    };
+
+    match crate::auth::sign_message(&payload.private_key, &nonce_bytes) {
+        Ok(signature) => Json(json!({ "status": "ok", "signature": signature })),
+        Err(e) => Json(json!({ "status": "error", "message": e })),
+    }
+}
+
+/// Verifica si el cliente está instalado en la PC del usuario.
+async fn client_check() -> impl IntoResponse {
+    let possible_paths = vec![
+        "client/target/release/iaf-client.exe",
+        "client/target/debug/iaf-client.exe",
+        "iaf-client.exe",
+    ];
+
+    let mut found = Vec::new();
+    for path in &possible_paths {
+        if std::path::Path::new(path).exists() {
+            found.push(path.to_string());
+        }
+    }
+
+    Json(json!({
+        "status": "ok",
+        "client_installed": !found.is_empty(),
+        "found_at": found,
+        "expected_paths": possible_paths,
+        "instructions": if found.is_empty() {
+            "Para instalar el cliente: cd client && cargo build --release. Luego ejecuta: .\\client\\target\\release\\iaf-client.exe <server_url> <username> <token>"
+        } else {
+            "Cliente encontrado. Ejecutalo con: iaf-client.exe http://127.0.0.1:8080 <username> <token>"
+        }
+    }))
+}
     nonce: String,
 }
 
