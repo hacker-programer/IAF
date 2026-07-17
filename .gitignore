@@ -4,3 +4,4 @@ citybound/
 .config/
 Cargo.lock
 debug_messages.json
+.config/users.json
