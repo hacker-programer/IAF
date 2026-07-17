@@ -329,7 +329,6 @@ struct CreateUserRequest {
     study_access: Option<bool>,
     programming_access: Option<bool>,
 }
-}
 
 async fn admin_create_user(
     State(state): State<AppState>,
