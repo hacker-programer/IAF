@@ -5,6 +5,7 @@ use std::collections::{HashMap, HashSet};
 use std::process::Command;
 
 use crate::desktop::DesktopController;
+use crate::auth::{UserStore, ChallengeStore, SessionStore};
 
 // ============================================================================
 // Proyectos y Configuración
@@ -627,4 +628,10 @@ pub struct AppState {
     pub tool_results: ToolResultStore,
     /// Gestor de sub-agentes para trabajo paralelo.
     pub sub_agents: SubAgentManager,
+    /// Gestor de usuarios (carga/guarda users.json).
+    pub user_store: UserStore,
+    /// Almacén de challenges criptográficos (nonces efímeros, TTL 5 min).
+    pub challenge_store: ChallengeStore,
+    /// Almacén de sesiones autenticadas (tokens post-login, TTL 24h).
+    pub session_store: SessionStore,
 }
