@@ -572,6 +572,7 @@ async fn chat_endpoint(
     };
 
     let is_admin = username == "admin_local" || state.user_store.is_admin(&username);
+    let has_session = payload.session_id.is_some();
     let session_id = payload.session_id.unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
 
     // Determinar directorio de chats
@@ -579,8 +580,7 @@ async fn chat_endpoint(
     let _ = fs::create_dir_all(&chat_dir);
 
     // Buscar chat existente o crear nuevo
-    let chat_file = if payload.session_id.is_some() {
-        // Buscar archivo existente que termine con -<session_id>.json
+    let chat_file = if has_session {
         let mut found = None;
         if let Ok(entries) = fs::read_dir(&chat_dir) {
             for entry in entries.filter_map(Result::ok) {
