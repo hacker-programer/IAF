@@ -33,13 +33,13 @@ use crate::state::{
 };
 use crate::desktop::DesktopController;
 use crate::auth::{UserStore, ChallengeStore, SessionStore, UserLimits, generate_keypair};
+use crate::study::{StudyEngine, StudyPhase, UserLearningProfile, UserKnowledgeBase, StudyProject};
 use crate::sync::SyncStore;
 use crate::client_protocol::{
     ClientRequest, ClientResponse, ClientAction,
     ConnectRequest, ConnectResponse, HeartbeatRequest,
     ClientResponseWrapper, PollRequest, PollResponse, ConnectedClient,
 };
-
 use std::sync::OnceLock;
 
 fn deepseek_key() -> &'static str {
