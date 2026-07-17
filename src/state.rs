@@ -612,6 +612,34 @@ fn get_parent_pid(pid: u32) -> Option<u32> {
 pub struct AppState {
     pub config_path: PathBuf,
     pub prompts: Arc<Mutex<PromptConfig>>,
+/// Obtiene el ParentProcessId de un proceso Windows usando Get-Process (PowerShell).
+/// Reemplaza al obsoleto wmic.
+/// Retorna None si el proceso no existe.
+fn get_parent_pid(pid: u32) -> Option<u32> {
+    let output = Command::new("powershell")
+        .args(&[
+            "-NoProfile",
+            "-Command",
+            &format!(
+                "(Get-Process -Id {} -ErrorAction SilentlyContinue).ParentProcessId",
+                pid
+            ),
+        ])
+        .output()
+        .ok()?;
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    stdout.trim().parse::<u32>().ok()
+}
+
+// ============================================================================
+// AppState — Estado Global de la Aplicación
+// ============================================================================
+
+#[derive(Clone)]
+pub struct AppState {
+    pub config_path: PathBuf,
+    pub prompts: Arc<Mutex<PromptConfig>>,
     pub projects: Arc<Mutex<Vec<Project>>>,
     pub base_workspace: PathBuf,
     pub pending_captcha: Arc<Mutex<Option<CaptchaRequest>>>,
@@ -621,10 +649,8 @@ pub struct AppState {
     pub image_store: Arc<Mutex<HashMap<String, String>>>,
     pub context_store: Arc<Mutex<HashMap<String, ContextEntry>>>,
     /// Registro seguro de procesos hijo spawnados por el agente.
-    /// Permite matar procesos de forma segura con validación de parent PID.
     pub process_registry: ProcessRegistry,
-    /// Almacén de resultados completos de herramientas (reemplaza truncado arbitrario).
-    /// El agente recibe IDs y puede paginar/liberar resultados bajo demanda.
+    /// Almacén de resultados completos de herramientas.
     pub tool_results: ToolResultStore,
     /// Gestor de sub-agentes para trabajo paralelo.
     pub sub_agents: SubAgentManager,
@@ -634,4 +660,14 @@ pub struct AppState {
     pub challenge_store: ChallengeStore,
     /// Almacén de sesiones autenticadas (tokens post-login, TTL 24h).
     pub session_store: SessionStore,
+    /// Motor de estudio (perfiles, knowledge base, hipótesis).
+    pub study_engine: crate::study::StudyEngine,
+    /// Almacén de sincronización de proyectos de estudio.
+    pub sync_store: crate::sync::SyncStore,
+    /// Clientes conectados (para ejecución remota).
+    pub connected_clients: Arc<Mutex<HashMap<String, crate::client_protocol::ConnectedClient>>>,
+    /// Cola de solicitudes pendientes para cada cliente.
+    pub client_pending_requests: Arc<Mutex<HashMap<String, Vec<crate::client_protocol::ClientRequest>>>>,
+    /// Cola de respuestas recibidas de clientes.
+    pub client_responses: Arc<Mutex<HashMap<String, crate::client_protocol::ClientResponse>>>,
 }
