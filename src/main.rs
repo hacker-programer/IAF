@@ -5,8 +5,7 @@ use axum::{
     Router,
     http::{HeaderMap, StatusCode},
 };
-
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use serde_json::json;
 use std::collections::HashMap;
 use std::fs;
@@ -29,16 +28,15 @@ mod client_protocol;
 
 use crate::state::{
     AppState, Project, PromptConfig, ActiveAgentStatus, ProcessRegistry, ToolResultStore, SubAgentManager,
-    ChatSession, ChatMessage, AuditStep,
+    ChatSession, ChatMessage,
 };
 use crate::desktop::DesktopController;
 use crate::auth::{UserStore, ChallengeStore, SessionStore, UserLimits, generate_keypair};
-use crate::study::{StudyEngine, StudyPhase, UserLearningProfile, UserKnowledgeBase, StudyProject};
+use crate::study::StudyEngine;
 use crate::sync::SyncStore;
 use crate::client_protocol::{
-    ClientRequest, ClientResponse, ClientAction,
-    ConnectRequest, ConnectResponse, HeartbeatRequest,
-    ClientResponseWrapper, PollRequest, PollResponse, ConnectedClient,
+    ClientRequest, ConnectRequest, HeartbeatRequest,
+    ClientResponseWrapper, PollRequest, ConnectedClient,
 };
 use std::sync::OnceLock;
 
