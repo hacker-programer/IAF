@@ -287,10 +287,12 @@ async fn client_check() -> impl IntoResponse {
     let mut found = Vec::new();
     for path in &possible_paths {
         if std::path::Path::new(path).exists() {
+    for path in &possible_paths {
+        if std::path::Path::new(path).exists() {
             found.push(path.to_string());
         }
+    }
     Json(json!({
-        "status": "ok",
         "client_installed": !found.is_empty(),
         "found_at": found,
         "expected_paths": possible_paths,
