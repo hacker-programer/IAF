@@ -5,3 +5,5 @@ citybound/
 Cargo.lock
 debug_messages.json
 .config/users.json
+*.pem
+.config/*.pem
