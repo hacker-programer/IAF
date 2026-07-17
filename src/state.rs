@@ -408,4 +408,6 @@ pub struct AppState {
     pub connected_clients: Arc<Mutex<HashMap<String, crate::client_protocol::ConnectedClient>>>,
     pub client_pending_requests: Arc<Mutex<HashMap<String, Vec<crate::client_protocol::ClientRequest>>>>,
     pub client_responses: Arc<Mutex<HashMap<String, crate::client_protocol::ClientResponse>>>,
+    /// true si este AppState sirve al puerto 80 (admin local sin auth)
+    pub port_80: bool,
 }
