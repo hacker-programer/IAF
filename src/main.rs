@@ -31,8 +31,8 @@ use crate::state::{
     AppState, Project, PromptConfig, ActiveAgentStatus, ProcessRegistry, ToolResultStore, SubAgentManager,
     ChatSession, ChatMessage, AuditStep,
 };
+use crate::desktop::DesktopController;
 use crate::auth::{UserStore, ChallengeStore, SessionStore, UserLimits, generate_keypair};
-use crate::study::{StudyEngine, StudyPhase, UserLearningProfile, UserKnowledgeBase, StudyProject};
 use crate::sync::SyncStore;
 use crate::client_protocol::{
     ClientRequest, ClientResponse, ClientAction,
