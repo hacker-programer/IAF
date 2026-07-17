@@ -64,9 +64,8 @@ fn extract_bearer_token(headers: &HeaderMap) -> Option<String> {
 async fn require_admin(
     state: &AppState,
     headers: &HeaderMap,
-    is_port_80: bool,
 ) -> Result<String, (StatusCode, String)> {
-    if is_port_80 {
+    if state.port_80 {
         return Ok("admin_local".to_string());
     }
     let token = extract_bearer_token(headers)
@@ -83,9 +82,8 @@ async fn require_admin(
 async fn require_auth(
     state: &AppState,
     headers: &HeaderMap,
-    is_port_80: bool,
 ) -> Result<String, (StatusCode, String)> {
-    if is_port_80 {
+    if state.port_80 {
         return Ok("admin_local".to_string());
     }
     let token = extract_bearer_token(headers)
