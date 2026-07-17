@@ -1140,4 +1140,4 @@ fn detect_base_workspace() -> PathBuf {
     PathBuf::from(".")
 }
 
-use crate::desktop::DesktopController;
+}
