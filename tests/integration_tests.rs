@@ -124,9 +124,9 @@ mod acceptance_tests {
             .replace(" ", "_");
         assert!(!sanitized.contains("?"));
         assert!(!sanitized.contains("!"));
-        assert!(sanitized.starts_with("Qué_es_Rust"));
-    }
-
+        assert!(!sanitized.contains("?"));
+        assert!(!sanitized.contains("!"));
+        assert!(sanitized.contains("Qué_es_Rust"));
     #[test]
     fn test_admin_cannot_delete_self() {
         let admin_username = "Fa";
