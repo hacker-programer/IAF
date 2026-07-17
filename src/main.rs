@@ -289,8 +289,6 @@ async fn client_check() -> impl IntoResponse {
         if std::path::Path::new(path).exists() {
             found.push(path.to_string());
         }
-    }
-    Json(json!({
     Json(json!({
         "status": "ok",
         "client_installed": !found.is_empty(),
@@ -309,20 +307,16 @@ async fn client_check() -> impl IntoResponse {
 // ============================================================================
 
 async fn admin_list_users(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> impl IntoResponse {
+    let admin = match require_admin(&state, &headers, false).await {
+        Ok(a) => a, Err(e) => return (e.0, Json(json!({ "status": "error", "message": e.1 }))).into_response(),
     };
     let _ = admin;
     let users = state.user_store.list_users();
     Json(json!({ "status": "ok", "users": users })).into_response()
 }
-
-#[derive(Deserialize)]
-struct CreateUserRequest {
-    username: String,
-    password: Option<String>,
-    public_key: Option<String>,
-    is_admin: bool,
-    permissions: Option<Vec<String>>,
-    study_access: Option<bool>,
     programming_access: Option<bool>,
 }
 
