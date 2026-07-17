@@ -1139,5 +1139,3 @@ fn detect_base_workspace() -> PathBuf {
     }
     PathBuf::from(".")
 }
-
-}
