@@ -329,10 +329,16 @@ struct CreateUserRequest {
     study_access: Option<bool>,
     programming_access: Option<bool>,
 }
+}
+
+async fn admin_create_user(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(payload): Json<CreateUserRequest>,
+) -> impl IntoResponse {
+    let _admin = match require_admin(&state, &headers, false).await {
         Ok(a) => a, Err(e) => return (e.0, Json(json!({ "status": "error", "message": e.1 }))).into_response(),
     };
-
-    let perms = payload.permissions.unwrap_or_else(|| vec!["read_file".into(), "search_code".into()]);
     let limits = if payload.is_admin { UserLimits::admin() } else { UserLimits::default() };
 
     let result = if payload.is_admin && payload.public_key.is_some() {
