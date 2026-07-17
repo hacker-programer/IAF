@@ -124,9 +124,9 @@ mod acceptance_tests {
             .replace(" ", "_");
         assert!(!sanitized.contains("?"));
         assert!(!sanitized.contains("!"));
-        assert!(!sanitized.contains("?"));
-        assert!(!sanitized.contains("!"));
         assert!(sanitized.contains("Qué_es_Rust"));
+    }
+
     #[test]
     fn test_admin_cannot_delete_self() {
         let admin_username = "Fa";
@@ -159,13 +159,13 @@ mod acceptance_tests {
     }
 
     #[test]
-    #[test]
     fn test_token_format() {
         // Tokens reales: "iaf_" + UUID sin guiones (32 hex chars) = 36 chars
         let token = "iaf_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6";
         assert!(token.starts_with("iaf_"));
         assert_eq!(token.len(), 36);
     }
+}
 // ============================================================================
 // Tests de Integración HTTP (requieren servidor corriendo)
 // ============================================================================
