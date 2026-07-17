@@ -18,12 +18,14 @@
 
 use ed25519_dalek::{VerifyingKey, SigningKey, Signature, Signer, Verifier};
 use rand::rngs::OsRng;
+use rand::RngCore;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
+use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
 
 // ============================================================================
 // Estructuras de Datos
@@ -349,8 +351,7 @@ impl ChallengeStore {
             },
         );
 
-        use base64::engine::general_purpose::STANDARD;
-        STANDARD.encode(nonce_bytes)
+        BASE64.encode(nonce_bytes)
     }
 
     /// Verifica la firma de un nonce. Retorna true si es válida.
@@ -369,8 +370,7 @@ impl ChallengeStore {
             .map_err(|e| format!("Clave pública inválida: {}", e))?;
 
         // 2. Decodificar nonce
-        use base64::engine::general_purpose::STANDARD;
-        let nonce_bytes = STANDARD
+        let nonce_bytes = BASE64
             .decode(nonce_b64)
             .map_err(|e| format!("Error decodificando nonce: {}", e))?;
 
@@ -406,7 +406,7 @@ impl ChallengeStore {
         }
 
         // 4. Decodificar firma
-        let sig_bytes = STANDARD
+        let sig_bytes = BASE64
             .decode(signature_b64)
             .map_err(|e| format!("Error decodificando firma: {}", e))?;
 
@@ -546,8 +546,7 @@ pub fn sign_message(private_key_hex: &str, message: &[u8]) -> Result<String, Str
         .map_err(|e| format!("Clave privada inválida: {}", e))?;
 
     let signature = signing_key.sign(message);
-    use base64::engine::general_purpose::STANDARD;
-    Ok(STANDARD.encode(signature.to_bytes()))
+    Ok(BASE64.encode(signature.to_bytes()))
 }
 
 #[cfg(test)]
@@ -567,8 +566,7 @@ mod tests {
         // Verify
         let pk_bytes = hex::decode(&public_hex).unwrap();
         let verifying_key = VerifyingKey::try_from(&pk_bytes[..]).unwrap();
-        use base64::engine::general_purpose::STANDARD;
-        let sig_bytes = STANDARD.decode(&signature_b64).unwrap();
+        let sig_bytes = BASE64.decode(&signature_b64).unwrap();
         let signature = Signature::try_from(&sig_bytes[..]).unwrap();
 
         assert!(verifying_key.verify(message, &signature).is_ok());
@@ -594,8 +592,7 @@ mod tests {
         assert_eq!(nonce_b64.len(), 44); // base64 of 32 bytes
 
         // Step 2: Sign the nonce
-        use base64::engine::general_purpose::STANDARD;
-        let nonce_bytes = STANDARD.decode(&nonce_b64).unwrap();
+        let nonce_bytes = BASE64.decode(&nonce_b64).unwrap();
         let signature_b64 = sign_message(&private_hex, &nonce_bytes).unwrap();
 
         // Step 3: Verify
@@ -621,8 +618,7 @@ mod tests {
         let challenge_store = ChallengeStore::new(300);
         let nonce_b64 = challenge_store.generate_challenge("testuser2");
 
-        use base64::engine::general_purpose::STANDARD;
-        let nonce_bytes = STANDARD.decode(&nonce_b64).unwrap();
+        let nonce_bytes = BASE64.decode(&nonce_b64).unwrap();
         let signature_b64 = sign_message(&private_hex, &nonce_bytes).unwrap();
 
         // First verification should succeed
