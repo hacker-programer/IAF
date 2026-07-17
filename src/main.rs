@@ -811,8 +811,6 @@ async fn sync_get_history(
 ) -> impl IntoResponse {
     let _username = match require_auth(&state, &headers, false).await {
         Ok(u) => u, Err(e) => return (e.0, Json(json!({ "status": "error", "message": e.1 }))).into_response(),
-    let _username = match require_auth(&state, &headers, false).await {
-        Ok(u) => u, Err(e) => return (e.0, Json(json!({ "status": "error", "message": e.1 }))).into_response(),
     };
     // path viene con URL encoding, restaurar
     let decoded_path = urlencoding::decode(&path).unwrap_or_else(|_| std::borrow::Cow::Borrowed(&path));
