@@ -1,96 +1,136 @@
-# DOCUMENTATION.md — Mapa Técnico del Proyecto IAF
+# DOCUMENTATION.md — Mapa Técnico del Proyecto IAF v2.0
 
-> **IAF (Intelligent Agent Framework)** — Framework de agente autónomo en Rust + Axum + DeepSeek API.
-> Servidor HTTP que orquesta un agente de desarrollo de software con herramientas,
-> sub-agentes paralelos, autenticación criptográfica y almacenamiento de resultados con IDs.
+> **IAF (Intelligent Agent Framework)** — Framework de agente autónomo + plataforma de enseñanza en Rust + Axum.
+> Servidor HTTP doble puerto (80 auto-admin, 8080 auth), autenticación dual (password + Ed25519),
+> motor de estudio con perfilado de aprendizaje, sincronización de proyectos y cliente de ejecución remota.
 
 ---
 
-## 📁 Estructura de Archivos Fuente
+## 📁 Estructura de Archivos
 
 | Archivo | Líneas | Rol |
 |---------|--------|-----|
-| `src/main.rs` | 1265 | Servidor HTTP (Axum), endpoints REST, inicialización, auth endpoints |
-| `src/agent.rs` | 2088 | Bucle principal del agente, herramientas, loop de ejecución |
-| `src/state.rs` | 647 | Estructuras de datos compartidas (AppState, ToolResultStore, SubAgentManager) |
-| `src/auth.rs` | 565 | Autenticación Ed25519 challenge-response, gestión de usuarios, sesiones |
-| `src/validator.rs` | 508 | Validación post-escritura (duplicados, delimitadores, contexto impl) |
-| `src/scraper.rs` | 170 | Búsqueda web vía DuckDuckGo Lite + fallback Google |
-| `src/sub_agent.rs` | 520 | Ejecución paralela de sub-agentes con restricciones de path |
-| `src/desktop.rs` | 165 | Control de mouse/teclado (rdev), lanzamiento de ejecutables |
-| `prompts/default_system_prompt.txt` | 517 | System prompt global del agente (reglas, técnicas de optimización) |
-| `.config/users.json` | (gitignored) | Usuarios, claves públicas, límites, permisos |
+| `src/main.rs` | ~680 | Servidor HTTP doble puerto, endpoints REST, migración de chats |
+| `src/auth.rs` | ~580 | Auth dual: contraseñas (argon2) + nonce Ed25519, UserStore, SessionStore |
+| `src/state.rs` | ~400 | AppState con todos los stores (StudyEngine, SyncStore, clientes) |
+| `src/study.rs` | ~570 | Motor de estudio: perfiles, knowledge base, hipótesis, engagement |
+| `src/sync.rs` | ~280 | Sincronización de proyectos entre amigos (push/pull/conflictos) |
+| `src/client_protocol.rs` | ~180 | Protocolo cliente-servidor para ejecución remota |
+| `src/agent.rs` | 2088 | Bucle principal del agente, herramientas |
+| `src/validator.rs` | 508 | Validación post-escritura |
+| `src/scraper.rs` | 170 | Búsqueda web DuckDuckGo Lite |
+| `src/sub_agent.rs` | 520 | Sub-agentes paralelos |
+| `src/desktop.rs` | 165 | Control de mouse/teclado |
+| `client/Cargo.toml` | 15 | Cliente binario independiente |
+| `client/src/main.rs` | ~350 | Ejecutor local (files, PowerShell, git, cargo) |
+| `prompts/study_system_prompt.txt` | 60 | System prompt del modo estudio |
+| `tests/integration_tests.rs` | ~250 | Tests de integración y aceptación |
 
 ---
 
-## 🔐 Sistema de Autenticación (`src/auth.rs`)
+## 🔐 Autenticación Dual
 
-### Flujo Challenge-Response (Ed25519)
+| Método | Usuarios | Endpoint |
+|--------|----------|----------|
+| **Username + Password (argon2id)** | Usuarios normales | `POST /api/auth/login` |
+| **Ed25519 Challenge-Response** | Solo admins | `POST /api/auth/challenge` → `POST /api/auth/verify` |
+
+### Estructura UserAccount (`src/auth.rs` línea ~40)
 
 ```
-Cliente                          Servidor
-  │                                 │
-  ├─ POST /api/auth/challenge ────>│  (1) Solicita nonce
-  │   { "username": "Fa" }          │
-  │                                 │
-  │<── { "nonce": "base64..." } ───┤  (2) Servidor genera 32 bytes aleatorios
-  │                                 │     Almacena en ChallengeStore (TTL 5 min)
-  │                                 │
-  │  (El cliente firma el nonce     │
-  │   con su clave privada Ed25519) │
-  │                                 │
-  ├─ POST /api/auth/verify ───────>│  (3) Envía firma
-  │   { "username","nonce",         │
-  │     "signature":"base64..." }   │     Verifica con clave pública almacenada
-  │                                 │     Consume el nonce (anti-replay)
-  │<── { "token":"iaf_...", ... } ──┤  (4) Sesión creada (TTL 24h)
+username, public_key?, password_hash?, is_admin, permissions[],
+limits: { max_tokens_per_day, max_api_calls_per_day, allowed_tools[],
+          max_sub_agents, max_projects, can_fork_repos,
+          can_execute_powershell, can_write_files },
+has_study_access, has_programming_access, created_at, key_updated_at
 ```
 
-### Estructuras Clave
+---
 
-| Estructura | Línea | Descripción |
-|-----------|-------|-------------|
-| `UserAccount` | ~40 | `username, public_key (hex 64), is_admin, permissions[], limits, created_at` |
-| `UserLimits` | ~63 | `max_tokens_per_day, max_api_calls_per_day, allowed_tools[], max_sub_agents, max_projects, can_fork_repos, can_execute_powershell, can_write_files` |
-| `UserStore` | ~129 | Carga/guarda users.json. CRUD de usuarios con validación de clave pública |
-| `ChallengeStore` | ~306 | Nonces efímeros (TTL 5 min). generate_challenge() y verify_challenge() con anti-replay |
-| `SessionStore` | ~443 | Tokens de sesión (TTL 24h). create_session(), validate_token(), revoke_token() |
-| `generate_keypair()` | ~537 | Genera par Ed25519 → (private_hex, public_hex) |
-| `sign_message()` | ~550 | Firma bytes con clave privada Ed25519 |
+## 🌐 Doble Puerto
 
-### Endpoints de Auth
+| Puerto | Auth | Acceso |
+|--------|------|--------|
+| **80** | Ninguno (auto-admin) | Total. Ejecuta localmente. Chats en `.config/chats/` |
+| **8080** | Requiere login | Según permisos. Chats en `.config/chats/<username>/` |
 
-| Método | Ruta | Auth | Descripción |
-|--------|------|------|-------------|
-| `GET` | `/api/auth/keygen` | No | Genera un par de claves Ed25519 (setup inicial) |
-| `POST` | `/api/auth/challenge` | No | Solicita un nonce (challenge) para firmar |
-| `POST` | `/api/auth/verify` | No | Verifica la firma del challenge → retorna token |
-| `POST` | `/api/auth/logout` | No | Invalida un token de sesión |
+---
 
-### Endpoints Admin (requieren token en header `Authorization: Bearer <token>`)
+## 📚 Modo Estudio
+
+### Fases
+
+1. **Exploración** — Perfilado del usuario (edad, neurología, juegos, hobbies, YouTubers). Prueba métodos de enseñanza.
+2. **Explotación** — Método optimizado encontrado. Mide rendimiento continuo.
+
+### API de Estudio
 
 | Método | Ruta | Descripción |
 |--------|------|-------------|
-| `GET` | `/api/admin/users` | Listar todos los usuarios |
-| `POST` | `/api/admin/users` | Crear nuevo usuario |
-| `PUT` | `/api/admin/users/:username/limits` | Actualizar límites de un usuario |
-| `PUT` | `/api/admin/users/:username/permissions` | Actualizar permisos |
-| `PUT` | `/api/admin/users/:username/key` | Cambiar clave pública |
-| `DELETE` | `/api/admin/users/:username` | Eliminar usuario |
-
-### Configuración Inicial
-
-1. Llamar a `GET /api/auth/keygen` para generar un par de claves
-2. Copiar `public_key` en `.config/users.json` (usar `.config/users.json.template` como base)
-3. Guardar `private_key` en un lugar seguro (variable de entorno o archivo protegido)
-4. Iniciar el servidor
+| `GET` | `/api/study/profile` | Obtener perfil de aprendizaje |
+| `POST` | `/api/study/profile` | Guardar perfil |
+| `GET` | `/api/study/knowledge` | Obtener knowledge base |
+| `POST` | `/api/study/projects` | Crear proyecto de estudio |
+| `GET` | `/api/study/projects` | Listar proyectos del usuario |
+| `POST` | `/api/study/projects/:id/members` | Agregar miembro |
+| `POST` | `/api/study/build-prompt` | Construir system prompt personalizado |
 
 ---
 
-## 🧩 Estructuras de Datos Principales (`src/state.rs`)
+## 🔄 Sincronización
 
-| Estructura | Línea aprox. | Descripción |
-|-----------|-------------|-------------|
-| `Project` | ~13 | `name: String, path: String, is_local: bool` — Proyecto registrado |
-| `PromptConfig` | ~19 | `global_default, global_current: String, projects: HashMap<String, String>` |
-| `ChatMessage` | ~33 | `role: String, content: String, timestamp: u64` |
+| Método | Ruta | Descripción |
+|--------|------|-------------|
+| `POST` | `/api/sync/process` | Procesar manifiesto de sync |
+| `POST` | `/api/sync/push` | Subir nueva versión de archivo |
+| `GET` | `/api/sync/history/:project_id/*path` | Historial de versiones |
+
+---
+
+## 🖥️ Cliente de Ejecución Remota
+
+| Método | Ruta | Descripción |
+|--------|------|-------------|
+| `POST` | `/api/client/connect` | Registrar cliente |
+| `POST` | `/api/client/heartbeat` | Heartbeat cada 30s |
+| `POST` | `/api/client/poll` | Polling de trabajo pendiente |
+| `POST` | `/api/client/response` | Enviar resultado de ejecución |
+
+El cliente se ejecuta: `iaf-client.exe <server_url> <username> <token>`
+
+---
+
+## 📝 Chats
+
+- **Formato**: `<titulo_sanitizado>-<UUID>.json`
+- **Admin/Port80**: `.config/chats/`
+- **Usuarios**: `.config/chats/<username>/`
+- **Migración automática** al iniciar el servidor
+
+---
+
+## 👑 Admin Endpoints
+
+| Método | Ruta | Descripción |
+|--------|------|-------------|
+| `GET` | `/api/admin/users` | Listar usuarios |
+| `POST` | `/api/admin/users` | Crear usuario |
+| `PUT` | `/api/admin/users/:username/limits` | Actualizar límites |
+| `PUT` | `/api/admin/users/:username/access` | study_access, programming_access |
+| `PUT` | `/api/admin/users/:username/password` | Cambiar contraseña |
+| `DELETE` | `/api/admin/users/:username` | Eliminar usuario |
+
+---
+
+## 🧪 Tests
+
+```bash
+# Unit tests
+cargo test --lib
+
+# Integration tests (requieren servidor)
+cargo test --test integration_tests -- --ignored
+
+# Todos los tests
+cargo test
+```
