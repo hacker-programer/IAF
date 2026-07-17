@@ -1044,8 +1044,8 @@ fn build_app(state: AppState, is_port_80: bool) -> Router {
         .route("/api/sync/process", post(sync_process))
         .route("/api/sync/push", post(sync_push_version))
         .route("/api/sync/history/:project_id/*path", get(sync_get_history))
-        // Client
         .route("/api/client/connect", post(client_connect))
+        .route("/api/client/check", get(client_check))
         .route("/api/client/heartbeat", post(client_heartbeat))
         .route("/api/client/poll", post(client_poll))
         .route("/api/client/response", post(client_response))
