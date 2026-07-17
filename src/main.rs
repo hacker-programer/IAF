@@ -287,12 +287,11 @@ async fn client_check() -> impl IntoResponse {
     let mut found = Vec::new();
     for path in &possible_paths {
         if std::path::Path::new(path).exists() {
-    for path in &possible_paths {
-        if std::path::Path::new(path).exists() {
             found.push(path.to_string());
         }
     }
     Json(json!({
+        "status": "ok",
         "client_installed": !found.is_empty(),
         "found_at": found,
         "expected_paths": possible_paths,
@@ -322,6 +321,7 @@ async fn admin_list_users(
 
 #[derive(Deserialize)]
 struct CreateUserRequest {
+    username: String,
     password: Option<String>,
     public_key: Option<String>,
     is_admin: bool,
@@ -329,13 +329,6 @@ struct CreateUserRequest {
     study_access: Option<bool>,
     programming_access: Option<bool>,
 }
-
-async fn admin_create_user(
-    State(state): State<AppState>,
-    headers: HeaderMap,
-    Json(payload): Json<CreateUserRequest>,
-) -> impl IntoResponse {
-    let _admin = match require_admin(&state, &headers, false).await {
         Ok(a) => a, Err(e) => return (e.0, Json(json!({ "status": "error", "message": e.1 }))).into_response(),
     };
 
