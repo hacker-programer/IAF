@@ -2,14 +2,13 @@
 // tests/integration_tests.rs — Tests Exhaustivos de Integración y Aceptación
 // ============================================================================
 
-use serde_json::json;
-
 // ============================================================================
 // Tests de Aceptación (E2E) — Sin servidor, validan lógica de negocio
 // ============================================================================
 
 #[cfg(test)]
 mod acceptance_tests {
+    use serde_json::json;
 
     #[test]
     fn test_full_user_journey_simulation() {
@@ -149,13 +148,11 @@ mod acceptance_tests {
 
     #[test]
     fn test_user_has_study_access_gate() {
-        // Usuario sin acceso a estudio no debería poder usar endpoints de estudio
         let has_study_access = false;
         let is_admin = false;
         let can_access_study = has_study_access || is_admin;
         assert!(!can_access_study);
 
-        // Admin siempre puede
         let is_admin2 = true;
         let can_access = false || is_admin2;
         assert!(can_access);
@@ -163,10 +160,9 @@ mod acceptance_tests {
 
     #[test]
     fn test_token_format() {
-        // Tokens deben empezar con "iaf_"
         let token = "iaf_a1b2c3d4e5f6g7h8i9j0";
         assert!(token.starts_with("iaf_"));
-        assert_eq!(token.len(), 27); // "iaf_" + 23 chars
+        assert_eq!(token.len(), 27);
     }
 }
 
@@ -225,7 +221,6 @@ mod integration_tests_http {
     #[ignore = "Requiere servidor corriendo con admin"]
     async fn test_admin_list_users() {
         let resp = get_json("/api/admin/users", None).await.unwrap();
-        // Sin token, debería dar 401
         assert_eq!(resp["status"], "error");
     }
 }
