@@ -317,6 +317,17 @@ async fn admin_list_users(
     let users = state.user_store.list_users();
     Json(json!({ "status": "ok", "users": users })).into_response()
 }
+    Json(json!({ "status": "ok", "users": users })).into_response()
+}
+
+#[derive(Deserialize)]
+struct CreateUserRequest {
+    username: String,
+    password: Option<String>,
+    public_key: Option<String>,
+    is_admin: bool,
+    permissions: Option<Vec<String>>,
+    study_access: Option<bool>,
     programming_access: Option<bool>,
 }
 
