@@ -291,6 +291,7 @@ async fn client_check() -> impl IntoResponse {
         }
     }
     Json(json!({
+    Json(json!({
         "status": "ok",
         "client_installed": !found.is_empty(),
         "found_at": found,
@@ -300,7 +301,6 @@ async fn client_check() -> impl IntoResponse {
         } else {
             "Cliente encontrado. Ejecutalo con: iaf-client.exe http://127.0.0.1:8080 <username> <token>"
         }
-    }))
     }))
 }
 
