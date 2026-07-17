@@ -349,10 +349,11 @@ mod tests {
         let loaded = engine.get_profile("student1").unwrap();
         assert_eq!(loaded.username, "student1");
     }
-    }
 
     #[test]
     fn test_knowledge_tracking() {
+        let engine = test_engine();
+        // Necesita al menos 3 demostraciones explícitas para superar el umbral de 0.3
         engine.record_knowledge_demonstration("student1", "rust", "fn main() {}", true).unwrap();
         engine.record_knowledge_demonstration("student1", "rust", "let x = 5;", true).unwrap();
         engine.record_knowledge_demonstration("student1", "rust", "struct Foo;", true).unwrap();
