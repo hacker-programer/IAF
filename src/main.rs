@@ -884,11 +884,12 @@ async fn auth_keygen() -> impl IntoResponse {
 // ============================================================================
 // MAIN
 // ============================================================================
-// MAIN
-// ============================================================================
 
 #[tokio::main]
 async fn main() {
+    // Detectar base_workspace dinámicamente en tiempo de ejecución
+    // (NO hardcodeado — usa IAF_WORKSPACE, dir del exe, o current_dir)
+    let base_workspace = detect_base_workspace();
     let config_dir = base_workspace.join(".config");
     fs::create_dir_all(&config_dir).unwrap_or_default();
     let _ = fs::create_dir_all(config_dir.join("chats"));
