@@ -338,8 +338,9 @@ async fn admin_create_user(
     let _admin = match require_admin(&state, &headers, false).await {
         Ok(a) => a, Err(e) => return (e.0, Json(json!({ "status": "error", "message": e.1 }))).into_response(),
     };
-    let limits = if payload.is_admin { UserLimits::admin() } else { UserLimits::default() };
 
+    let perms = payload.permissions.unwrap_or_else(|| vec!["read_file".into(), "search_code".into()]);
+    let limits = if payload.is_admin { UserLimits::admin() } else { UserLimits::default() };
     let result = if payload.is_admin && payload.public_key.is_some() {
         state.user_store.create_admin(&payload.username, &payload.public_key.unwrap(), perms, limits)
     } else if let Some(ref pw) = payload.password {
