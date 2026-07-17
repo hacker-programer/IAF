@@ -3,66 +3,128 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Agent-First System</title>
+    <title>IAF — Intelligent Agent Framework</title>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
     <div class="glass-bg"></div>
-    <div class="app-container">
+
+    <!-- ===== LOGIN SCREEN ===== -->
+    <div id="loginScreen" class="login-screen hidden">
+        <div class="login-card">
+            <div class="logo" style="text-align: center; margin-bottom: 24px;">
+                <span class="neon-text">IAF</span>
+            </div>
+            <h2 style="text-align: center; margin-bottom: 24px;">Iniciar Sesión</h2>
+            <div id="loginTabs" class="login-tabs">
+                <button class="login-tab active" data-tab="password">Usuario</button>
+                <button class="login-tab" data-tab="nonce">Admin (Nonce)</button>
+            </div>
+            <!-- Password login -->
+            <div id="loginPassword" class="login-form">
+                <input type="text" id="loginUser" placeholder="Usuario" autocomplete="username">
+                <input type="password" id="loginPass" placeholder="Contraseña" autocomplete="current-password">
+                <button id="loginBtn" class="btn btn-primary" style="width:100%">Entrar</button>
+            </div>
+            <!-- Nonce login -->
+            <div id="loginNonce" class="login-form hidden">
+                <input type="text" id="nonceUser" placeholder="Admin Username">
+                <div id="nonceStep1">
+                    <button id="getChallengeBtn" class="btn btn-primary" style="width:100%">Obtener Challenge</button>
+                </div>
+                <div id="nonceStep2" class="hidden">
+                    <label style="font-size:11px;color:var(--text-muted)">Nonce (cópialo y firmalo con tu clave privada)</label>
+                    <textarea id="nonceValue" rows="2" readonly style="width:100%;background:rgba(0,0,0,0.3);color:var(--accent);font-family:monospace;font-size:11px;padding:4px"></textarea>
+                    <input type="text" id="nonceSignature" placeholder="Firma (base64)">
+                    <button id="verifyNonceBtn" class="btn btn-success" style="width:100%">Verificar Firma</button>
+                </div>
+            </div>
+            <div id="loginError" class="login-error hidden"></div>
+        </div>
+    </div>
+
+    <div id="appContainer" class="app-container">
         <!-- Sidebar -->
         <aside class="sidebar">
             <div class="logo">
-                <span class="neon-text">AGENT</span>FIRST
+                <span class="neon-text">IAF</span>
+                <span id="userBadge" class="user-badge"></span>
             </div>
-            
+
+            <!-- Mode Toggle -->
+            <div class="mode-toggle">
+                <button id="modeProgramming" class="mode-btn active">💻 Programar</button>
+                <button id="modeStudy" class="mode-btn">📚 Estudiar</button>
+            </div>
+
             <section class="section">
                 <h3>Proyectos</h3>
                 <div class="project-actions">
                     <input type="text" id="repoUrl" placeholder="Repo de Github (URL o usuario/repo)">
                     <button id="forkBtn" class="btn btn-primary">Fork & Clone</button>
-                    
                     <div style="border-top: 1px solid var(--border-color); margin: 8px 0; padding-top: 8px;"></div>
-                    
                     <input type="text" id="localProjName" placeholder="Nombre Proyecto Local">
                     <input type="text" id="localProjPath" placeholder="Ruta Absoluta Carpeta">
                     <button id="addLocalBtn" class="btn btn-secondary">Agregar Carpeta Local</button>
                 </div>
-                <div id="projectList" class="project-list">
-                    <!-- Dinámico -->
-                </div>
+                <div id="projectList" class="project-list"></div>
             </section>
 
             <section class="section">
-                <h3>Historial de Chats</h3>
-                <div id="chatHistoryList" class="project-list">
-                    <!-- Dinámico -->
-                </div>
+                <h3>Historial</h3>
+                <div id="chatHistoryList" class="project-list"></div>
                 <button id="newChatBtn" class="btn btn-secondary" style="width: 100%; margin-top: 8px;">Nuevo Chat</button>
             </section>
 
             <section class="section config-section">
                 <h3>System Prompts</h3>
                 <div class="form-group">
-                    <label>Global (Editable)</label>
+                    <label>Global</label>
                     <textarea id="globalPrompt" rows="4"></textarea>
                 </div>
                 <div class="btn-group">
-                    <button id="savePromptsBtn" class="btn btn-success">Guardar Prompts</button>
-                    <button id="resetPromptBtn" class="btn btn-danger">Restaurar Defecto</button>
+                    <button id="savePromptsBtn" class="btn btn-success">Guardar</button>
+                    <button id="resetPromptBtn" class="btn btn-danger">Restaurar</button>
                 </div>
-
                 <div class="form-group project-prompt-group" style="margin-top: 12px;">
-                    <label>Prompt Local del Proyecto</label>
-                    <textarea id="localPrompt" rows="4" placeholder="Instrucciones específicas de este proyecto..."></textarea>
+                    <label>Prompt Local</label>
+                    <textarea id="localPrompt" rows="4" placeholder="Instrucciones específicas del proyecto..."></textarea>
                 </div>
             </section>
+
+            <!-- Study Profile (only in study mode) -->
+            <section id="studyProfileSection" class="section hidden">
+                <h3>🎓 Perfil de Estudio</h3>
+                <div class="form-group">
+                    <label>Edad</label>
+                    <input type="number" id="profileAge" min="5" max="120" placeholder="Opcional">
+                </div>
+                <div class="form-group">
+                    <label>Juegos Favoritos</label>
+                    <input type="text" id="profileGames" placeholder="Minecraft, Roblox...">
+                </div>
+                <div class="form-group">
+                    <label>Hobbies</label>
+                    <input type="text" id="profileHobbies" placeholder="dibujar, música...">
+                </div>
+                <div class="form-group">
+                    <label>Condiciones (TDAH, TEA...)</label>
+                    <input type="text" id="profileNeuro" placeholder="Opcional">
+                </div>
+                <button id="saveProfileBtn" class="btn btn-success" style="width:100%">Guardar Perfil</button>
+                <div id="studyPhase" style="margin-top:8px;font-size:11px;color:var(--text-muted)"></div>
+            </section>
+
+            <div style="margin-top: auto; padding: 12px;">
+                <button id="logoutBtn" class="btn btn-danger" style="width:100%">Cerrar Sesión</button>
+            </div>
         </aside>
 
-        <!-- Main Chat and Console area -->
+        <!-- Main -->
         <main class="main-content">
             <header class="header">
-                <h2>Proyecto Activo: <span id="activeProjectName">Ninguno (Global)</span></h2>
+                <h2><span id="activeProjectName">Ninguno (Global)</span> — <span id="activeMode">💻 Programar</span></h2>
                 <div class="header-actions">
                     <div id="captchaAlert" class="captcha-alert hidden">
                         <span>⚠️ Google CAPTCHA</span>
@@ -75,92 +137,82 @@
                 <div class="chat-pane">
                     <div class="chat-area" id="chatArea">
                         <div class="message system-msg">
-                            <strong>Sistema:</strong> ¡Bienvenido al panel Agent-First! Selecciona un proyecto, configura sus instrucciones o agrega una carpeta para empezar.
+                            <strong>Sistema:</strong> ¡Bienvenido a IAF! Selecciona un proyecto y modo para empezar.
                         </div>
                     </div>
-
                     <footer class="footer">
                         <div class="input-container">
-                            <textarea id="chatInput" placeholder="Pídele al agente resolver tareas... (Ej: 'Crea pruebas unitarias para el controlador de usuarios')"></textarea>
+                            <textarea id="chatInput" placeholder="Escribe tu mensaje..."></textarea>
                             <div class="btn-group-vertical" style="display: flex; flex-direction: column; gap: 8px;">
-                                <button id="sendBtn" class="btn btn-primary" style="white-space: nowrap;">Refinar y Enviar</button>
-                                <button id="sendDirectBtn" class="btn btn-warning" style="white-space: nowrap; font-size: 11px; padding: 4px 8px;">Enviar Directo</button>
+                                <button id="sendBtn" class="btn btn-primary">Refinar y Enviar</button>
+                                <button id="sendDirectBtn" class="btn btn-warning" style="font-size:11px;padding:4px 8px;">Enviar Directo</button>
                             </div>
                         </div>
                     </footer>
                 </div>
 
-                <!-- Auditoría / Consola del Agente -->
                 <div class="console-pane">
                     <div class="console-header">
-                        <h3>Consola de Auditoría</h3>
-                        <button id="interruptBtn" class="btn btn-danger btn-sm hidden">Interrumpir Agente</button>
-                        <button id="summarizeStepsBtn" class="btn btn-warning btn-sm" style="margin-left: 8px;">Resumir Pasos</button>
+                        <h3>Consola</h3>
+                        <button id="interruptBtn" class="btn btn-danger btn-sm hidden">Interrumpir</button>
+                        <button id="summarizeStepsBtn" class="btn btn-warning btn-sm" style="margin-left:8px;">Resumir</button>
                     </div>
                     <div id="consoleArea" class="console-area">
-                        <div class="console-empty">El agente está inactivo. Envía un mensaje para comenzar a auditar sus pasos.</div>
+                        <div class="console-empty">El agente está inactivo.</div>
                     </div>
                 </div>
             </div>
         </main>
     </div>
 
-    <!-- Modal para CAPTCHA -->
+    <!-- Modals (CAPTCHA, Refine, Agent Questions, Plan) -->
     <div id="captchaModal" class="modal hidden">
         <div class="modal-content">
             <h3>Resolver CAPTCHA</h3>
-            <p>Se detectó actividad sospechosa al buscar en Google. Abre la página para verificar que eres humano, resuelve el CAPTCHA y pega el código HTML completo o contenido visible resultante aquí para que el agente continúe.</p>
-            <a id="captchaLink" href="#" target="_blank" class="btn btn-primary">Abrir página de Google</a>
-            <textarea id="captchaSolution" rows="6" placeholder="Pega el HTML o contenido aquí..."></textarea>
+            <p>Abrí la página, resolvé el CAPTCHA y pegá el resultado:</p>
+            <a id="captchaLink" href="#" target="_blank" class="btn btn-primary">Abrir página</a>
+            <textarea id="captchaSolution" rows="6" placeholder="Pega el HTML aquí..."></textarea>
             <div class="btn-group">
-                <button id="submitCaptchaBtn" class="btn btn-success">Enviar Solución</button>
+                <button id="submitCaptchaBtn" class="btn btn-success">Enviar</button>
                 <button id="closeCaptchaBtn" class="btn btn-danger">Cancelar</button>
             </div>
         </div>
     </div>
 
-    <!-- Modal para Refinar Prompt -->
     <div id="refinePromptModal" class="modal hidden">
-        <div class="modal-content" style="max-width: 600px;">
-            <h3>Prompt Refinado y Estructurado</h3>
-            <p>El sistema ha estructurado tu instrucción. Puedes **editarlo manualmente** abajo directamente o proveer **instrucciones adicionales** de cambio al modelo y hacer clic en **Re-Refinar con Instrucción**:</p>
-            <textarea id="refinedPromptText" rows="12" style="font-family: inherit; font-size: 13px; width: 100%; padding: 8px; background: rgba(0,0,0,0.2); border: 1px solid var(--border-color); border-radius: 8px; color: var(--text-color); margin-bottom: 12px;"></textarea>
-            
-            <div class="form-group" style="margin-bottom: 12px;">
-                <label style="font-size: 12px; color: var(--text-muted);">Instrucción adicional para el modelo (Ej: "No, no es que no pueda... Siempre, es que si X, ahí no puede"):</label>
-                <input type="text" id="refinePromptFeedback" placeholder="Escribe aquí las correcciones al prompt..." style="width: 100%; padding: 8px; background: rgba(0,0,0,0.2); border: 1px solid var(--border-color); border-radius: 8px; color: var(--text-color);">
+        <div class="modal-content" style="max-width:600px;">
+            <h3>Prompt Refinado</h3>
+            <textarea id="refinedPromptText" rows="12" style="width:100%;background:rgba(0,0,0,0.2);border:1px solid var(--border-color);border-radius:8px;color:var(--text-color);padding:8px;margin-bottom:12px;"></textarea>
+            <div class="form-group" style="margin-bottom:12px;">
+                <label style="font-size:12px;color:var(--text-muted);">Instrucción adicional:</label>
+                <input type="text" id="refinePromptFeedback" placeholder="Correcciones al prompt..." style="width:100%;padding:8px;background:rgba(0,0,0,0.2);border:1px solid var(--border-color);border-radius:8px;color:var(--text-color);">
             </div>
-
             <div class="btn-group">
-                <button id="applyRefinedPromptBtn" class="btn btn-success">Sí, Aplicar y Enviar</button>
-                <button id="reRefinePromptBtn" class="btn btn-warning">Re-Refinar con Instrucción</button>
-                <button id="cancelRefinedPromptBtn" class="btn btn-danger">No, Usar Original</button>
+                <button id="applyRefinedPromptBtn" class="btn btn-success">Aplicar y Enviar</button>
+                <button id="reRefinePromptBtn" class="btn btn-warning">Re-Refinar</button>
+                <button id="cancelRefinedPromptBtn" class="btn btn-danger">Usar Original</button>
             </div>
         </div>
     </div>
 
-    <!-- Modal para Preguntas del Agente (Pausa Activa) -->
     <div id="agentQuestionModal" class="modal hidden">
         <div class="modal-content">
             <h3>El Agente Necesita Clarificación</h3>
-            <p>El agente se ha pausado y requiere que definas la visión exacta antes de continuar:</p>
-            <div id="agentQuestionPrompt" style="background: rgba(255,255,255,0.05); padding: 12px; border-radius: 8px; font-weight: bold; margin-bottom: 12px;"></div>
-            <textarea id="agentQuestionResponse" rows="4" placeholder="Escribe tu respuesta aquí..."></textarea>
+            <div id="agentQuestionPrompt" style="background:rgba(255,255,255,0.05);padding:12px;border-radius:8px;font-weight:bold;margin-bottom:12px;"></div>
+            <textarea id="agentQuestionResponse" rows="4" placeholder="Tu respuesta..."></textarea>
             <div class="btn-group">
                 <button id="submitAgentResponseBtn" class="btn btn-success">Enviar Respuesta</button>
             </div>
         </div>
     </div>
 
-    <!-- Modal para Aprobación del Plan (Plan Review) -->
     <div id="agentPlanModal" class="modal hidden">
-        <div class="modal-content" style="max-width: 650px;">
+        <div class="modal-content" style="max-width:650px;">
             <h3>Plan de Cambios Propuesto</h3>
-            <p>Revisa el plan detallado de cambios que propone el agente antes de que modifique los archivos de tu máquina:</p>
-            <div id="agentPlanContent" style="background: rgba(0,0,0,0.3); border: 1px solid var(--border-color); padding: 16px; border-radius: 8px; max-height: 250px; overflow-y: auto; font-family: 'JetBrains Mono', monospace; font-size: 12px; white-space: pre-wrap; margin-bottom: 12px;"></div>
+            <div id="agentPlanContent" style="background:rgba(0,0,0,0.3);border:1px solid var(--border-color);padding:16px;border-radius:8px;max-height:250px;overflow-y:auto;font-family:'JetBrains Mono',monospace;font-size:12px;white-space:pre-wrap;margin-bottom:12px;"></div>
             <div class="btn-group">
-                <button id="approvePlanBtn" class="btn btn-success">Aprobar Plan</button>
-                <button id="rejectPlanBtn" class="btn btn-danger">Rechazar / Cancelar</button>
+                <button id="approvePlanBtn" class="btn btn-success">Aprobar</button>
+                <button id="rejectPlanBtn" class="btn btn-danger">Rechazar</button>
             </div>
         </div>
     </div>
@@ -168,4 +220,3 @@
     <script src="app.js"></script>
 </body>
 </html>
-
