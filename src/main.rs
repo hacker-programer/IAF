@@ -301,33 +301,14 @@ async fn client_check() -> impl IntoResponse {
             "Cliente encontrado. Ejecutalo con: iaf-client.exe http://127.0.0.1:8080 <username> <token>"
         }
     }))
+    }))
 }
 
 // ============================================================================
 // Endpoints Admin (gestión de usuarios)
 // ============================================================================
-    }
-
-    Json(json!({
-        "status": "ok",
-        "client_installed": !found.is_empty(),
-        "found_at": found,
-        "expected_paths": possible_paths,
-        "instructions": if found.is_empty() {
-            "Para instalar el cliente: cd client && cargo build --release. Luego ejecuta: .\\client\\target\\release\\iaf-client.exe <server_url> <username> <token>"
-        } else {
-            "Cliente encontrado. Ejecutalo con: iaf-client.exe http://127.0.0.1:8080 <username> <token>"
-        }
-    }))
-}
-// ============================================================================
 
 async fn admin_list_users(
-    State(state): State<AppState>,
-    headers: HeaderMap,
-) -> impl IntoResponse {
-    let admin = match require_admin(&state, &headers, false).await {
-        Ok(a) => a, Err(e) => return (e.0, Json(json!({ "status": "error", "message": e.1 }))).into_response(),
     };
     let _ = admin;
     let users = state.user_store.list_users();
