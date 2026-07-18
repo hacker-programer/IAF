@@ -471,45 +471,75 @@ mod acceptance_tests {
 
 // ============================================================================
 // Tests de Integración HTTP (requieren servidor corriendo)
-// ============================================================================
-// ============================================================================
-// Tests de Integración HTTP (requieren servidor corriendo)
+//
+// NOTA: Estos tests usan un cliente HTTP estático (LazyLock) con pool de
+// conexiones reutilizado. Esto evita el agotamiento de puertos efímeros
+// en Windows que causaba tests intermitentes (status=0, 404 falsos).
+// Además incluyen reintentos con backoff exponencial (3 intentos).
 // ============================================================================
 
 #[cfg(test)]
 mod integration_tests_http {
-    const SERVER_URL: &str = "http://127.0.0.1:8080";
+    use std::sync::LazyLock;
+    use std::time::Duration;
 
-    /// Helper: GET con parseo JSON seguro (tolera respuestas no-JSON)
+    const SERVER_URL: &str = "http://127.0.0.1:8080";
+    const MAX_RETRIES: u32 = 3;
+
+    /// Cliente HTTP estático compartido entre todos los tests.
+    /// Reutilizar el mismo cliente (y su pool de conexiones interno) evita
+    /// el agotamiento de puertos efímeros de Windows y los tests intermitentes.
+    static CLIENT: LazyLock<reqwest::Client> = LazyLock::new(|| {
+        reqwest::Client::builder()
+            .timeout(Duration::from_secs(10))
+            .pool_max_idle_per_host(5)
+            .tcp_keepalive(Duration::from_secs(30))
+            .build()
+            .expect("Failed to create HTTP test client")
+    });
+
+    /// Helper: GET con parseo JSON seguro + reintentos ante fallos de conexión.
+    /// Los reintentos con backoff exponencial (100ms → 200ms → 400ms) manejan
+    /// fallos transitorios de red sin bloquear el test suite.
     async fn get_json_safe(path: &str) -> (u16, serde_json::Value) {
-        let client = reqwest::Client::new();
-        match client.get(format!("{}{}", SERVER_URL, path)).send().await {
-            Ok(resp) => {
-                let status = resp.status().as_u16();
-                let body = resp.text().await.unwrap_or_default();
-                let parsed = serde_json::from_str(&body).unwrap_or(serde_json::Value::Null);
-                (status, parsed)
+        for attempt in 0..MAX_RETRIES {
+            match CLIENT.get(format!("{}{}", SERVER_URL, path)).send().await {
+                Ok(resp) => {
+                    let status = resp.status().as_u16();
+                    let body = resp.text().await.unwrap_or_default();
+                    let parsed = serde_json::from_str(&body).unwrap_or(serde_json::Value::Null);
+                    return (status, parsed);
+                }
+                Err(_) if attempt + 1 < MAX_RETRIES => {
+                    tokio::time::sleep(Duration::from_millis(100 * 2u64.pow(attempt))).await;
+                }
+                Err(_) => { /* último intento falló, devolver status=0 */ }
             }
-            Err(_) => (0, serde_json::Value::Null),
         }
+        (0, serde_json::Value::Null)
     }
 
-    /// Helper: POST con parseo JSON seguro
+    /// Helper: POST con parseo JSON seguro + reintentos ante fallos de conexión.
     async fn post_json_safe(path: &str, body: &str) -> (u16, serde_json::Value) {
-        let client = reqwest::Client::new();
-        match client.post(format!("{}{}", SERVER_URL, path))
-            .header("Content-Type", "application/json")
-            .body(body.to_string())
-            .send().await
-        {
-            Ok(resp) => {
-                let status = resp.status().as_u16();
-                let text = resp.text().await.unwrap_or_default();
-                let parsed = serde_json::from_str(&text).unwrap_or(serde_json::Value::Null);
-                (status, parsed)
+        for attempt in 0..MAX_RETRIES {
+            match CLIENT.post(format!("{}{}", SERVER_URL, path))
+                .header("Content-Type", "application/json")
+                .body(body.to_string())
+                .send().await
+            {
+                Ok(resp) => {
+                    let status = resp.status().as_u16();
+                    let text = resp.text().await.unwrap_or_default();
+                    let parsed = serde_json::from_str(&text).unwrap_or(serde_json::Value::Null);
+                    return (status, parsed);
+                }
+                Err(_) if attempt + 1 < MAX_RETRIES => {
+                    tokio::time::sleep(Duration::from_millis(100 * 2u64.pow(attempt))).await;
+                }
+                Err(_) => {}
             }
-            Err(_) => (0, serde_json::Value::Null),
         }
+        (0, serde_json::Value::Null)
     }
 
     #[tokio::test]
