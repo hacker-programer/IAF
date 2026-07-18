@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::collections::{HashMap, HashSet};
 use std::process::Command;
+use std::fs;
 
 use crate::desktop::DesktopController;
 use crate::auth::{UserStore, ChallengeStore, SessionStore};
@@ -23,6 +24,78 @@ pub struct PromptConfig {
     pub global_default: String,
     pub global_current: String,
     pub projects: HashMap<String, String>,
+}
+
+// ============================================================================
+// Estado de Ciclos por Proyecto (cicle.json)
+// ============================================================================
+
+/// Representa en qué ciclo del modo programación está cada proyecto
+#[derive(Clone, Serialize, Deserialize, Debug, PartialEq)]
+pub enum CiclePhase {
+    /// Ciclo 1: Implementar la tarea
+    Implementacion,
+    /// Ciclo 2: Optimización exhaustiva extrema
+    Optimizacion,
+    /// Ciclo 3: Búsqueda exhaustiva de bugs
+    BusquedaBugs,
+    /// Ciclo 4: Reducción, eliminar archivos y código redundante
+    Reduccion,
+    /// Ciclo 5: Segunda búsqueda exhaustiva de bugs
+    SegundaBusquedaBugs,
+    /// Ciclo 6: Terminar tarea
+    Terminar,
+}
+
+impl Default for CiclePhase {
+    fn default() -> Self { CiclePhase::Implementacion }
+}
+
+impl CiclePhase {
+    pub fn next(&self) -> CiclePhase {
+        match self {
+            CiclePhase::Implementacion => CiclePhase::Optimizacion,
+            CiclePhase::Optimizacion => CiclePhase::BusquedaBugs,
+            CiclePhase::BusquedaBugs => CiclePhase::Reduccion,
+            CiclePhase::Reduccion => CiclePhase::SegundaBusquedaBugs,
+            CiclePhase::SegundaBusquedaBugs => CiclePhase::Terminar,
+            CiclePhase::Terminar => CiclePhase::Terminar,
+        }
+    }
+
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            CiclePhase::Implementacion => "ciclo1_implementacion",
+            CiclePhase::Optimizacion => "ciclo2_optimizacion",
+            CiclePhase::BusquedaBugs => "ciclo3_busqueda_bugs",
+            CiclePhase::Reduccion => "ciclo4_reduccion",
+            CiclePhase::SegundaBusquedaBugs => "ciclo5_segunda_busqueda_bugs",
+            CiclePhase::Terminar => "ciclo6_terminar",
+        }
+    }
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+pub struct CicleState {
+    pub project_name: String,
+    pub current_phase: CiclePhase,
+    pub iteration_count: u64,
+    pub started_at: u64,
+    pub last_updated: u64,
+}
+
+impl CicleState {
+    pub fn new(project_name: &str) -> Self {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH).unwrap().as_secs();
+        Self {
+            project_name: project_name.to_string(),
+            current_phase: CiclePhase::Implementacion,
+            iteration_count: 0,
+            started_at: now,
+            last_updated: now,
+        }
+    }
 }
 
 // ============================================================================
@@ -410,4 +483,89 @@ pub struct AppState {
     pub client_responses: Arc<Mutex<HashMap<String, crate::client_protocol::ClientResponse>>>,
     /// true si este AppState sirve al puerto 80 (admin local sin auth)
     pub port_80: bool,
+}
+
+impl AppState {
+    /// Obtiene la ruta donde se guardan los datos de un usuario
+    /// ./.config/data/<username>/
+    pub fn user_data_dir(&self, username: &str) -> PathBuf {
+        self.base_workspace.join(".config").join("data").join(username)
+    }
+
+    /// Obtiene la ruta del system prompt global de un usuario
+    /// ./.config/data/<username>/globalPrompt.json
+    pub fn global_prompt_path(&self, username: &str) -> PathBuf {
+        self.user_data_dir(username).join("globalPrompt.json")
+    }
+
+    /// Obtiene la ruta del system prompt local de un proyecto para un usuario
+    /// ./.config/data/<username>/<project>/localPrompt.json
+    pub fn local_prompt_path(&self, username: &str, project_name: &str) -> PathBuf {
+        self.user_data_dir(username).join(project_name).join("localPrompt.json")
+    }
+
+    /// Obtiene la ruta del estado de ciclo de un proyecto para un usuario
+    /// ./.config/data/<username>/<project>/cicle.json
+    pub fn cicle_path(&self, username: &str, project_name: &str) -> PathBuf {
+        self.user_data_dir(username).join(project_name).join("cicle.json")
+    }
+
+    /// Carga el system prompt global de un usuario, o retorna el default
+    pub fn load_global_prompt(&self, username: &str) -> String {
+        let path = self.global_prompt_path(username);
+        if path.exists() {
+            fs::read_to_string(&path).unwrap_or_else(|_| {
+                let prompts = self.prompts.lock().unwrap();
+                prompts.global_default.clone()
+            })
+        } else {
+            let prompts = self.prompts.lock().unwrap();
+            prompts.global_default.clone()
+        }
+    }
+
+    /// Guarda el system prompt global de un usuario
+    pub fn save_global_prompt(&self, username: &str, content: &str) -> Result<(), String> {
+        let path = self.global_prompt_path(username);
+        let _ = fs::create_dir_all(path.parent().unwrap());
+        fs::write(&path, content).map_err(|e| format!("Error guardando globalPrompt: {}", e))
+    }
+
+    /// Carga el system prompt local de un proyecto para un usuario
+    pub fn load_local_prompt(&self, username: &str, project_name: &str) -> Option<String> {
+        let path = self.local_prompt_path(username, project_name);
+        if path.exists() {
+            fs::read_to_string(&path).ok()
+        } else {
+            None
+        }
+    }
+
+    /// Guarda el system prompt local de un proyecto para un usuario
+    pub fn save_local_prompt(&self, username: &str, project_name: &str, content: &str) -> Result<(), String> {
+        let path = self.local_prompt_path(username, project_name);
+        let _ = fs::create_dir_all(path.parent().unwrap());
+        fs::write(&path, content).map_err(|e| format!("Error guardando localPrompt: {}", e))
+    }
+
+    /// Carga el estado de ciclo de un proyecto
+    pub fn load_cicle(&self, username: &str, project_name: &str) -> Option<CicleState> {
+        let path = self.cicle_path(username, project_name);
+        if path.exists() {
+            fs::read_to_string(&path)
+                .ok()
+                .and_then(|s| serde_json::from_str(&s).ok())
+        } else {
+            None
+        }
+    }
+
+    /// Guarda el estado de ciclo de un proyecto
+    pub fn save_cicle(&self, username: &str, cicle: &CicleState) -> Result<(), String> {
+        let path = self.cicle_path(username, &cicle.project_name);
+        let _ = fs::create_dir_all(path.parent().unwrap());
+        let json = serde_json::to_string_pretty(cicle)
+            .map_err(|e| format!("Error serializando cicle: {}", e))?;
+        fs::write(&path, json).map_err(|e| format!("Error guardando cicle: {}", e))
+    }
 }
