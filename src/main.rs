@@ -28,10 +28,10 @@ mod client_protocol;
 
 use crate::state::{
     AppState, Project, PromptConfig, ActiveAgentStatus, ProcessRegistry, ToolResultStore, SubAgentManager,
-    ChatSession, ChatMessage,
+    ChatSession, ChatMessage, CicleState, CiclePhase,
 };
 use crate::desktop::DesktopController;
-use crate::auth::{UserStore, ChallengeStore, SessionStore, UserLimits, generate_keypair};
+use crate::auth::{UserStore, ChallengeStore, SessionStore, UserLimits, WeeklySchedule, generate_keypair};
 use crate::study::StudyEngine;
 use crate::sync::SyncStore;
 use crate::client_protocol::{
@@ -177,8 +177,8 @@ async fn login(State(state): State<AppState>, Json(payload): Json<LoginRequest>)
                 "token": token,
                 "username": user.username,
                 "is_admin": user.is_admin,
-                "has_study_access": user.has_study_access,
-                "has_programming_access": user.has_programming_access,
+                "has_study_access": user.has_study_access(),
+                "has_programming_access": user.has_programming_access(),
             }))
         }
         Ok(None) => Json(json!({ "status": "error", "message": "Credenciales inválidas." })),
@@ -227,8 +227,9 @@ async fn verify(State(state): State<AppState>, Json(payload): Json<VerifyRequest
             let token = state.session_store.create_session(&user.username);
             Json(json!({
                 "status": "ok", "token": token, "username": user.username,
-                "is_admin": user.is_admin, "has_study_access": user.has_study_access,
-                "has_programming_access": user.has_programming_access,
+                "is_admin": user.is_admin,
+                "has_study_access": user.has_study_access(),
+                "has_programming_access": user.has_programming_access(),
             }))
         }
         Ok(false) => Json(json!({ "status": "error", "message": "Firma inválida." })),
@@ -245,6 +246,7 @@ async fn keygen() -> impl IntoResponse {
         "warning": "Guarda tu private_key en un lugar seguro. NUNCA la compartas. Esta es la ÚNICA vez que la verás."
     }))
 }
+
 #[derive(Deserialize)]
 struct LogoutRequest {
     token: String,
@@ -256,7 +258,6 @@ async fn logout(State(state): State<AppState>, Json(payload): Json<LogoutRequest
 }
 
 /// Helper para que los scripts .ps1 firmen nonces localmente.
-/// Recibe la clave privada (hex) y el nonce (base64), devuelve la firma (base64).
 #[derive(Deserialize)]
 struct SignRequest {
     private_key: String,
@@ -275,7 +276,6 @@ async fn sign_nonce(Json(payload): Json<SignRequest>) -> impl IntoResponse {
     }
 }
 
-/// Verifica si el cliente está instalado en la PC del usuario.
 async fn client_check() -> impl IntoResponse {
     let possible_paths = vec![
         "client/target/release/iaf-client.exe",
@@ -309,7 +309,7 @@ async fn admin_list_users(
     State(state): State<AppState>,
     headers: HeaderMap,
 ) -> impl IntoResponse {
-    let admin = match require_admin(&state, &headers, false).await {
+    let admin = match require_admin(&state, &headers).await {
         Ok(a) => a, Err(e) => return (e.0, Json(json!({ "status": "error", "message": e.1 }))).into_response(),
     };
     let _ = admin;
@@ -324,8 +324,10 @@ struct CreateUserRequest {
     public_key: Option<String>,
     is_admin: bool,
     permissions: Option<Vec<String>>,
-    study_access: Option<bool>,
-    programming_access: Option<bool>,
+    modo_estudio: Option<bool>,
+    modo_programador: Option<bool>,
+    editar_system_prompt_global: Option<bool>,
+    editar_system_prompt_local: Option<bool>,
 }
 
 async fn admin_create_user(
@@ -333,7 +335,7 @@ async fn admin_create_user(
     headers: HeaderMap,
     Json(payload): Json<CreateUserRequest>,
 ) -> impl IntoResponse {
-    let _admin = match require_admin(&state, &headers, false).await {
+    let _admin = match require_admin(&state, &headers).await {
         Ok(a) => a, Err(e) => return (e.0, Json(json!({ "status": "error", "message": e.1 }))).into_response(),
     };
 
@@ -344,8 +346,10 @@ async fn admin_create_user(
     } else if let Some(ref pw) = payload.password {
         state.user_store.create_user_with_password(
             &payload.username, pw, payload.is_admin, perms, limits,
-            payload.study_access.unwrap_or(false),
-            payload.programming_access.unwrap_or(false),
+            payload.modo_estudio.unwrap_or(false),
+            payload.modo_programador.unwrap_or(false),
+            payload.editar_system_prompt_global.unwrap_or(false),
+            payload.editar_system_prompt_local.unwrap_or(false),
         )
     } else {
         Err("Se requiere password (usuarios normales) o public_key (admins).".into())
@@ -368,7 +372,7 @@ async fn admin_update_limits(
     AxumPath(username): AxumPath<String>,
     Json(payload): Json<UpdateLimitsRequest>,
 ) -> impl IntoResponse {
-    let _admin = match require_admin(&state, &headers, false).await {
+    let _admin = match require_admin(&state, &headers).await {
         Ok(a) => a, Err(e) => return (e.0, Json(json!({ "status": "error", "message": e.1 }))).into_response(),
     };
     match state.user_store.update_limits(&username, payload.limits) {
@@ -379,8 +383,10 @@ async fn admin_update_limits(
 
 #[derive(Deserialize)]
 struct UpdateAccessRequest {
-    study_access: bool,
-    programming_access: bool,
+    modo_estudio: bool,
+    modo_programador: bool,
+    editar_system_prompt_global: bool,
+    editar_system_prompt_local: bool,
 }
 
 async fn admin_update_access(
@@ -389,10 +395,37 @@ async fn admin_update_access(
     AxumPath(username): AxumPath<String>,
     Json(payload): Json<UpdateAccessRequest>,
 ) -> impl IntoResponse {
-    let _admin = match require_admin(&state, &headers, false).await {
+    let _admin = match require_admin(&state, &headers).await {
         Ok(a) => a, Err(e) => return (e.0, Json(json!({ "status": "error", "message": e.1 }))).into_response(),
     };
-    match state.user_store.update_access(&username, payload.study_access, payload.programming_access) {
+    match state.user_store.update_access(
+        &username,
+        payload.modo_estudio,
+        payload.modo_programador,
+        payload.editar_system_prompt_global,
+        payload.editar_system_prompt_local,
+    ) {
+        Ok(()) => Json(json!({ "status": "ok" })).into_response(),
+        Err(e) => (StatusCode::BAD_REQUEST, Json(json!({ "status": "error", "message": e }))).into_response(),
+    }
+}
+
+#[derive(Deserialize)]
+struct UpdateScheduleRequest {
+    horarios: HashMap<String, Vec<(u32, u32)>>,
+}
+
+async fn admin_update_schedule(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    AxumPath(username): AxumPath<String>,
+    Json(payload): Json<UpdateScheduleRequest>,
+) -> impl IntoResponse {
+    let _admin = match require_admin(&state, &headers).await {
+        Ok(a) => a, Err(e) => return (e.0, Json(json!({ "status": "error", "message": e.1 }))).into_response(),
+    };
+    let schedule = WeeklySchedule { horarios: payload.horarios };
+    match state.user_store.update_schedule(&username, schedule) {
         Ok(()) => Json(json!({ "status": "ok" })).into_response(),
         Err(e) => (StatusCode::BAD_REQUEST, Json(json!({ "status": "error", "message": e }))).into_response(),
     }
@@ -409,7 +442,7 @@ async fn admin_change_password(
     AxumPath(username): AxumPath<String>,
     Json(payload): Json<ChangePasswordRequest>,
 ) -> impl IntoResponse {
-    let _admin = match require_admin(&state, &headers, false).await {
+    let _admin = match require_admin(&state, &headers).await {
         Ok(a) => a, Err(e) => return (e.0, Json(json!({ "status": "error", "message": e.1 }))).into_response(),
     };
     match state.user_store.change_password(&username, &payload.new_password) {
@@ -423,15 +456,212 @@ async fn admin_delete_user(
     headers: HeaderMap,
     AxumPath(username): AxumPath<String>,
 ) -> impl IntoResponse {
-    let _admin = match require_admin(&state, &headers, false).await {
+    let admin_name = match require_admin(&state, &headers).await {
         Ok(a) => a, Err(e) => return (e.0, Json(json!({ "status": "error", "message": e.1 }))).into_response(),
     };
-    if username == _admin {
+    if username == admin_name {
         return (StatusCode::BAD_REQUEST, Json(json!({ "status": "error", "message": "No podés eliminarte a vos mismo." }))).into_response();
     }
     match state.user_store.delete_user(&username) {
         Ok(()) => Json(json!({ "status": "ok" })).into_response(),
         Err(e) => (StatusCode::BAD_REQUEST, Json(json!({ "status": "error", "message": e }))).into_response(),
+    }
+}
+
+// ============================================================================
+// Endpoints de System Prompts (Global y Local)
+// ============================================================================
+
+#[derive(Deserialize)]
+struct SaveGlobalPromptRequest {
+    content: String,
+}
+
+async fn get_global_prompt(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> impl IntoResponse {
+    let username = match require_auth(&state, &headers).await {
+        Ok(u) => u, Err(e) => return (e.0, Json(json!({ "status": "error", "message": e.1 }))).into_response(),
+    };
+
+    let user = state.user_store.find_user(&username);
+    let can_edit = user.as_ref().map(|u| u.can_edit_global_prompt()).unwrap_or(false);
+    let content = state.load_global_prompt(&username);
+    let default_content = {
+        let prompts = state.prompts.lock().unwrap();
+        prompts.global_default.clone()
+    };
+
+    Json(json!({
+        "status": "ok",
+        "content": content,
+        "default_content": default_content,
+        "can_edit": can_edit,
+    })).into_response()
+}
+
+async fn save_global_prompt(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(payload): Json<SaveGlobalPromptRequest>,
+) -> impl IntoResponse {
+    let username = match require_auth(&state, &headers).await {
+        Ok(u) => u, Err(e) => return (e.0, Json(json!({ "status": "error", "message": e.1 }))).into_response(),
+    };
+
+    let user = state.user_store.find_user(&username);
+    if !user.as_ref().map(|u| u.can_edit_global_prompt()).unwrap_or(false) {
+        return (StatusCode::FORBIDDEN, Json(json!({ "status": "error", "message": "No tenés permiso para editar el system prompt global." }))).into_response();
+    }
+
+    match state.save_global_prompt(&username, &payload.content) {
+        Ok(()) => {
+            // También actualizar en memoria
+            let mut prompts = state.prompts.lock().unwrap();
+            prompts.global_current = payload.content.clone();
+            Json(json!({ "status": "ok" })).into_response()
+        }
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "status": "error", "message": e }))).into_response(),
+    }
+}
+
+async fn reset_global_prompt(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> impl IntoResponse {
+    let username = match require_auth(&state, &headers).await {
+        Ok(u) => u, Err(e) => return (e.0, Json(json!({ "status": "error", "message": e.1 }))).into_response(),
+    };
+
+    let user = state.user_store.find_user(&username);
+    if !user.as_ref().map(|u| u.can_edit_global_prompt()).unwrap_or(false) {
+        return (StatusCode::FORBIDDEN, Json(json!({ "status": "error", "message": "No tenés permiso para editar el system prompt global." }))).into_response();
+    }
+
+    let default_content = {
+        let prompts = state.prompts.lock().unwrap();
+        prompts.global_default.clone()
+    };
+
+    match state.save_global_prompt(&username, &default_content) {
+        Ok(()) => {
+            let mut prompts = state.prompts.lock().unwrap();
+            prompts.global_current = default_content.clone();
+            Json(json!({ "status": "ok", "content": default_content })).into_response()
+        }
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "status": "error", "message": e }))).into_response(),
+    }
+}
+
+#[derive(Deserialize)]
+struct SaveLocalPromptRequest {
+    project_name: String,
+    content: String,
+}
+
+async fn get_local_prompt(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    AxumPath(project_name): AxumPath<String>,
+) -> impl IntoResponse {
+    let username = match require_auth(&state, &headers).await {
+        Ok(u) => u, Err(e) => return (e.0, Json(json!({ "status": "error", "message": e.1 }))).into_response(),
+    };
+
+    let user = state.user_store.find_user(&username);
+    let can_edit = user.as_ref().map(|u| u.can_edit_local_prompt()).unwrap_or(false);
+    let content = state.load_local_prompt(&username, &project_name);
+
+    Json(json!({
+        "status": "ok",
+        "content": content,
+        "can_edit": can_edit,
+    })).into_response()
+}
+
+async fn save_local_prompt(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(payload): Json<SaveLocalPromptRequest>,
+) -> impl IntoResponse {
+    let username = match require_auth(&state, &headers).await {
+        Ok(u) => u, Err(e) => return (e.0, Json(json!({ "status": "error", "message": e.1 }))).into_response(),
+    };
+
+    let user = state.user_store.find_user(&username);
+    if !user.as_ref().map(|u| u.can_edit_local_prompt()).unwrap_or(false) {
+        return (StatusCode::FORBIDDEN, Json(json!({ "status": "error", "message": "No tenés permiso para editar system prompts locales." }))).into_response();
+    }
+
+    match state.save_local_prompt(&username, &payload.project_name, &payload.content) {
+        Ok(()) => {
+            // También actualizar en memoria
+            let mut prompts = state.prompts.lock().unwrap();
+            prompts.projects.insert(payload.project_name.clone(), payload.content);
+            Json(json!({ "status": "ok" })).into_response()
+        }
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "status": "error", "message": e }))).into_response(),
+    }
+}
+
+// ============================================================================
+// Endpoints de Ciclos (Cicle)
+// ============================================================================
+
+async fn get_cicle(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    AxumPath(project_name): AxumPath<String>,
+) -> impl IntoResponse {
+    let username = match require_auth(&state, &headers).await {
+        Ok(u) => u, Err(e) => return (e.0, Json(json!({ "status": "error", "message": e.1 }))).into_response(),
+    };
+
+    let cicle = state.load_cicle(&username, &project_name)
+        .unwrap_or_else(|| CicleState::new(&project_name));
+
+    Json(json!({
+        "status": "ok",
+        "cicle": cicle,
+    })).into_response()
+}
+
+#[derive(Deserialize)]
+struct UpdateCicleRequest {
+    phase: String,
+}
+
+async fn update_cicle(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    AxumPath(project_name): AxumPath<String>,
+    Json(payload): Json<UpdateCicleRequest>,
+) -> impl IntoResponse {
+    let username = match require_auth(&state, &headers).await {
+        Ok(u) => u, Err(e) => return (e.0, Json(json!({ "status": "error", "message": e.1 }))).into_response(),
+    };
+
+    let phase = match payload.phase.as_str() {
+        "ciclo1_implementacion" => CiclePhase::Implementacion,
+        "ciclo2_optimizacion" => CiclePhase::Optimizacion,
+        "ciclo3_busqueda_bugs" => CiclePhase::BusquedaBugs,
+        "ciclo4_reduccion" => CiclePhase::Reduccion,
+        "ciclo5_segunda_busqueda_bugs" => CiclePhase::SegundaBusquedaBugs,
+        "ciclo6_terminar" => CiclePhase::Terminar,
+        _ => return (StatusCode::BAD_REQUEST, Json(json!({ "status": "error", "message": "Fase inválida. Usar: ciclo1_implementacion, ciclo2_optimizacion, etc." }))).into_response(),
+    };
+
+    let mut cicle = state.load_cicle(&username, &project_name)
+        .unwrap_or_else(|| CicleState::new(&project_name));
+    cicle.current_phase = phase;
+    cicle.last_updated = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH).unwrap().as_secs();
+    cicle.iteration_count += 1;
+
+    match state.save_cicle(&username, &cicle) {
+        Ok(()) => Json(json!({ "status": "ok", "cicle": cicle })).into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "status": "error", "message": e }))).into_response(),
     }
 }
 
@@ -454,7 +684,7 @@ async fn study_save_profile(
     headers: HeaderMap,
     Json(payload): Json<SaveProfileRequest>,
 ) -> impl IntoResponse {
-    let username = match require_auth(&state, &headers, false).await {
+    let username = match require_auth(&state, &headers).await {
         Ok(u) => u, Err(e) => return (e.0, Json(json!({ "status": "error", "message": e.1 }))).into_response(),
     };
 
@@ -462,7 +692,7 @@ async fn study_save_profile(
         Some(u) => u,
         None => return (StatusCode::NOT_FOUND, Json(json!({ "status": "error", "message": "Usuario no encontrado." }))).into_response(),
     };
-    if !user.has_study_access && !user.is_admin {
+    if !user.has_study_access() && !user.is_admin {
         return (StatusCode::FORBIDDEN, Json(json!({ "status": "error", "message": "No tenés acceso al modo estudio." }))).into_response();
     }
 
@@ -484,7 +714,7 @@ async fn study_get_profile(
     State(state): State<AppState>,
     headers: HeaderMap,
 ) -> impl IntoResponse {
-    let username = match require_auth(&state, &headers, false).await {
+    let username = match require_auth(&state, &headers).await {
         Ok(u) => u, Err(e) => return (e.0, Json(json!({ "status": "error", "message": e.1 }))).into_response(),
     };
     let profile = state.study_engine.get_or_create_profile(&username);
@@ -504,7 +734,7 @@ async fn study_get_knowledge(
     State(state): State<AppState>,
     headers: HeaderMap,
 ) -> impl IntoResponse {
-    let username = match require_auth(&state, &headers, false).await {
+    let username = match require_auth(&state, &headers).await {
         Ok(u) => u, Err(e) => return (e.0, Json(json!({ "status": "error", "message": e.1 }))).into_response(),
     };
     let kb = state.study_engine.get_or_create_knowledge(&username);
@@ -522,7 +752,7 @@ async fn study_create_project(
     headers: HeaderMap,
     Json(payload): Json<CreateStudyProjectRequest>,
 ) -> impl IntoResponse {
-    let username = match require_auth(&state, &headers, false).await {
+    let username = match require_auth(&state, &headers).await {
         Ok(u) => u, Err(e) => return (e.0, Json(json!({ "status": "error", "message": e.1 }))).into_response(),
     };
     match state.study_engine.create_study_project(&payload.name, &payload.description, &username) {
@@ -542,7 +772,7 @@ async fn study_add_member(
     AxumPath(project_id): AxumPath<String>,
     Json(payload): Json<AddMemberRequest>,
 ) -> impl IntoResponse {
-    let _username = match require_auth(&state, &headers, false).await {
+    let _username = match require_auth(&state, &headers).await {
         Ok(u) => u, Err(e) => return (e.0, Json(json!({ "status": "error", "message": e.1 }))).into_response(),
     };
     match state.study_engine.add_member_to_project(&project_id, &payload.username) {
@@ -555,7 +785,7 @@ async fn study_get_projects(
     State(state): State<AppState>,
     headers: HeaderMap,
 ) -> impl IntoResponse {
-    let username = match require_auth(&state, &headers, false).await {
+    let username = match require_auth(&state, &headers).await {
         Ok(u) => u, Err(e) => return (e.0, Json(json!({ "status": "error", "message": e.1 }))).into_response(),
     };
     let projects = state.study_engine.get_user_projects(&username);
@@ -572,7 +802,7 @@ async fn study_build_prompt(
     headers: HeaderMap,
     Json(payload): Json<BuildStudyPromptRequest>,
 ) -> impl IntoResponse {
-    let username = match require_auth(&state, &headers, false).await {
+    let username = match require_auth(&state, &headers).await {
         Ok(u) => u, Err(e) => return (e.0, Json(json!({ "status": "error", "message": e.1 }))).into_response(),
     };
 
@@ -606,8 +836,7 @@ async fn chat_endpoint(
     headers: HeaderMap,
     Json(payload): Json<ChatInput>,
 ) -> impl IntoResponse {
-    let is_port_80 = false; // Se determina en la construcción de rutas
-    let username = match require_auth(&state, &headers, is_port_80).await {
+    let username = match require_auth(&state, &headers).await {
         Ok(u) => u, Err(e) => return (e.0, Json(json!({ "status": "error", "message": e.1 }))).into_response(),
     };
 
@@ -689,11 +918,9 @@ async fn get_chats(
     State(state): State<AppState>,
     headers: HeaderMap,
 ) -> impl IntoResponse {
-    let is_port_80 = false;
-    let username = match require_auth(&state, &headers, is_port_80).await {
+    let username = match require_auth(&state, &headers).await {
         Ok(u) => u,
         Err(_) => {
-            // Si no está autenticado, retornar lista vacía
             return Json(json!({ "status": "ok", "chats": [] })).into_response();
         }
     };
@@ -701,10 +928,8 @@ async fn get_chats(
     let is_admin = username == "admin_local" || state.user_store.is_admin(&username);
     let chat_dir = get_chat_dir(&state, &username, is_admin);
 
-    // Si es admin, buscar en todos los subdirectorios también
     let mut summaries = Vec::new();
     if is_admin {
-        // Buscar recursivamente
         if let Ok(entries) = fs::read_dir(state.base_workspace.join(".config").join("chats")) {
             for entry in entries.filter_map(Result::ok) {
                 let path = entry.path();
@@ -760,15 +985,13 @@ async fn get_chat_session(
     headers: HeaderMap,
     AxumPath(id): AxumPath<String>,
 ) -> impl IntoResponse {
-    let is_port_80 = false;
-    let username = match require_auth(&state, &headers, is_port_80).await {
+    let username = match require_auth(&state, &headers).await {
         Ok(u) => u,
         Err(e) => return (e.0, Json(json!({ "status": "error", "message": e.1 }))).into_response(),
     };
 
     let is_admin = username == "admin_local" || state.user_store.is_admin(&username);
 
-    // Buscar en el directorio del usuario o en el general
     let chat_dir = get_chat_dir(&state, &username, is_admin);
     if let Ok(entries) = fs::read_dir(&chat_dir) {
         for entry in entries.filter_map(Result::ok) {
@@ -776,10 +999,6 @@ async fn get_chat_session(
             if fname.ends_with(&format!("-{}.json", id)) || fname == format!("{}.json", id) {
                 if let Ok(content) = fs::read_to_string(entry.path()) {
                     if let Ok(session) = serde_json::from_str::<ChatSession>(&content) {
-                        // Verificar permisos: solo admin puede ver chats de otros
-                        if !is_admin && session.project_name.is_some() {
-                            // Usuario normal, verificar que el chat es suyo
-                        }
                         return Json(json!({ "status": "ok", "session": session })).into_response();
                     }
                 }
@@ -806,7 +1025,7 @@ async fn sync_process(
     headers: HeaderMap,
     Json(payload): Json<SyncManifestInput>,
 ) -> impl IntoResponse {
-    let _username = match require_auth(&state, &headers, false).await {
+    let _username = match require_auth(&state, &headers).await {
         Ok(u) => u, Err(e) => return (e.0, Json(json!({ "status": "error", "message": e.1 }))).into_response(),
     };
 
@@ -834,7 +1053,7 @@ async fn sync_push_version(
     headers: HeaderMap,
     Json(payload): Json<PushVersionRequest>,
 ) -> impl IntoResponse {
-    let username = match require_auth(&state, &headers, false).await {
+    let username = match require_auth(&state, &headers).await {
         Ok(u) => u, Err(e) => return (e.0, Json(json!({ "status": "error", "message": e.1 }))).into_response(),
     };
 
@@ -849,10 +1068,9 @@ async fn sync_get_history(
     headers: HeaderMap,
     AxumPath((project_id, path)): AxumPath<(String, String)>,
 ) -> impl IntoResponse {
-    let _username = match require_auth(&state, &headers, false).await {
+    let _username = match require_auth(&state, &headers).await {
         Ok(u) => u, Err(e) => return (e.0, Json(json!({ "status": "error", "message": e.1 }))).into_response(),
     };
-    // path viene con URL encoding, restaurar
     let decoded_path = urlencoding::decode(&path).unwrap_or_else(|_| std::borrow::Cow::Borrowed(&path));
     let history = state.sync_store.get_file_history(&project_id, &decoded_path);
     Json(json!({ "status": "ok", "history": history })).into_response()
@@ -888,7 +1106,6 @@ async fn client_connect(
 
     state.connected_clients.lock().unwrap().insert(client_id.clone(), client.clone());
 
-    // Inicializar cola vacía
     state.client_pending_requests.lock().unwrap().entry(client_id.clone()).or_insert_with(Vec::new);
 
     Json(json!({
@@ -994,19 +1211,21 @@ async fn get_agent_status(State(state): State<AppState>) -> impl IntoResponse {
 // MAIN — Doble Puerto
 // ============================================================================
 
-fn build_app(state: AppState, _is_port_80: bool) -> Router {
+fn build_app(state: AppState) -> Router {
     let cors = CorsLayer::permissive();
 
-    // Rutas comunes (ambos puertos)
-    let mut app = Router::new()
+    Router::new()
+        // Auth
         .route("/api/auth/login", post(login))
         .route("/api/auth/challenge", post(challenge))
         .route("/api/auth/verify", post(verify))
         .route("/api/auth/keygen", get(keygen))
         .route("/api/auth/logout", post(logout))
         .route("/api/auth/sign", post(sign_nonce))
+        // Projects & Agent
         .route("/api/projects", get(get_projects))
         .route("/api/agent/status", get(get_agent_status))
+        // Chat
         .route("/api/chat", post(chat_endpoint))
         .route("/api/chats", get(get_chats))
         .route("/api/chats/:id", get(get_chat_session))
@@ -1014,8 +1233,16 @@ fn build_app(state: AppState, _is_port_80: bool) -> Router {
         .route("/api/admin/users", get(admin_list_users).post(admin_create_user))
         .route("/api/admin/users/:username/limits", put(admin_update_limits))
         .route("/api/admin/users/:username/access", put(admin_update_access))
+        .route("/api/admin/users/:username/schedule", put(admin_update_schedule))
         .route("/api/admin/users/:username/password", put(admin_change_password))
         .route("/api/admin/users/:username", delete(admin_delete_user))
+        // System Prompts
+        .route("/api/prompts/global", get(get_global_prompt).post(save_global_prompt))
+        .route("/api/prompts/global/reset", post(reset_global_prompt))
+        .route("/api/prompts/local/:project_name", get(get_local_prompt))
+        .route("/api/prompts/local", post(save_local_prompt))
+        // Cicles
+        .route("/api/cicles/:project_name", get(get_cicle).put(update_cicle))
         // Study
         .route("/api/study/profile", get(study_get_profile).post(study_save_profile))
         .route("/api/study/knowledge", get(study_get_knowledge))
@@ -1026,18 +1253,15 @@ fn build_app(state: AppState, _is_port_80: bool) -> Router {
         .route("/api/sync/process", post(sync_process))
         .route("/api/sync/push", post(sync_push_version))
         .route("/api/sync/history/:project_id/*path", get(sync_get_history))
+        // Client
         .route("/api/client/connect", post(client_connect))
         .route("/api/client/check", get(client_check))
         .route("/api/client/heartbeat", post(client_heartbeat))
         .route("/api/client/poll", post(client_poll))
         .route("/api/client/response", post(client_response))
         .layer(cors)
-        .with_state(state.clone());
-
-    // Servir archivos estáticos (UI)
-    app = app.nest_service("/", ServeDir::new("public"));
-
-    app
+        .nest_service("/", ServeDir::new("public"))
+        .with_state(state)
 }
 
 #[tokio::main]
@@ -1046,6 +1270,7 @@ async fn main() {
     let config_dir = base_workspace.join(".config");
     let _ = fs::create_dir_all(&config_dir);
     let _ = fs::create_dir_all(config_dir.join("chats"));
+    let _ = fs::create_dir_all(config_dir.join("data"));
 
     let config_path = config_dir.join("prompts.json");
     let mut prompts = PromptConfig {
@@ -1096,6 +1321,7 @@ async fn main() {
         connected_clients: Arc::new(Mutex::new(HashMap::new())),
         client_pending_requests: Arc::new(Mutex::new(HashMap::new())),
         client_responses: Arc::new(Mutex::new(HashMap::new())),
+        port_80: false,
     };
 
     // Migrar chats existentes al nuevo formato
@@ -1108,11 +1334,12 @@ async fn main() {
         }
     }
 
-    let state_80 = state.clone();
+    let mut state_80 = state.clone();
+    state_80.port_80 = true;
     let state_8080 = state;
 
-    let app_80 = build_app(state_80, true);
-    let app_8080 = build_app(state_8080, false);
+    let app_80 = build_app(state_80);
+    let app_8080 = build_app(state_8080);
 
     let addr_80 = SocketAddr::from(([0, 0, 0, 0], 80));
     let addr_8080 = SocketAddr::from(([127, 0, 0, 1], 8080));
@@ -1121,7 +1348,6 @@ async fn main() {
     println!("   • Puerto 80   — Admin local (sin auth): http://{}", addr_80);
     println!("   • Puerto 8080 — Usuarios (requiere login): http://{}", addr_8080);
 
-    // Servir ambos puertos concurrentemente
     let srv_80 = tokio::spawn(async move {
         let listener = match tokio::net::TcpListener::bind(addr_80).await {
             Ok(l) => l,
