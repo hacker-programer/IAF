@@ -23,82 +23,68 @@
 - **Problema**: El validador post-escritura en main.rs marcaba falsos positivos al detectar `const` en JS como "definiciones duplicadas".
 - **Mitigación**: Ignorar warnings de validación en archivos JS. El validador está diseñado para Rust.
 
+### Ediciones Parciales (start_line/end_line)
+- **Fecha**: 2025-07
+- **Problema**: Usar `write_file_with_commit` con `start_line`/`end_line` causa corrupción de archivos: código huérfano, definiciones duplicadas, funciones insertadas en medio de otras.
+- **Síntoma**: Tras 3 ediciones parciales, main.rs quedó con código mezclado, funciones dentro de funciones, y braces desbalanceados.
+- **Mitigación**: SIEMPRE escribir el archivo COMPLETO. Para archivos grandes (>1000 líneas), usar PowerShell para hacer reemplazos de texto y luego hacer commit con git.
+
+### Espacio en Disco C
+- **Fecha**: 2025-07
+- **Problema**: C:\ puede llenarse con artifacts de cargo (cargo-target, auto-cargo-target), Docker installers, WSL MSIs, etc.
+- **Síntoma**: `write_file_with_commit` falla con "os error 112" (ENOSPC).
+- **Mitigación**: Limpiar `C:\Users\Fa\AppData\Local\Temp` periódicamente: remover `auto-cargo-target`, `DockerDesktopInstallers`, `wsl*.msi`, `vscode-stable-user-x64`.
+
+### Problema de Encoding en PowerShell Replace
+- **Fecha**: 2025-07
+- **Problema**: `$content.Replace()` en PowerShell falla silenciosamente si el texto contiene caracteres Unicode (como `→`) que no coinciden exactamente.
+- **Mitigación**: Usar patrones más cortos y específicos (ej: reemplazar solo la línea `fs::rename` en vez del bloque entero).
+
 ---
 
-## 🟡 Bugs Corregidos (v2.3)
+## 🟡 Bugs Corregidos (v2.4)
 
-### CAPTCHA Endpoints 404 (2025-02)
-- **Síntoma**: El frontend hacía polling cada 3s a `/api/captcha/status` y `/api/captcha/solve` que no existían en el router `build_app`.
-- **Causa raíz**: `CaptchaRequest` existía en `state.rs` como estructura de datos pero nunca se implementaron los handlers HTTP ni las rutas.
-- **Solución**: Se agregaron `captcha_status` (GET) y `captcha_solve` (POST) en `main.rs` y se registraron en `build_app`. Ahora siempre devuelven JSON válido (`{"status":"ok","url":null}`) en vez de 404.
-- **Por qué los tests no lo cubrieron**: Los tests HTTP existentes estaban todos con `#[ignore]` (requieren servidor). No había tests unitarios para verificar que las rutas estuvieran registradas.
+### Persistencia de Proyectos (2025-07)
+- **Síntoma**: Los proyectos desaparecían al reiniciar el servidor.
+- **Causa raíz**: `migrate_chats()` usaba `fs::rename()` para renombrar `local_projects.json` a `.bak`. En el segundo arranque, el archivo ya no existía y `initial_projects` arrancaba vacío.
+- **Solución**: Cambiar `rename` por `copy`. Agregar recovery: si `.json` no existe pero `.bak` sí, restaurar. Si no existe nada, persistir desde memoria.
+
+### Admin Creation Requería Contraseña (2025-07)
+- **Síntoma**: El frontend siempre exigía contraseña al crear usuarios, incluso admins (que deben usar clave pública).
+- **Causa raíz**: `createUserBtn.onclick` no distinguía entre admin y usuario normal. Siempre enviaba `password`.
+- **Solución**: Modificar el frontend para detectar el checkbox "Admin" y mostrar campo de clave pública + upload .pem + generación de claves en vez de contraseña.
+
+### Scripts .ps1 No Accesibles (2025-07)
+- **Síntoma**: Los scripts `generate_keys.ps1` y `sign_nonce.ps1` existían en disco pero no eran accesibles desde la UI.
+- **Causa raíz**: No había endpoint REST para servirlos ni links en el frontend.
+- **Solución**: Agregar `GET /api/scripts/:name` y botones de descarga en el admin panel.
+
+---
+
+## 🟢 Patrones Útiles Descubiertos
+
+### PowerShell para Ediciones Seguras
+Para archivos grandes donde `write_file_with_commit` completo es impráctico:
+1. Leer archivo con `Get-Content -Raw -Encoding UTF8`
+2. Hacer reemplazos con `.Replace(old, new)` usando strings literales cortos
+3. Guardar con `Set-Content -Path ... -Value ... -Encoding UTF8 -NoNewline`
+4. Hacer commit con `git add ...; git commit -m ...; git push`
+5. Verificar con `read_file` que el cambio es correcto
+
+### Limpieza de Disco para Compilación
+```powershell
+Remove-Item "C:\Users\Fa\AppData\Local\Temp\auto-cargo-target" -Recurse -Force
+Remove-Item "C:\Users\Fa\AppData\Local\Temp\DockerDesktopInstallers" -Recurse -Force
+Remove-Item "$env:TEMP\cargo-target\debug\incremental" -Recurse -Force
+```
+
+---
+
+## 🔵 CAPTCHA Endpoints 404 (2025-02) — Corregido en v2.3
+- **Síntoma**: El frontend hacía polling cada 3s a `/api/captcha/status` y `/api/captcha/solve` que no existían.
+- **Causa raíz**: `CaptchaRequest` existía en `state.rs` pero nunca se implementaron los handlers HTTP.
+- **Solución**: Se agregaron `captcha_status` (GET) y `captcha_solve` (POST) en `main.rs`.
 
 ### apiCall se rompía con respuestas no-JSON (2025-02)
-- **Síntoma**: `Uncaught (in promise) SyntaxError: Failed to execute 'json' on 'Response': Unexpected end of JSON input`
-- **Causa raíz**: La función `apiCall` en app.js hacía `return res.json()` directamente. Si cualquier endpoint devolvía 404 con HTML (como `/api/prompts` o `/api/captcha/status`), `res.json()` lanzaba excepción no capturada.
-- **Solución**: Se modificó `apiCall` para leer `res.text()` primero, intentar `JSON.parse()`, y devolver un objeto de error estructurado si falla.
-
-### Interfaz de login rota en puerto 8080 (2025-02)
-- **Síntoma**: Después de loguearse en puerto 8080, la UI se rompía con errores de consola.
-- **Causa raíz**: `showApp()` llamaba a `loadPrompts()` que usaba `/api/prompts` (endpoint inexistente). El error de parseo JSON resultante no se manejaba, rompiendo la UI.
-- **Solución**: Se agregaron todos los endpoints legacy que el frontend esperaba y se hizo `apiCall` resiliente.
-
-### Endpoints Legacy Faltantes (2025-02)
-- **Problema**: El frontend esperaba estos endpoints que no existían:
-  - `/api/prompts` (GET/POST) → legacy_prompts_get, legacy_prompts_post
-  - `/api/prompts/reset` → legacy_prompts_reset
-  - `/api/prompts/refine` → legacy_prompts_refine
-  - `/api/projects/fork` → fork_project
-  - `/api/projects/local` → add_local_project
-  - `/api/agent/responder` → agent_responder
-  - `/api/agent/aprobar_plan` → agent_approve_plan
-  - `/api/agent/interrupt` → agent_interrupt
-- **Solución**: Todos implementados en `main.rs` v2.3.
-
----
-
-## 🟢 Patrones y Decisiones de Arquitectura
-
-### Doble Puerto (80/8080)
-- Puerto 80: `state.port_80 = true`, sin auth, acceso total.
-- Puerto 8080: requiere login, permisos según usuario.
-- Ambos comparten el mismo `AppState` subyacente pero con `port_80` diferente.
-
-### Migración de Datos Legacy
-- `migrate_chats()` se ejecuta al inicio en `main()`.
-- Es recursiva: procesa `.config/chats/` y todos sus subdirectorios.
-- Migra 3 tipos de datos: chats (UUID → título-UUID), prompts.json (→ per-user), local_projects.json (→ per-user).
-- Los archivos originales se renombran a `.bak` en vez de borrarse.
-
-### Formato de Chats
-- Nuevo: `<título_sanitizado>-<uuid>.json`
-- Viejo: `<uuid>.json`
-- Los admins tienen sus chats en `.config/chats/` directamente.
-- Los usuarios normales tienen sus chats en `.config/chats/<username>/`.
-
-### apiCall en Frontend
-- Ahora es resiliente: `fetch` → `res.text()` → `JSON.parse()` con try-catch.
-- Nunca lanza excepción: siempre devuelve un objeto con `status`.
-- El CAPTCHA polling usa `fetch` directo (no `apiCall`) para manejo de errores más fino.
-
----
-
-## 📋 Checklist Anti-Regresión
-
-Antes de hacer deploy:
-- [ ] `cargo check` limpio
-- [ ] `cargo test --test integration_tests` (29 tests pasan)
-- [ ] Verificar que `/api/captcha/status` devuelva 200 (no 404)
-- [ ] Verificar que `/api/prompts` GET devuelva JSON con `global_current`
-- [ ] Verificar que `apiCall` no lance excepciones con endpoints inexistentes
-- [ ] Verificar migración: backups `.bak` creados, archivos renombrados
-
----
-
-## 🧠 Lecciones para el Futuro
-
-1. **Siempre agregar el endpoint al router**: Si existe el struct de request/response en state.rs, verificar que también haya un handler y una ruta en `build_app`.
-2. **Siempre hacer `apiCall` resiliente**: Cualquier endpoint puede fallar. El frontend no debe romperse por un 404.
-3. **Los tests `#[ignore]` no protegen**: Si todos los tests de integración están ignorados, no hay red de seguridad. Agregar tests unitarios de aceptación que validen estructuras JSON y lógica sin necesidad de servidor.
-4. **Migración debe ser recursiva**: Si hay subdirectorios (carpetas de usuario), `fs::read_dir` solo lee un nivel. Usar recursión explícita.
-5. **Legacy endpoints como puente**: Mantener compatibilidad con frontends viejos evita breaking changes silenciosos.
+- **Síntoma**: `Uncaught (in promise) SyntaxError: Failed to execute 'json' on 'Response'`
+- **Solución**: `apiCall` ahora lee `res.text()` primero y usa `try/catch` para parsear JSON, devolviendo objeto de error estructurado si falla.
