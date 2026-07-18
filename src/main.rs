@@ -1,4 +1,4 @@
-#![allow(dead_code, unused_imports, unused_variables, unused_mut, unused_assignments, unused_must_use)]
+﻿#![allow(dead_code, unused_imports, unused_variables, unused_mut, unused_assignments, unused_must_use)]
 use axum::{
     extract::{State, Json, Path as AxumPath},
     response::IntoResponse,
@@ -231,8 +231,67 @@ fn migrate_chats(state: &AppState) {
         // Ya se carga en main(), solo marcar como migrado
         let bak_path = state.base_workspace.join(".config").join("local_projects.json.bak");
         if !bak_path.exists() {
-            let _ = fs::rename(&local_proj_path, &bak_path);
-            eprintln!("[IAF] local_projects.json renombrado a .bak (migración completada)");
+            let _ = fs::copy(&local_proj_path, &bak_path);
+            eprintln!("[IAF] local_projects.json respaldado como .bak (copia, no rename)");
+        }
+    } else if bak_path.exists() {
+        let _ = fs::copy(&bak_path, &local_proj_path);
+        eprintln!("[IAF] local_projects.json restaurado desde .bak (recovery)");
+    } else {
+        let projects = state.projects.lock().unwrap();
+        if !projects.is_empty() {
+            let json = serde_json::to_string_pretty(&*projects).unwrap_or_default();
+            let _ = fs::write(&local_proj_path, &json);
+            eprintln!("[IAF] Proyectos persistidos en local_projects.json (recovery)");
+        }
+    }
+}
+
+// ============================================================================
+// Endpoint de Descarga de Scripts
+// ============================================================================
+
+/// Sirve scripts desde la carpeta scripts/ del proyecto
+/// GET /api/scripts/generate_keys  -> scripts/generate_keys.ps1
+/// GET /api/scripts/sign_nonce     -> scripts/sign_nonce.ps1
+async fn serve_script(
+    State(state): State<AppState>,
+    AxumPath(name): AxumPath<String>,
+) -> impl IntoResponse {
+    let safe_name: String = name.chars()
+        .filter(|c| c.is_alphanumeric() || *c == '_' || *c == '-')
+        .collect();
+
+    if safe_name.is_empty() || safe_name.len() > 64 {
+        return (StatusCode::BAD_REQUEST, Json(json!({ "status": "error", "message": "Nombre de script invalido." }))).into_response();
+    }
+
+    let script_path = state.base_workspace
+        .join("scripts")
+        .join(format!("{}.ps1", safe_name));
+
+    if !script_path.exists() {
+        return (StatusCode::NOT_FOUND, Json(json!({
+            "status": "error",
+            "message": format!("Script '{}' no encontrado. Disponibles: generate_keys, sign_nonce", safe_name),
+            "available_scripts": ["generate_keys", "sign_nonce"]
+        }))).into_response();
+    }
+
+    match fs::read_to_string(&script_path) {
+        Ok(content) => {
+            let filename = format!("{}.ps1", safe_name);
+            let headers = [
+                ("Content-Type", "application/x-powershell"),
+                ("Content-Disposition", &format!("attachment; filename=\"{}\"", filename)),
+            ];
+            (StatusCode::OK, headers, content).into_response()
+        }
+        Err(e) => {
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({
+                "status": "error",
+                "message": format!("Error leyendo script: {}", e)
+            }))).into_response()
         }
     }
 }
@@ -1695,6 +1754,7 @@ fn build_app(state: AppState) -> Router {
         .route("/api/auth/keygen", get(keygen))
         .route("/api/auth/logout", post(logout))
         .route("/api/auth/sign", post(sign_nonce))
+        .route("/api/scripts/:name", get(serve_script))
         // Projects & Agent
         .route("/api/projects", get(get_projects))
         .route("/api/projects/fork", post(fork_project))
