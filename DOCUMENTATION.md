@@ -1,4 +1,4 @@
-# DOCUMENTATION.md — Mapa Técnico del Proyecto IAF v2.2
+# DOCUMENTATION.md — Mapa Técnico del Proyecto IAF v2.3
 
 > **IAF (Intelligent Agent Framework)** — Framework de agente autónomo + plataforma de enseñanza en Rust + Axum.
 > Servidor HTTP doble puerto (80 auto-admin, 8080 auth), autenticación dual (password + Ed25519),
@@ -10,9 +10,9 @@
 
 | Archivo | Líneas | Rol |
 |---------|--------|-----|
-| `src/main.rs` | ~1350 | Servidor HTTP doble puerto, endpoints REST, system prompts, ciclos |
+| `src/main.rs` | ~1650 | Servidor HTTP doble puerto, endpoints REST, CAPTCHA, legacy routes, migración, system prompts, ciclos |
 | `src/auth.rs` | ~750 | Auth dual: contraseñas (argon2) + nonce Ed25519, permisos booleanos, WeeklySchedule, UserLimits |
-| `src/state.rs` | ~560 | AppState, CicleState/CiclePhase, rutas de guardado de prompts/ciclos, AppState::load_global_prompt() |
+| `src/state.rs` | ~571 | AppState, CicleState/CiclePhase, CaptchaRequest, rutas de guardado de prompts/ciclos, ToolResultStore, SubAgentManager |
 | `src/study.rs` | ~570 | Motor de estudio: perfiles, knowledge base, hipótesis, engagement |
 | `src/sync.rs` | ~280 | Sincronización de proyectos (push/pull/conflictos) |
 | `src/client_protocol.rs` | ~180 | Protocolo cliente-servidor para ejecución remota |
@@ -24,7 +24,7 @@
 | `client/Cargo.toml` | 15 | Cliente binario independiente |
 | `client/src/main.rs` | ~350 | Ejecutor local (files, PowerShell, git, cargo) |
 | `prompts/study_system_prompt.txt` | 60 | System prompt del modo estudio |
-| `tests/integration_tests.rs` | ~250 | Tests de integración y aceptación |
+| `tests/integration_tests.rs` | ~500 | Tests de integración, aceptación y regresión (42 tests) |
 
 ---
 
@@ -62,12 +62,6 @@ allowed_tools[], max_sub_agents, max_projects,
 can_fork_repos, can_execute_powershell, can_write_files
 ```
 
-### WeeklySchedule (`src/auth.rs` línea ~100)
-
-HashMap días → Vec<(hora_inicio, hora_fin)>. Ejemplo: `{"lunes": [(9,10), (16,18)], "martes": [(9,12)]}`
-
-`is_active_now()` determina si el usuario está en una franja horaria activa.
-
 ---
 
 ## 🌐 Doble Puerto
@@ -89,10 +83,6 @@ HashMap días → Vec<(hora_inicio, hora_fin)>. Ejemplo: `{"lunes": [(9,10), (16
 | 4 | `Reduccion` | Eliminar archivos y código redundante |
 | 5 | `SegundaBusquedaBugs` | Segunda búsqueda de bugs. Si hay, corrige y vuelve al ciclo 2 |
 | 6 | `Terminar` | Tarea finalizada |
-
-### CicleState (`src/state.rs` línea ~88)
-- `project_name`, `current_phase: CiclePhase`, `iteration_count`, `started_at`, `last_updated`
-- Guardado en `.config/data/<username>/<project>/cicle.json`
 
 ---
 
@@ -141,25 +131,50 @@ HashMap días → Vec<(hora_inicio, hora_fin)>. Ejemplo: `{"lunes": [(9,10), (16
 | `POST` | `/api/auth/sign` | Firmar nonce (helper para scripts .ps1) |
 | `GET` | `/api/client/check` | Verificar si el cliente está instalado |
 
+### CAPTCHA (v2.3)
+| Método | Ruta | Handler | Descripción |
+|--------|------|---------|-------------|
+| `GET` | `/api/captcha/status` | `captcha_status` | Estado del CAPTCHA (retorna `{url: null}` si no hay) |
+| `POST` | `/api/captcha/solve` | `captcha_solve` | Enviar solución de CAPTCHA |
+
+### Agente
+| Método | Ruta | Handler | Descripción |
+|--------|------|---------|-------------|
+| `GET` | `/api/agent/status` | `get_agent_status` | Estado del agente |
+| `POST` | `/api/agent/responder` | `agent_responder` | Responder pregunta del agente |
+| `POST` | `/api/agent/aprobar_plan` | `agent_approve_plan` | Aprobar/rechazar plan |
+| `POST` | `/api/agent/interrupt` | `agent_interrupt` | Interrumpir agente |
+
+### Proyectos
+| Método | Ruta | Handler | Descripción |
+|--------|------|---------|-------------|
+| `GET` | `/api/projects` | `get_projects` | Listar proyectos |
+| `POST` | `/api/projects/fork` | `fork_project` | Clonar repo via `gh` |
+| `POST` | `/api/projects/local` | `add_local_project` | Agregar proyecto local |
+
 ### Admin
 | Método | Ruta | Descripción |
 |--------|------|-------------|
 | `GET` | `/api/admin/users` | Listar todos los usuarios |
 | `POST` | `/api/admin/users` | Crear usuario (password o public_key) |
 | `PUT` | `/api/admin/users/:username/limits` | Actualizar límites (UserLimits completo) |
-| `PUT` | `/api/admin/users/:username/access` | Actualizar accesos (modo_estudio, modo_programador, editar_system_prompt_global, editar_system_prompt_local) |
+| `PUT` | `/api/admin/users/:username/access` | Actualizar accesos |
 | `PUT` | `/api/admin/users/:username/schedule` | Actualizar horarios semanales |
 | `PUT` | `/api/admin/users/:username/password` | Cambiar contraseña |
 | `DELETE` | `/api/admin/users/:username` | Eliminar usuario |
 
-### System Prompts
+### System Prompts (nuevos + legacy)
 | Método | Ruta | Descripción |
 |--------|------|-------------|
 | `GET` | `/api/prompts/global` | Obtener system prompt global del usuario |
 | `POST` | `/api/prompts/global` | Guardar system prompt global |
 | `POST` | `/api/prompts/global/reset` | Restaurar global al default |
-| `GET` | `/api/prompts/local/:project_name` | Obtener system prompt local de un proyecto |
+| `GET` | `/api/prompts/local/:project_name` | Obtener system prompt local |
 | `POST` | `/api/prompts/local` | Guardar system prompt local |
+| `GET` | `/api/prompts` | **LEGACY** — mismo que `/api/prompts/global` + projects map |
+| `POST` | `/api/prompts` | **LEGACY** — guardar global + locales |
+| `POST` | `/api/prompts/reset` | **LEGACY** — mismo que `/api/prompts/global/reset` |
+| `POST` | `/api/prompts/refine` | **LEGACY** — refinar prompt con feedback opcional |
 
 ### Ciclos
 | Método | Ruta | Descripción |
@@ -218,44 +233,94 @@ HashMap días → Vec<(hora_inicio, hora_fin)>. Ejemplo: `{"lunes": [(9,10), (16
 │       ├── localPrompt.json              (system prompt local del proyecto)
 │       └── cicle.json                    (CicleState)
 ├── users.json                            (UserStore)
-└── prompts.json                          (PromptConfig global)
+├── prompts.json                          (PromptConfig global, legacy)
+├── prompts.json.bak                      (backup post-migración)
+├── local_projects.json                   (proyectos, legacy)
+└── local_projects.json.bak               (backup post-migración)
 ```
 
 ---
 
 ## 🔧 Detalles Técnicos Importantes
 
+### Migración Automática (v2.3)
+Al iniciar el servidor, `migrate_chats()` realiza:
+1. **Migración recursiva de chats**: renombra archivos `<uuid>.json` → `<title>-<uuid>.json` en `.config/chats/` y subdirectorios.
+2. **Migración de prompts.json**: extrae `global_current` → `data/admin/globalPrompt.json` y project prompts → `data/admin/<project>/localPrompt.json`. Luego renombra a `.bak`.
+3. **Migración de local_projects.json**: renombra a `.bak` una vez cargado.
+4. **Creación de directorios** para usuarios existentes.
+
+### CAPTCHA (v2.3)
+- `GET /api/captcha/status`: Siempre devuelve JSON válido `{"status":"ok","url":null}` si no hay CAPTCHA pendiente. **Nunca 404**.
+- `POST /api/captcha/solve`: Acepta `{id, solved_content}`. Si no hay CAPTCHA pendiente, devuelve 200 con mensaje informativo.
+- El frontend (app.js) usa polling cada 3s con `fetch` directo y manejo silencioso de errores.
+
+### apiCall Resiliente (app.js v2.3)
+- La función `apiCall` ahora lee `res.text()` primero y luego intenta `JSON.parse()`.
+- Si falla el parseo (respuesta HTML, vacía, etc.), devuelve `{status: "error", message: "Respuesta inválida del servidor (HTTP XXX)"}`.
+- Esto evita que un 404 en cualquier endpoint rompa la UI.
+
+### Legacy Endpoints (v2.3)
+Para compatibilidad con frontends viejos, se mantienen:
+- `/api/prompts` (GET/POST) → mismo formato que el frontend espera
+- `/api/prompts/reset` (POST)
+- `/api/prompts/refine` (POST)
+- `/api/projects/fork` (POST)
+- `/api/projects/local` (POST)
+- `/api/agent/responder` (POST)
+- `/api/agent/aprobar_plan` (POST)
+- `/api/agent/interrupt` (POST)
+
 ### MiniMax M3 (`src/agent.rs`)
 - Reemplazó a Qwen2.5-VL para análisis multimodal.
 - Llamadas via OpenRouter con providers: `{"order": ["DeepInfra"], "allow_fallbacks": true}`
-- Usado en `analyze_images` (imágenes/video/audio) y en `image_view`.
-
-### no_sync (`src/agent.rs` línea ~1623)
-- Recibe `include_patterns` y `exclude_patterns` (arrays de strings).
-- Devuelve un reporte de configuración.
-- Diseñado para Patrón Composite de sincronización.
-
-### reportar_fallo (`src/agent.rs` línea ~1641)
-- Recibe `informe` (string) y `severidad` (baja/media/alta/critica).
-- Guarda en `.config/fallos_reportados.json`.
-
-### Ediciones parciales en write_file_with_commit
-- **PROHIBIDO usar start_line/end_line**. Causan corrupción de archivos (delimitadores desbalanceados, líneas duplicadas).
-- Siempre escribir el archivo COMPLETO.
-- Verificar que no haya definiciones duplicadas antes de escribir.
 
 ---
 
-## 🧪 Tests
+## 🧪 Tests (42 total: 29 unit + 13 HTTP ignorados)
+
+### Tests de Regresión (v2.3)
+| Test | Descripción |
+|------|-------------|
+| `test_captcha_status_no_pending` | Formato respuesta sin CAPTCHA |
+| `test_captcha_status_with_pending` | Formato respuesta con CAPTCHA |
+| `test_captcha_solve_payload_format` | Validación del payload |
+| `test_captcha_response_is_valid_json` | JSON siempre parseable |
+| `test_legacy_prompts_get_format` | Formato exacto esperado por frontend |
+| `test_legacy_prompts_post_payload` | Payload con global + project_prompts |
+| `test_legacy_prompts_reset_call` | Respuesta del reset |
+| `test_prompts_refine_with_feedback` | Refine con y sin feedback |
+| `test_uuid_detection` | Detección de UUIDs en nombres de archivo |
+| `test_filename_sanitization_for_migration` | Sanitización segura |
+| `test_chat_filename_new_format` | Formato `<title>-<uuid>.json` |
+| `test_agent_responder_payload` | Payload del responder |
+| `test_agent_approve_plan_payload` | Payload aprobar/rechazar |
+| `test_agent_interrupt_no_body` | Respuesta del interrupt |
+| `test_frontend_json_parsing_resilience` | Parseo resiliente (vacío, HTML, JSON) |
+| `test_frontend_api_error_object` | Objeto de error estructurado |
+
+### Tests HTTP (ignored, requieren servidor)
+| Test | Endpoint |
+|------|----------|
+| `test_captcha_status_returns_valid_json` | `GET /api/captcha/status` |
+| `test_captcha_solve_without_pending_returns_ok` | `POST /api/captcha/solve` |
+| `test_legacy_prompts_get_returns_200` | `GET /api/prompts` |
+| `test_legacy_prompts_reset_returns_200` | `POST /api/prompts/reset` |
+| `test_prompts_refine_returns_200` | `POST /api/prompts/refine` |
+| `test_agent_responder_returns_200` | `POST /api/agent/responder` |
+| `test_agent_interrupt_returns_200` | `POST /api/agent/interrupt` |
+| `test_agent_approve_plan_returns_200` | `POST /api/agent/aprobar_plan` |
+| `test_projects_fork_returns_valid_response` | `POST /api/projects/fork` |
+| `test_projects_local_returns_valid_response` | `POST /api/projects/local` |
 
 ```bash
-# Compilar (target dir alternativo por permisos)
+# Compilar
 $env:CARGO_TARGET_DIR = "C:\Users\Fa\AppData\Local\Temp\cargo-target"
 cargo check
 
-# Unit tests
-cargo test --lib
+# Unit tests (29 tests)
+cargo test --test integration_tests
 
-# Integration tests
+# Integration tests (requieren servidor corriendo)
 cargo test --test integration_tests -- --ignored
 ```
