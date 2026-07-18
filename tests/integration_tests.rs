@@ -175,13 +175,6 @@ mod integration_tests_http {
 
     const SERVER_URL: &str = "http://127.0.0.1:8080";
 
-    async fn post_json(path: &str, body: serde_json::Value, token: Option<&str>) -> Result<serde_json::Value, String> {
-        let client = reqwest::Client::new();
-        let mut req = client.post(format!("{}{}", SERVER_URL, path))
-            .header("Content-Type", "application/json");
-        if let Some(t) = token {
-            req = req.header("Authorization", format!("Bearer {}", t));
-        }
         req.json(&body).send().await
             .map_err(|e| format!("HTTP: {}", e))?
             .json().await
