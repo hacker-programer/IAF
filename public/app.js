@@ -50,7 +50,9 @@ async function init() {
 async function checkClient() {
     try {
         const res = await fetch('/api/client/check');
-        const data = await res.json();
+        const text = await res.text();
+        let data;
+        try { data = JSON.parse(text); } catch(e) { return; }
         if (!data.client_installed) {
             clientWarning.innerHTML = '⚠️ <b>Cliente no detectado.</b><br>' + data.instructions;
             clientWarning.classList.remove('hidden');
@@ -164,6 +166,7 @@ document.getElementById('logoutBtn').onclick = async () => {
 };
 
 // ---- Auth headers for all API calls ----
+// Versión resiliente: maneja respuestas no-JSON (404, 500, HTML) sin romperse
 async function apiCall(endpoint, method = 'GET', body = null) {
     const opts = { method, headers: { 'Content-Type': 'application/json' } };
     if (authToken && authToken !== 'admin_local') {
@@ -171,7 +174,18 @@ async function apiCall(endpoint, method = 'GET', body = null) {
     }
     if (body) opts.body = JSON.stringify(body);
     const res = await fetch(endpoint, opts);
-    return res.json();
+    const text = await res.text();
+    try {
+        return JSON.parse(text);
+    } catch (e) {
+        // Si la respuesta no es JSON (ej: 404 HTML, 500 vacío), devolver objeto de error estructurado
+        if (text.length === 0) {
+            console.warn('apiCall: respuesta vacía de ' + endpoint + ' (HTTP ' + res.status + ')');
+        } else {
+            console.warn('apiCall: respuesta no-JSON de ' + endpoint + ' (HTTP ' + res.status + '):', text.substring(0, 200));
+        }
+        return { status: 'error', message: 'Respuesta inválida del servidor (HTTP ' + res.status + ')' };
+    }
 }
 
 // ---- Mode Toggle ----
@@ -338,11 +352,15 @@ document.getElementById('saveProfileBtn').onclick = async () => {
 
 // ---- Projects ----
 async function loadProjects() {
-    const projects = await apiCall('/api/projects');
-    const list = document.getElementById('projectList');
-    list.innerHTML = projects.map(p => `
-        <div class="project-item ${activeProject === p.name ? 'active' : ''}" onclick="selectProject('${p.name}')">${p.name}</div>
-    `).join('');
+    try {
+        const projects = await apiCall('/api/projects');
+        const list = document.getElementById('projectList');
+        if (Array.isArray(projects)) {
+            list.innerHTML = projects.map(p => `
+                <div class="project-item ${activeProject === p.name ? 'active' : ''}" onclick="selectProject('${p.name}')">${p.name}</div>
+            `).join('');
+        }
+    } catch(e) {}
 }
 
 async function selectProject(name) {
@@ -350,14 +368,16 @@ async function selectProject(name) {
     document.getElementById('activeProjectName').innerText = name;
     loadProjects();
     const prompts = await apiCall('/api/prompts');
-    document.getElementById('localPrompt').value = prompts.projects[name] || '';
+    document.getElementById('localPrompt').value = (prompts.projects && prompts.projects[name]) || '';
 }
 
 // ---- Prompts ----
 async function loadPrompts() {
-    const prompts = await apiCall('/api/prompts');
-    document.getElementById('globalPrompt').value = prompts.global_current;
-    if (activeProject) document.getElementById('localPrompt').value = prompts.projects[activeProject] || '';
+    try {
+        const prompts = await apiCall('/api/prompts');
+        document.getElementById('globalPrompt').value = prompts.global_current || '';
+        if (activeProject) document.getElementById('localPrompt').value = (prompts.projects && prompts.projects[activeProject]) || '';
+    } catch(e) {}
 }
 
 document.getElementById('savePromptsBtn').onclick = async () => {
@@ -398,11 +418,13 @@ document.getElementById('addLocalBtn').onclick = async () => {
 // ---- Chat History ----
 async function loadChatHistory() {
     try {
-        const chats = await apiCall('/api/chats');
+        const res = await apiCall('/api/chats');
         const list = document.getElementById('chatHistoryList');
-        list.innerHTML = chats.map(c => `
-            <div class="project-item ${currentSessionId === c.id ? 'active' : ''}" onclick="selectChatSession('${c.id}')">${c.title}</div>
-        `).join('');
+        if (res.chats && Array.isArray(res.chats)) {
+            list.innerHTML = res.chats.map(c => `
+                <div class="project-item ${currentSessionId === c.id ? 'active' : ''}" onclick="selectChatSession('${c.id}')">${c.title}</div>
+            `).join('');
+        }
     } catch(e) {}
 }
 
@@ -607,10 +629,21 @@ document.getElementById('interruptBtn').onclick = async () => {
     await apiCall('/api/agent/interrupt', 'POST');
 };
 
-// ---- CAPTCHA Polling ----
+// ---- CAPTCHA Polling (silencioso: no reporta errores 404 en consola) ----
+let captchaPollFailures = 0;
 setInterval(async () => {
     try {
-        const captcha = await apiCall('/api/captcha/status');
+        const res = await fetch('/api/captcha/status');
+        if (!res.ok) {
+            captchaPollFailures++;
+            // Solo loguear cada 10 fallos para no saturar la consola
+            if (captchaPollFailures % 10 === 0) {
+                console.debug('CAPTCHA polling: endpoint no disponible (HTTP ' + res.status + '), intento #' + captchaPollFailures);
+            }
+            return;
+        }
+        captchaPollFailures = 0;
+        const captcha = await res.json();
         if (captcha && captcha.url) {
             currentCaptcha = captcha;
             document.getElementById('captchaAlert').classList.remove('hidden');
@@ -618,7 +651,10 @@ setInterval(async () => {
         } else {
             document.getElementById('captchaAlert').classList.add('hidden');
         }
-    } catch(e) {}
+    } catch(e) {
+        captchaPollFailures++;
+        // Silenciar errores de red
+    }
 }, 3000);
 
 document.getElementById('openCaptchaBtn').onclick = () => document.getElementById('captchaModal').classList.remove('hidden');
