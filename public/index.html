@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
@@ -105,7 +105,12 @@
             <section id="adminPanel" class="section hidden">
                 <h3>👑 Admin</h3>
                 <button id="adminUsersBtn" class="btn btn-primary" style="width:100%;margin-bottom:8px;">Gestionar Usuarios</button>
-                <button id="adminPromptsBtn" class="btn btn-secondary" style="width:100%">Prompts Globales</button>
+                <button id="adminPromptsBtn" class="btn btn-secondary" style="width:100%;margin-bottom:8px;">Prompts Globales</button>
+                <div style="border-top:1px solid var(--border-color);padding-top:8px;margin-top:8px;">
+                    <p style="font-size:11px;color:var(--text-muted);margin-bottom:4px;">Scripts PowerShell:</p>
+                    <button onclick="downloadScript('generate_keys')" class="btn btn-secondary btn-sm" style="width:100%;margin-bottom:4px;font-size:11px;">📥 generate_keys.ps1</button>
+                    <button onclick="downloadScript('sign_nonce')" class="btn btn-secondary btn-sm" style="width:100%;font-size:11px;">📥 sign_nonce.ps1</button>
+                </div>
             </section>
 
             <div style="margin-top:auto;padding:12px;">
@@ -167,10 +172,16 @@
                 <h4 style="margin-bottom:8px;">Crear Nuevo Usuario</h4>
                 <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
                     <input type="text" id="newUsername" placeholder="Username" style="padding:6px;background:rgba(0,0,0,0.3);border:1px solid var(--border-color);border-radius:6px;color:var(--text-color);">
-                    <input type="password" id="newPassword" placeholder="Contraseña (8+ chars)" style="padding:6px;background:rgba(0,0,0,0.3);border:1px solid var(--border-color);border-radius:6px;color:var(--text-color);">
+                    <div id="newPasswordContainer"><input type="password" id="newPassword" placeholder="Contraseña (8+ chars)" style="width:100%;padding:6px;background:rgba(0,0,0,0.3);border:1px solid var(--border-color);border-radius:6px;color:var(--text-color);"></div>
+                    <div id="newPublicKeyContainer" class="hidden"><input type="text" id="newPublicKey" placeholder="Clave pública (hex 64 chars) o subir .pem" style="width:100%;padding:6px;background:rgba(0,0,0,0.3);border:1px solid var(--border-color);border-radius:6px;color:var(--text-color);"></div>
+                </div>
+                <div style="margin-top:4px;">
+                    <input type="file" id="pemFileInput" accept=".pem" style="font-size:11px;color:var(--text-muted);display:none;">
+                    <button id="uploadPemBtn" class="btn btn-secondary btn-sm hidden" style="font-size:11px;">Subir .pem</button>
+                    <button id="generateKeysBtn" class="btn btn-secondary btn-sm hidden" style="font-size:11px;">Generar Claves</button>
                 </div>
                 <div style="display:flex;gap:12px;margin-top:8px;align-items:center;">
-                    <label style="font-size:12px;"><input type="checkbox" id="newIsAdmin"> Admin</label>
+                    <label style="font-size:12px;"><input type="checkbox" id="newIsAdmin" onchange="toggleAdminCreateMode()"> Admin</label>
                     <label style="font-size:12px;"><input type="checkbox" id="newStudyAccess" checked> Estudio</label>
                     <label style="font-size:12px;"><input type="checkbox" id="newProgAccess"> Programar</label>
                     <button id="createUserBtn" class="btn btn-success btn-sm">Crear</button>
@@ -227,6 +238,21 @@
         <div class="modal-content" style="max-width:650px;"><h3>Plan de Cambios Propuesto</h3><div id="agentPlanContent" style="background:rgba(0,0,0,0.3);border:1px solid var(--border-color);padding:16px;border-radius:8px;max-height:250px;overflow-y:auto;font-family:'JetBrains Mono',monospace;font-size:12px;white-space:pre-wrap;margin-bottom:12px;"></div><div class="btn-group"><button id="approvePlanBtn" class="btn btn-success">Aprobar</button><button id="rejectPlanBtn" class="btn btn-danger">Rechazar</button></div></div>
     </div>
 
+
+    <!-- ===== KEY GENERATION MODAL ===== -->
+    <div id="keygenModal" class="modal hidden">
+        <div class="modal-content" style="max-width:550px;">
+            <h3>🔑 Claves Ed25519 Generadas</h3>
+            <p style="font-size:12px;color:var(--warning);margin-bottom:8px;">⚠️ Guarda la clave PRIVADA ahora. No se volverá a mostrar.</p>
+            <div class="form-group"><label>Clave Pública (para users.json)</label><input type="text" id="keygenPublic" readonly style="width:100%;padding:8px;background:rgba(0,0,0,0.3);border:1px solid var(--border-color);border-radius:6px;color:var(--text-color);font-family:monospace;font-size:11px;"></div>
+            <div class="form-group"><label>Clave Privada (¡guardala ya!)</label><input type="text" id="keygenPrivate" readonly style="width:100%;padding:8px;background:rgba(0,0,0,0.3);border:1px solid var(--warning);border-radius:6px;color:var(--text-color);font-family:monospace;font-size:11px;"></div>
+            <div class="btn-group">
+                <button onclick="downloadPem('private', document.getElementById('keygenPrivate').value)" class="btn btn-warning btn-sm">Descargar .pem (Privada)</button>
+                <button onclick="downloadPem('public', document.getElementById('keygenPublic').value)" class="btn btn-secondary btn-sm">Descargar .pem (Pública)</button>
+                <button id="closeKeygenBtn" class="btn btn-danger btn-sm">Cerrar</button>
+            </div>
+        </div>
+    </div>
     <script src="app.js"></script>
 </body>
 </html>

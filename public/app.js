@@ -1,4 +1,4 @@
-// ============================================================================
+﻿// ============================================================================
 // IAF — app.js — Cliente Web con Autenticación
 // ============================================================================
 
@@ -302,27 +302,134 @@ document.getElementById('deleteUserBtn').onclick = async () => {
 // Create user
 document.getElementById('createUserBtn').onclick = async () => {
     const username = document.getElementById('newUsername').value.trim();
-    const password = document.getElementById('newPassword').value;
-    if (!username || !password) return alert('Username y contraseña requeridos.');
-    if (password.length < 8) return alert('La contraseña debe tener al menos 8 caracteres.');
+    const isAdmin = document.getElementById('newIsAdmin').checked;
 
-    const res = await apiCall('/api/admin/users', 'POST', {
+    if (!username) return alert('Username requerido.');
+
+    const payload = {
         username,
-        password,
-        is_admin: document.getElementById('newIsAdmin').checked,
-        study_access: document.getElementById('newStudyAccess').checked,
-        programming_access: document.getElementById('newProgAccess').checked,
+        is_admin: isAdmin,
+        modo_estudio: document.getElementById('newStudyAccess').checked,
+        modo_programador: document.getElementById('newProgAccess').checked,
         permissions: ['read_file', 'search_code'],
-    });
+    };
+
+    if (isAdmin) {
+        // Admin: requiere public_key, NO password
+        const publicKey = document.getElementById('newPublicKey').value.trim();
+        if (!publicKey || publicKey.length < 64) {
+            return alert('Para crear un admin se requiere la clave pública (64 caracteres hex). Generala con "Generar Claves" o subí un .pem.');
+        }
+        payload.public_key = publicKey;
+    } else {
+        // Usuario normal: requiere password
+        const password = document.getElementById('newPassword').value;
+        if (!password) return alert('Contraseña requerida para usuarios normales.');
+        if (password.length < 8) return alert('La contraseña debe tener al menos 8 caracteres.');
+        payload.password = password;
+    }
+
+    const res = await apiCall('/api/admin/users', 'POST', payload);
 
     if (res.status === 'ok') {
         document.getElementById('newUsername').value = '';
         document.getElementById('newPassword').value = '';
+        document.getElementById('newPublicKey').value = '';
         await refreshUsersTable();
     } else {
         alert('Error: ' + res.message);
     }
 };
+
+// ---- Admin Create Mode Toggle ----
+function toggleAdminCreateMode() {
+    const isAdmin = document.getElementById('newIsAdmin').checked;
+    document.getElementById('newPasswordContainer').classList.toggle('hidden', isAdmin);
+    document.getElementById('newPublicKeyContainer').classList.toggle('hidden', !isAdmin);
+    document.getElementById('uploadPemBtn').classList.toggle('hidden', !isAdmin);
+    document.getElementById('generateKeysBtn').classList.toggle('hidden', !isAdmin);
+    document.getElementById('pemFileInput').style.display = isAdmin ? 'inline' : 'none';
+}
+
+// ---- PEM File Upload ----
+document.getElementById('uploadPemBtn').onclick = () => {
+    document.getElementById('pemFileInput').click();
+};
+
+document.getElementById('pemFileInput').onchange = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    try {
+        const text = await file.text();
+        // Parse PEM: extraer hex key del formato -----BEGIN IAF ED25519 ... KEY-----
+        const match = text.match(/-----BEGIN IAF ED25519 (?:PRIVATE|PUBLIC) KEY-----\s*([a-fA-F0-9]{64})\s*-----END/);
+        if (match) {
+            document.getElementById('newPublicKey').value = match[1].toLowerCase();
+        } else {
+            // Try raw hex
+            const hexMatch = text.match(/^([a-fA-F0-9]{64})$/m);
+            if (hexMatch) {
+                document.getElementById('newPublicKey').value = hexMatch[1].toLowerCase();
+            } else {
+                alert('Formato .pem inválido. Debe contener una clave ED25519 de 64 caracteres hex.');
+            }
+        }
+    } catch(err) { alert('Error leyendo el archivo .pem'); }
+};
+
+// ---- Generate Keys ----
+document.getElementById('generateKeysBtn').onclick = async () => {
+    try {
+        const res = await apiCall('/api/auth/keygen');
+        if (res.status === 'ok') {
+            document.getElementById('keygenPublic').value = res.public_key;
+            document.getElementById('keygenPrivate').value = res.private_key;
+            // Auto-fill public key in the create form
+            document.getElementById('newPublicKey').value = res.public_key;
+            document.getElementById('keygenModal').classList.remove('hidden');
+        } else {
+            alert('Error generando claves: ' + res.message);
+        }
+    } catch(e) { alert('Error de conexión al generar claves.'); }
+};
+
+document.getElementById('closeKeygenBtn').onclick = () => {
+    document.getElementById('keygenModal').classList.add('hidden');
+};
+
+// ---- Download PEM ----
+function downloadPem(type, hexKey) {
+    if (!hexKey) return alert('No hay clave para descargar.');
+    const label = type === 'private' ? 'PRIVATE' : 'PUBLIC';
+    const content = `-----BEGIN IAF ED25519 ${label} KEY-----\n${hexKey}\n-----END IAF ED25519 ${label} KEY-----\n`;
+    const blob = new Blob([content], { type: 'application/x-pem-file' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `iaf_admin_${type}.pem`;
+    a.click();
+    URL.revokeObjectURL(url);
+}
+
+// ---- Download Script ----
+async function downloadScript(name) {
+    try {
+        const headers = {};
+        if (authToken && authToken !== 'admin_local') headers['Authorization'] = 'Bearer ' + authToken;
+        const res = await fetch('/api/scripts/' + name, { headers });
+        if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            return alert('Error: ' + (err.message || 'Script no encontrado.'));
+        }
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = name + '.ps1';
+        a.click();
+        URL.revokeObjectURL(url);
+    } catch(e) { alert('Error descargando script: ' + e.message); }
+}
 
 // ---- Study Profile ----
 async function loadStudyProfile() {
