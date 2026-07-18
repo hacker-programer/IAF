@@ -46,40 +46,177 @@ pub struct UserAccount {
     /// Hash argon2id de la contraseña. Solo para usuarios normales.
     #[serde(default)]
     pub password_hash: Option<String>,
-    /// true = tiene acceso administrativo total
+    /// true = tiene acceso administrativo total (implica el resto de permisos)
     pub is_admin: bool,
-    /// Lista de permisos específicos
+    /// Permite gestionar al resto de usuarios desde la interfaz web
+    #[serde(default)]
+    pub admin: bool,
+    /// Permite acceder al modo programador
+    #[serde(default)]
+    pub modo_programador: bool,
+    /// Permite acceder al modo estudio
+    #[serde(default)]
+    pub modo_estudio: bool,
+    /// Permite editar el system prompt global
+    #[serde(default)]
+    pub editar_system_prompt_global: bool,
+    /// Permite editar los system prompts locales de cada proyecto
+    #[serde(default)]
+    pub editar_system_prompt_local: bool,
+    /// Lista de permisos específicos (herramientas, etc.)
+    #[serde(default)]
     pub permissions: Vec<String>,
-    /// Límites de uso diario y restricciones
+    /// Límites de uso y restricciones
+    #[serde(default)]
     pub limits: UserLimits,
-    /// ¿Tiene acceso al modo estudio?
-    pub has_study_access: bool,
-    /// ¿Tiene acceso al modo programar?
-    pub has_programming_access: bool,
     /// Timestamp de creación (epoch seconds)
+    #[serde(default)]
     pub created_at: u64,
     /// Timestamp de último cambio de clave/contraseña (epoch seconds)
+    #[serde(default)]
     pub key_updated_at: u64,
+}
+
+impl UserAccount {
+    /// Verifica si el usuario tiene un permiso específico. Admin siempre tiene todo.
+    pub fn has_permission(&self, perm: &str) -> bool {
+        if self.is_admin || self.admin {
+            return true;
+        }
+        self.permissions.iter().any(|p| p == perm || p == "*")
+    }
+
+    /// Verifica si tiene acceso al modo programador
+    pub fn has_programming_access(&self) -> bool {
+        self.is_admin || self.admin || self.modo_programador
+    }
+
+    /// Verifica si tiene acceso al modo estudio
+    pub fn has_study_access(&self) -> bool {
+        self.is_admin || self.admin || self.modo_estudio
+    }
+
+    /// Verifica si puede editar el system prompt global
+    pub fn can_edit_global_prompt(&self) -> bool {
+        self.is_admin || self.admin || self.editar_system_prompt_global
+    }
+
+    /// Verifica si puede editar system prompts locales
+    pub fn can_edit_local_prompt(&self) -> bool {
+        self.is_admin || self.admin || self.editar_system_prompt_local
+    }
+}
+
+/// Horario semanal para activación de límites
+#[derive(Clone, Serialize, Deserialize, Debug, Default)]
+pub struct WeeklySchedule {
+    /// Días de la semana y sus franjas horarias activas
+    /// Ejemplo: "lunes" -> [(9, 10), (16, 18)] = activo de 9-10 AM y 4-6 PM
+    #[serde(default)]
+    pub horarios: HashMap<String, Vec<(u32, u32)>>,
+}
+
+impl WeeklySchedule {
+    /// Verifica si el usuario está activo en este momento según el horario
+    pub fn is_active_now(&self) -> bool {
+        if self.horarios.is_empty() {
+            return true; // Sin horarios = siempre activo
+        }
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+
+        // Convertir a fecha/hora local (aproximación UTC para simplificar)
+        let secs_since_midnight = now % 86400;
+        let current_hour = (secs_since_midnight / 3600) as u32;
+
+        // Día de la semana (0 = domingo en UTC, mapeamos a nombres)
+        let days_since_epoch = now / 86400;
+        let day_of_week = (days_since_epoch + 4) % 7; // Ajuste: 0 = lunes
+        let day_name = match day_of_week {
+            0 => "lunes",
+            1 => "martes",
+            2 => "miercoles",
+            3 => "jueves",
+            4 => "viernes",
+            5 => "sabado",
+            6 => "domingo",
+            _ => return true,
+        };
+
+        if let Some(ranges) = self.horarios.get(day_name) {
+            for &(start, end) in ranges {
+                if current_hour >= start && current_hour < end {
+                    return true;
+                }
+            }
+            false
+        } else {
+            // Si no hay horario para este día, no está activo
+            false
+        }
+    }
 }
 
 /// Límites configurables por usuario
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct UserLimits {
-    pub max_tokens_per_day: Option<u64>,
-    pub max_api_calls_per_day: Option<u64>,
+    /// Si los límites están activados. false = sin restricciones (pero sin acceso si no está activado)
+    #[serde(default = "default_activacion")]
+    pub activacion: bool,
+    /// Límite de peticiones por minuto (0 = ilimitado)
+    #[serde(default)]
+    pub peticiones_por_minuto: u32,
+    /// Límite de peticiones por hora (0 = ilimitado)
+    #[serde(default)]
+    pub peticiones_por_hora: u32,
+    /// Límite de iteraciones del agente (0 = ilimitado)
+    #[serde(default)]
+    pub limite_iteraciones: u32,
+    /// Límite de tokens de entrada (0 = ilimitado)
+    #[serde(default)]
+    pub limite_tokens_entrada: u64,
+    /// Límite de tokens de salida (0 = ilimitado)
+    #[serde(default)]
+    pub limite_tokens_salida: u64,
+    /// Horarios de activación (días y horas)
+    #[serde(default)]
+    pub horarios: WeeklySchedule,
+    /// Herramientas permitidas (vacío = todas si admin, ninguna si no)
+    #[serde(default)]
     pub allowed_tools: Vec<String>,
+    /// Máximo de sub-agentes paralelos
+    #[serde(default = "default_max_sub_agents")]
     pub max_sub_agents: usize,
+    /// Máximo de proyectos
+    #[serde(default = "default_max_projects")]
     pub max_projects: usize,
+    /// Puede forkear repositorios
+    #[serde(default)]
     pub can_fork_repos: bool,
+    /// Puede ejecutar PowerShell
+    #[serde(default)]
     pub can_execute_powershell: bool,
+    /// Puede escribir archivos
+    #[serde(default)]
     pub can_write_files: bool,
 }
+
+fn default_activacion() -> bool { true }
+fn default_max_sub_agents() -> usize { 1 }
+fn default_max_projects() -> usize { 2 }
 
 impl Default for UserLimits {
     fn default() -> Self {
         Self {
-            max_tokens_per_day: Some(100_000),
-            max_api_calls_per_day: Some(500),
+            activacion: true,
+            peticiones_por_minuto: 10,
+            peticiones_por_hora: 100,
+            limite_iteraciones: 50,
+            limite_tokens_entrada: 500_000,
+            limite_tokens_salida: 200_000,
+            horarios: WeeklySchedule::default(),
             allowed_tools: vec![
                 "read_file".into(),
                 "search_code".into(),
@@ -97,8 +234,13 @@ impl Default for UserLimits {
 impl UserLimits {
     pub fn admin() -> Self {
         Self {
-            max_tokens_per_day: None,
-            max_api_calls_per_day: None,
+            activacion: true,
+            peticiones_por_minuto: 0,
+            peticiones_por_hora: 0,
+            limite_iteraciones: 0,
+            limite_tokens_entrada: 0,
+            limite_tokens_salida: 0,
+            horarios: WeeklySchedule::default(),
             allowed_tools: vec!["*".into()],
             max_sub_agents: 8,
             max_projects: usize::MAX,
@@ -106,6 +248,14 @@ impl UserLimits {
             can_execute_powershell: true,
             can_write_files: true,
         }
+    }
+
+    /// Verifica si el usuario está activo ahora (según horarios y activación)
+    pub fn is_active_now(&self) -> bool {
+        if !self.activacion {
+            return false;
+        }
+        self.horarios.is_active_now()
     }
 }
 
@@ -178,8 +328,10 @@ impl UserStore {
         is_admin: bool,
         permissions: Vec<String>,
         limits: UserLimits,
-        has_study: bool,
-        has_programming: bool,
+        modo_estudio: bool,
+        modo_programador: bool,
+        editar_global: bool,
+        editar_local: bool,
     ) -> Result<UserAccount, String> {
         if password.len() < 8 {
             return Err("La contraseña debe tener al menos 8 caracteres.".into());
@@ -198,10 +350,13 @@ impl UserStore {
             public_key: None,
             password_hash: Some(hash),
             is_admin,
+            admin: is_admin,
+            modo_programador: is_admin || modo_programador,
+            modo_estudio: is_admin || modo_estudio,
+            editar_system_prompt_global: is_admin || editar_global,
+            editar_system_prompt_local: is_admin || editar_local,
             permissions,
             limits,
-            has_study_access: has_study,
-            has_programming_access: has_programming,
             created_at: now,
             key_updated_at: now,
         };
@@ -233,10 +388,13 @@ impl UserStore {
             public_key: Some(public_key.to_string()),
             password_hash: None,
             is_admin: true,
+            admin: true,
+            modo_programador: true,
+            modo_estudio: true,
+            editar_system_prompt_global: true,
+            editar_system_prompt_local: true,
             permissions,
             limits,
-            has_study_access: true,
-            has_programming_access: true,
             created_at: now,
             key_updated_at: now,
         };
@@ -266,6 +424,10 @@ impl UserStore {
         let valid = Argon2::default().verify_password(password.as_bytes(), &parsed_hash).is_ok();
 
         if valid {
+            // Verificar límites de horario
+            if !user.limits.is_active_now() && !user.is_admin {
+                return Err("Tu cuenta no está activa en este horario.".into());
+            }
             Ok(Some(user))
         } else {
             Ok(None)
@@ -325,13 +487,36 @@ impl UserStore {
         self.save()
     }
 
-    pub fn update_access(&self, username: &str, study: bool, programming: bool) -> Result<(), String> {
+    /// Actualiza accesos del usuario (modo programador, modo estudio, editar prompts)
+    pub fn update_access(
+        &self,
+        username: &str,
+        modo_estudio: bool,
+        modo_programador: bool,
+        editar_global: bool,
+        editar_local: bool,
+    ) -> Result<(), String> {
         let mut users = self.users.lock();
         let user = users.users.iter_mut()
             .find(|u| u.username == username)
             .ok_or_else(|| format!("Usuario '{}' no encontrado.", username))?;
-        user.has_study_access = study;
-        user.has_programming_access = programming;
+        if !user.is_admin {
+            user.modo_estudio = modo_estudio;
+            user.modo_programador = modo_programador;
+            user.editar_system_prompt_global = editar_global;
+            user.editar_system_prompt_local = editar_local;
+        }
+        drop(users);
+        self.save()
+    }
+
+    /// Actualiza horarios de un usuario
+    pub fn update_schedule(&self, username: &str, schedule: WeeklySchedule) -> Result<(), String> {
+        let mut users = self.users.lock();
+        let user = users.users.iter_mut()
+            .find(|u| u.username == username)
+            .ok_or_else(|| format!("Usuario '{}' no encontrado.", username))?;
+        user.limits.horarios = schedule;
         drop(users);
         self.save()
     }
@@ -361,7 +546,7 @@ impl UserStore {
     }
 
     pub fn is_admin(&self, username: &str) -> bool {
-        self.find_user(username).map(|u| u.is_admin).unwrap_or(false)
+        self.find_user(username).map(|u| u.is_admin || u.admin).unwrap_or(false)
     }
 }
 
@@ -588,14 +773,15 @@ mod tests {
         let user = store.create_user_with_password(
             "alumno1", "contraseña_segura_123", false,
             vec!["read_file".into()], UserLimits::default(),
-            true, false,
+            true, false, false, false,
         ).unwrap();
 
         assert_eq!(user.username, "alumno1");
         assert!(user.password_hash.is_some());
         assert!(user.public_key.is_none());
-        assert!(user.has_study_access);
-        assert!(!user.has_programming_access);
+        assert!(user.has_study_access());
+        assert!(!user.has_programming_access());
+        assert!(!user.is_admin);
 
         // Verify login
         let verified = store.verify_password("alumno1", "contraseña_segura_123").unwrap();
@@ -657,11 +843,105 @@ mod tests {
 
         let store = UserStore::load(&config_dir);
         let result = store.create_user_with_password(
-            "test", "corta", false, vec![], UserLimits::default(), false, false
+            "test", "corta", false, vec![], UserLimits::default(), false, false, false, false,
         );
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("8 caracteres"));
 
         let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    #[test]
+    fn test_permissions_model() {
+        // Admin tiene todos los permisos
+        let admin = UserAccount {
+            username: "admin".into(),
+            is_admin: true,
+            admin: true,
+            modo_programador: true,
+            modo_estudio: true,
+            editar_system_prompt_global: true,
+            editar_system_prompt_local: true,
+            ..Default::default()
+        };
+        assert!(admin.has_study_access());
+        assert!(admin.has_programming_access());
+        assert!(admin.can_edit_global_prompt());
+        assert!(admin.can_edit_local_prompt());
+
+        // Usuario normal con modo estudio solamente
+        let user = UserAccount {
+            username: "estudiante".into(),
+            modo_estudio: true,
+            modo_programador: false,
+            editar_system_prompt_global: false,
+            editar_system_prompt_local: false,
+            ..Default::default()
+        };
+        assert!(user.has_study_access());
+        assert!(!user.has_programming_access());
+        assert!(!user.can_edit_global_prompt());
+        assert!(!user.can_edit_local_prompt());
+    }
+
+    #[test]
+    fn test_user_limits_defaults() {
+        let limits = UserLimits::default();
+        assert!(limits.activacion);
+        assert_eq!(limits.peticiones_por_minuto, 10);
+        assert_eq!(limits.peticiones_por_hora, 100);
+        assert_eq!(limits.limite_iteraciones, 50);
+        assert!(limits.is_active_now()); // Sin horarios = siempre activo
+
+        let admin_limits = UserLimits::admin();
+        assert!(admin_limits.activacion);
+        assert_eq!(admin_limits.peticiones_por_minuto, 0); // ilimitado
+        assert_eq!(admin_limits.max_sub_agents, 8);
+    }
+
+    #[test]
+    fn test_weekly_schedule() {
+        let mut schedule = WeeklySchedule::default();
+        // Sin horarios = siempre activo
+        assert!(schedule.is_active_now());
+
+        // Agregar un horario que cubre todas las horas
+        let mut horarios = HashMap::new();
+        horarios.insert("lunes".to_string(), vec![(0, 24)]);
+        horarios.insert("martes".to_string(), vec![(0, 24)]);
+        horarios.insert("miercoles".to_string(), vec![(0, 24)]);
+        horarios.insert("jueves".to_string(), vec![(0, 24)]);
+        horarios.insert("viernes".to_string(), vec![(0, 24)]);
+        horarios.insert("sabado".to_string(), vec![(0, 24)]);
+        horarios.insert("domingo".to_string(), vec![(0, 24)]);
+        schedule.horarios = horarios;
+        assert!(schedule.is_active_now());
+    }
+
+    #[test]
+    fn test_user_limits_inactive_when_disabled() {
+        let mut limits = UserLimits::default();
+        limits.activacion = false;
+        assert!(!limits.is_active_now());
+    }
+
+    impl Default for UserAccount {
+        fn default() -> Self {
+            Self {
+                username: String::new(),
+                public_key: None,
+                password_hash: None,
+                is_admin: false,
+                admin: false,
+                modo_programador: false,
+                modo_estudio: false,
+                editar_system_prompt_global: false,
+                editar_system_prompt_local: false,
+                permissions: vec![],
+                limits: UserLimits::default(),
+                created_at: 0,
+                key_updated_at: 0,
+            }
+        }
     }
 }
