@@ -436,7 +436,7 @@ pub async fn run_agent_loop(
                     "required": ["sub_agent_id"]
                 }
             }
-        })
+        }),
         json!({
             "type": "function",
             "function": {
@@ -1632,11 +1632,11 @@ pub async fn run_agent_loop(
                             .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect())
                             .unwrap_or_default();
                         let project_name = args.get("project_name").and_then(|v| v.as_str()).unwrap_or("default");
+                        let inc_str = if include_patterns.is_empty() { "(todo)".to_string() } else { include_patterns.join(", ") };
+                        let exc_str = if exclude_patterns.is_empty() { "(nada)".to_string() } else { exclude_patterns.join(", ") };
                         let report = format!(
                             "Configuracion de sincronizacion para \"{}\":\n  INCLUIR: {}\n  EXCLUIR: {}\n  Estado: ACTIVO",
-                            project_name,
-                            if include_patterns.is_empty() { "(todo)" } else { &include_patterns.join(", ") },
-                            if exclude_patterns.is_empty() { "(nada)" } else { &exclude_patterns.join(", ") }
+                            project_name, inc_str, exc_str
                         );
                         json!({ "status": "ok", "report": report }).to_string()
                     }
