@@ -1,9 +1,9 @@
-// ============================================================================
-// tests/integration_tests.rs — Tests Exhaustivos de Integración y Aceptación
+﻿// ============================================================================
+// tests/integration_tests.rs â€” Tests Exhaustivos de IntegraciÃ³n y AceptaciÃ³n
 // ============================================================================
 
 // ============================================================================
-// Tests de Aceptación (E2E) — Sin servidor, validan lógica de negocio
+// Tests de AceptaciÃ³n (E2E) â€” Sin servidor, validan lÃ³gica de negocio
 // ============================================================================
 
 #[cfg(test)]
@@ -38,7 +38,7 @@ mod acceptance_tests {
     #[test]
     fn test_study_project_creation() {
         let project = json!({
-            "name": "Rust Básico",
+            "name": "Rust BÃ¡sico",
             "description": "Aprender Rust desde cero",
             "members": ["alumno_test"]
         });
@@ -94,10 +94,10 @@ mod acceptance_tests {
     #[test]
     fn test_password_validation() {
         let short = "abc";
-        assert!(short.len() < 8, "Contraseñas cortas deben ser rechazadas");
+        assert!(short.len() < 8, "ContraseÃ±as cortas deben ser rechazadas");
 
         let valid = "secure_password_123";
-        assert!(valid.len() >= 8, "Contraseñas de 8+ caracteres deben ser aceptadas");
+        assert!(valid.len() >= 8, "ContraseÃ±as de 8+ caracteres deben ser aceptadas");
     }
 
     #[test]
@@ -116,7 +116,7 @@ mod acceptance_tests {
 
     #[test]
     fn test_chat_filename_sanitization() {
-        let title = "¿Qué es Rust? — Aprendiendo Ownership & Borrowing!!!";
+        let title = "Â¿QuÃ© es Rust? â€” Aprendiendo Ownership & Borrowing!!!";
         let sanitized: String = title.chars()
             .map(|c| if c.is_alphanumeric() || c == '-' || c == '_' || c == ' ' { c } else { '_' })
             .collect::<String>()
@@ -124,7 +124,7 @@ mod acceptance_tests {
             .replace(" ", "_");
         assert!(!sanitized.contains("?"));
         assert!(!sanitized.contains("!"));
-        assert!(sanitized.contains("Qué_es_Rust"));
+        assert!(sanitized.contains("QuÃ©_es_Rust"));
     }
 
     #[test]
@@ -167,12 +167,11 @@ mod acceptance_tests {
     }
 }
 // ============================================================================
-// Tests de Integración HTTP (requieren servidor corriendo)
+// Tests de IntegraciÃ³n HTTP (requieren servidor corriendo)
 // ============================================================================
 
 #[cfg(test)]
 mod integration_tests_http {
-    use serde_json::json;
 
     const SERVER_URL: &str = "http://127.0.0.1:8080";
 

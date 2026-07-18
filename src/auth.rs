@@ -1,19 +1,19 @@
-// ============================================================================
-// auth.rs — Sistema de Autenticación Dual
+﻿// ============================================================================
+// auth.rs â€” Sistema de AutenticaciÃ³n Dual
 // ============================================================================
 //
-// ADMIN:    Autenticación por firma Ed25519 (challenge-response).
-//           POST /api/auth/challenge → firma nonce → POST /api/auth/verify
-//           El admin NO tiene contraseña. Solo nonce criptográfico.
+// ADMIN:    AutenticaciÃ³n por firma Ed25519 (challenge-response).
+//           POST /api/auth/challenge â†’ firma nonce â†’ POST /api/auth/verify
+//           El admin NO tiene contraseÃ±a. Solo nonce criptogrÃ¡fico.
 //
-// USUARIOS: Username + contraseña (argon2id, memory-hard).
+// USUARIOS: Username + contraseÃ±a (argon2id, memory-hard).
 //           POST /api/auth/login { "username": "...", "password": "..." }
-//           La contraseña se hashea con argon2id (OWASP recommended).
+//           La contraseÃ±a se hashea con argon2id (OWASP recommended).
 //
-// Solo el admin puede: crear/eliminar usuarios, cambiar límites, permisos,
-// claves públicas, y restablecer contraseñas.
+// Solo el admin puede: crear/eliminar usuarios, cambiar lÃ­mites, permisos,
+// claves pÃºblicas, y restablecer contraseÃ±as.
 //
-// Las cuentas solo las crea el admin. Nadie más puede.
+// Las cuentas solo las crea el admin. Nadie mÃ¡s puede.
 
 use ed25519_dalek::{VerifyingKey, SigningKey, Signature, Signer, Verifier};
 use rand::rngs::OsRng;
@@ -38,12 +38,12 @@ use parking_lot::Mutex;
 /// Cuenta de usuario almacenada en users.json
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct UserAccount {
-    /// Nombre de usuario único
+    /// Nombre de usuario Ãºnico
     pub username: String,
-    /// Clave pública Ed25519 en formato hex (64 caracteres). Solo para admin.
+    /// Clave pÃºblica Ed25519 en formato hex (64 caracteres). Solo para admin.
     #[serde(default)]
     pub public_key: Option<String>,
-    /// Hash argon2id de la contraseña. Solo para usuarios normales.
+    /// Hash argon2id de la contraseÃ±a. Solo para usuarios normales.
     #[serde(default)]
     pub password_hash: Option<String>,
     /// true = tiene acceso administrativo total (implica el resto de permisos)
@@ -63,22 +63,22 @@ pub struct UserAccount {
     /// Permite editar los system prompts locales de cada proyecto
     #[serde(default)]
     pub editar_system_prompt_local: bool,
-    /// Lista de permisos específicos (herramientas, etc.)
+    /// Lista de permisos especÃ­ficos (herramientas, etc.)
     #[serde(default)]
     pub permissions: Vec<String>,
-    /// Límites de uso y restricciones
+    /// LÃ­mites de uso y restricciones
     #[serde(default)]
     pub limits: UserLimits,
-    /// Timestamp de creación (epoch seconds)
+    /// Timestamp de creaciÃ³n (epoch seconds)
     #[serde(default)]
     pub created_at: u64,
-    /// Timestamp de último cambio de clave/contraseña (epoch seconds)
+    /// Timestamp de Ãºltimo cambio de clave/contraseÃ±a (epoch seconds)
     #[serde(default)]
     pub key_updated_at: u64,
 }
 
 impl UserAccount {
-    /// Verifica si el usuario tiene un permiso específico. Admin siempre tiene todo.
+    /// Verifica si el usuario tiene un permiso especÃ­fico. Admin siempre tiene todo.
     pub fn has_permission(&self, perm: &str) -> bool {
         if self.is_admin || self.admin {
             return true;
@@ -107,17 +107,17 @@ impl UserAccount {
     }
 }
 
-/// Horario semanal para activación de límites
+/// Horario semanal para activaciÃ³n de lÃ­mites
 #[derive(Clone, Serialize, Deserialize, Debug, Default)]
 pub struct WeeklySchedule {
-    /// Días de la semana y sus franjas horarias activas
+    /// DÃ­as de la semana y sus franjas horarias activas
     /// Ejemplo: "lunes" -> [(9, 10), (16, 18)] = activo de 9-10 AM y 4-6 PM
     #[serde(default)]
     pub horarios: HashMap<String, Vec<(u32, u32)>>,
 }
 
 impl WeeklySchedule {
-    /// Verifica si el usuario está activo en este momento según el horario
+    /// Verifica si el usuario estÃ¡ activo en este momento segÃºn el horario
     pub fn is_active_now(&self) -> bool {
         if self.horarios.is_empty() {
             return true; // Sin horarios = siempre activo
@@ -127,11 +127,11 @@ impl WeeklySchedule {
             .unwrap()
             .as_secs();
 
-        // Convertir a fecha/hora local (aproximación UTC para simplificar)
+        // Convertir a fecha/hora local (aproximaciÃ³n UTC para simplificar)
         let secs_since_midnight = now % 86400;
         let current_hour = (secs_since_midnight / 3600) as u32;
 
-        // Día de la semana (0 = domingo en UTC, mapeamos a nombres)
+        // DÃ­a de la semana (0 = domingo en UTC, mapeamos a nombres)
         let days_since_epoch = now / 86400;
         let day_of_week = (days_since_epoch + 4) % 7; // Ajuste: 0 = lunes
         let day_name = match day_of_week {
@@ -153,43 +153,43 @@ impl WeeklySchedule {
             }
             false
         } else {
-            // Si no hay horario para este día, no está activo
+            // Si no hay horario para este dÃ­a, no estÃ¡ activo
             false
         }
     }
 }
 
-/// Límites configurables por usuario
+/// LÃ­mites configurables por usuario
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct UserLimits {
-    /// Si los límites están activados. false = sin restricciones (pero sin acceso si no está activado)
+    /// Si los lÃ­mites estÃ¡n activados. false = sin restricciones (pero sin acceso si no estÃ¡ activado)
     #[serde(default = "default_activacion")]
     pub activacion: bool,
-    /// Límite de peticiones por minuto (0 = ilimitado)
+    /// LÃ­mite de peticiones por minuto (0 = ilimitado)
     #[serde(default)]
     pub peticiones_por_minuto: u32,
-    /// Límite de peticiones por hora (0 = ilimitado)
+    /// LÃ­mite de peticiones por hora (0 = ilimitado)
     #[serde(default)]
     pub peticiones_por_hora: u32,
-    /// Límite de iteraciones del agente (0 = ilimitado)
+    /// LÃ­mite de iteraciones del agente (0 = ilimitado)
     #[serde(default)]
     pub limite_iteraciones: u32,
-    /// Límite de tokens de entrada (0 = ilimitado)
+    /// LÃ­mite de tokens de entrada (0 = ilimitado)
     #[serde(default)]
     pub limite_tokens_entrada: u64,
-    /// Límite de tokens de salida (0 = ilimitado)
+    /// LÃ­mite de tokens de salida (0 = ilimitado)
     #[serde(default)]
     pub limite_tokens_salida: u64,
-    /// Horarios de activación (días y horas)
+    /// Horarios de activaciÃ³n (dÃ­as y horas)
     #[serde(default)]
     pub horarios: WeeklySchedule,
-    /// Herramientas permitidas (vacío = todas si admin, ninguna si no)
+    /// Herramientas permitidas (vacÃ­o = todas si admin, ninguna si no)
     #[serde(default)]
     pub allowed_tools: Vec<String>,
-    /// Máximo de sub-agentes paralelos
+    /// MÃ¡ximo de sub-agentes paralelos
     #[serde(default = "default_max_sub_agents")]
     pub max_sub_agents: usize,
-    /// Máximo de proyectos
+    /// MÃ¡ximo de proyectos
     #[serde(default = "default_max_projects")]
     pub max_projects: usize,
     /// Puede forkear repositorios
@@ -250,7 +250,7 @@ impl UserLimits {
         }
     }
 
-    /// Verifica si el usuario está activo ahora (según horarios y activación)
+    /// Verifica si el usuario estÃ¡ activo ahora (segÃºn horarios y activaciÃ³n)
     pub fn is_active_now(&self) -> bool {
         if !self.activacion {
             return false;
@@ -266,7 +266,7 @@ pub struct UsersFile {
 }
 
 // ============================================================================
-// UserStore — Gestión persistente de usuarios
+// UserStore â€” GestiÃ³n persistente de usuarios
 // ============================================================================
 
 #[derive(Clone)]
@@ -283,12 +283,12 @@ impl UserStore {
                 Ok(content) => {
                     serde_json::from_str::<UsersFile>(&content)
                         .unwrap_or_else(|e| {
-                            eprintln!("[auth] Error al parsear users.json: {}. Creando archivo vacío.", e);
+                            eprintln!("[auth] Error al parsear users.json: {}. Creando archivo vacÃ­o.", e);
                             UsersFile::default()
                         })
                 }
                 Err(e) => {
-                    eprintln!("[auth] Error al leer users.json: {}. Creando archivo vacío.", e);
+                    eprintln!("[auth] Error al leer users.json: {}. Creando archivo vacÃ­o.", e);
                     UsersFile::default()
                 }
             }
@@ -320,7 +320,7 @@ impl UserStore {
         self.users.lock().users.clone()
     }
 
-    /// Crea un usuario normal (con contraseña). SOLO admin.
+    /// Crea un usuario normal (con contraseÃ±a). SOLO admin.
     pub fn create_user_with_password(
         &self,
         username: &str,
@@ -334,7 +334,7 @@ impl UserStore {
         editar_local: bool,
     ) -> Result<UserAccount, String> {
         if password.len() < 8 {
-            return Err("La contraseña debe tener al menos 8 caracteres.".into());
+            return Err("La contraseÃ±a debe tener al menos 8 caracteres.".into());
         }
 
         let hash = hash_password(password)?;
@@ -367,7 +367,7 @@ impl UserStore {
         Ok(account)
     }
 
-    /// Crea un admin (con clave pública Ed25519). SOLO admin.
+    /// Crea un admin (con clave pÃºblica Ed25519). SOLO admin.
     pub fn create_admin(
         &self,
         username: &str,
@@ -406,7 +406,7 @@ impl UserStore {
     }
 
     /// Verifica credenciales de usuario normal (username + password).
-    /// Retorna Some(UserAccount) si es válido, None si no.
+    /// Retorna Some(UserAccount) si es vÃ¡lido, None si no.
     pub fn verify_password(&self, username: &str, password: &str) -> Result<Option<UserAccount>, String> {
         let user = match self.find_user(username) {
             Some(u) => u,
@@ -415,7 +415,7 @@ impl UserStore {
 
         let hash_str = match &user.password_hash {
             Some(h) => h.clone(),
-            None => return Err("Este usuario no tiene contraseña configurada (usa nonce).".into()),
+            None => return Err("Este usuario no tiene contraseÃ±a configurada (usa nonce).".into()),
         };
 
         let parsed_hash = PasswordHash::new(&hash_str)
@@ -424,9 +424,9 @@ impl UserStore {
         let valid = Argon2::default().verify_password(password.as_bytes(), &parsed_hash).is_ok();
 
         if valid {
-            // Verificar límites de horario
+            // Verificar lÃ­mites de horario
             if !user.limits.is_active_now() && !user.is_admin {
-                return Err("Tu cuenta no está activa en este horario.".into());
+                return Err("Tu cuenta no estÃ¡ activa en este horario.".into());
             }
             Ok(Some(user))
         } else {
@@ -434,10 +434,10 @@ impl UserStore {
         }
     }
 
-    /// Cambia la contraseña de un usuario. SOLO admin.
+    /// Cambia la contraseÃ±a de un usuario. SOLO admin.
     pub fn change_password(&self, username: &str, new_password: &str) -> Result<(), String> {
         if new_password.len() < 8 {
-            return Err("La contraseña debe tener al menos 8 caracteres.".into());
+            return Err("La contraseÃ±a debe tener al menos 8 caracteres.".into());
         }
 
         let hash = hash_password(new_password)?;
@@ -452,7 +452,7 @@ impl UserStore {
         self.save()
     }
 
-    /// Actualiza la clave pública Ed25519 de un admin. SOLO admin.
+    /// Actualiza la clave pÃºblica Ed25519 de un admin. SOLO admin.
     pub fn update_public_key(&self, username: &str, new_public_key: &str) -> Result<(), String> {
         Self::validate_public_key_hex(new_public_key)?;
 
@@ -534,14 +534,14 @@ impl UserStore {
     fn validate_public_key_hex(hex_key: &str) -> Result<(), String> {
         if hex_key.len() != 64 {
             return Err(format!(
-                "Clave pública inválida: debe ser 64 caracteres hex (32 bytes). Tiene {}.",
+                "Clave pÃºblica invÃ¡lida: debe ser 64 caracteres hex (32 bytes). Tiene {}.",
                 hex_key.len()
             ));
         }
         let bytes = hex::decode(hex_key)
-            .map_err(|e| format!("Clave pública no es hex válido: {}", e))?;
+            .map_err(|e| format!("Clave pÃºblica no es hex vÃ¡lido: {}", e))?;
         VerifyingKey::try_from(&bytes[..])
-            .map_err(|e| format!("Clave pública no es una clave Ed25519 válida: {}", e))?;
+            .map_err(|e| format!("Clave pÃºblica no es una clave Ed25519 vÃ¡lida: {}", e))?;
         Ok(())
     }
 
@@ -551,7 +551,7 @@ impl UserStore {
 }
 
 // ============================================================================
-// ChallengeStore — Nonces efímeros (solo admin)
+// ChallengeStore â€” Nonces efÃ­meros (solo admin)
 // ============================================================================
 
 #[derive(Clone)]
@@ -597,9 +597,9 @@ impl ChallengeStore {
         public_key_hex: &str,
     ) -> Result<bool, String> {
         let pk_bytes = hex::decode(public_key_hex)
-            .map_err(|e| format!("Error decodificando clave pública: {}", e))?;
+            .map_err(|e| format!("Error decodificando clave pÃºblica: {}", e))?;
         let verifying_key = VerifyingKey::try_from(&pk_bytes[..])
-            .map_err(|e| format!("Clave pública inválida: {}", e))?;
+            .map_err(|e| format!("Clave pÃºblica invÃ¡lida: {}", e))?;
 
         let nonce_bytes = BASE64.decode(nonce_b64)
             .map_err(|e| format!("Error decodificando nonce: {}", e))?;
@@ -632,7 +632,7 @@ impl ChallengeStore {
         let sig_bytes = BASE64.decode(signature_b64)
             .map_err(|e| format!("Error decodificando firma: {}", e))?;
         let signature = Signature::try_from(&sig_bytes[..])
-            .map_err(|e| format!("Firma inválida: {}", e))?;
+            .map_err(|e| format!("Firma invÃ¡lida: {}", e))?;
 
         let is_valid = verifying_key.verify(&nonce_bytes, &signature).is_ok();
 
@@ -717,13 +717,13 @@ fn epoch_now() -> u64 {
     SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs()
 }
 
-/// Hashea una contraseña con argon2id (memory-hard, OWASP recommended).
+/// Hashea una contraseÃ±a con argon2id (memory-hard, OWASP recommended).
 fn hash_password(password: &str) -> Result<String, String> {
     let salt = SaltString::generate(&mut ArgonOsRng);
     let argon2 = Argon2::default();
     let hash = argon2
         .hash_password(password.as_bytes(), &salt)
-        .map_err(|e| format!("Error al hashear contraseña: {}", e))?;
+        .map_err(|e| format!("Error al hashear contraseÃ±a: {}", e))?;
     Ok(hash.to_string())
 }
 
@@ -738,7 +738,7 @@ pub fn sign_message(private_key_hex: &str, message: &[u8]) -> Result<String, Str
     let sk_bytes = hex::decode(private_key_hex)
         .map_err(|e| format!("Error decodificando clave privada: {}", e))?;
     let signing_key = SigningKey::try_from(&sk_bytes[..])
-        .map_err(|e| format!("Clave privada inválida: {}", e))?;
+        .map_err(|e| format!("Clave privada invÃ¡lida: {}", e))?;
     let signature = signing_key.sign(message);
     Ok(BASE64.encode(signature.to_bytes()))
 }
@@ -753,25 +753,25 @@ mod tests {
 
     #[test]
     fn test_password_hash_and_verify() {
-        let hash = hash_password("mi_super_contraseña_123").unwrap();
+        let hash = hash_password("mi_super_contraseÃ±a_123").unwrap();
         assert!(hash.starts_with("$argon2"));
 
         // Verify
         let parsed = PasswordHash::new(&hash).unwrap();
-        assert!(Argon2::default().verify_password("mi_super_contraseña_123".as_bytes(), &parsed).is_ok());
-        assert!(Argon2::default().verify_password("contraseña_mala".as_bytes(), &parsed).is_err());
+        assert!(Argon2::default().verify_password("mi_super_contraseÃ±a_123".as_bytes(), &parsed).is_ok());
+        assert!(Argon2::default().verify_password("contraseÃ±a_mala".as_bytes(), &parsed).is_err());
     }
 
     #[test]
     fn test_create_user_with_password() {
-        let tmp = std::env::temp_dir().join("iaf_test_pw");
+        let tmp = std::env::temp_dir().join(format!("iaf_test_pw_{}", uuid::Uuid::new_v4()));
         let _ = std::fs::create_dir_all(&tmp);
         let config_dir = tmp.join(".config");
         let _ = std::fs::create_dir_all(&config_dir);
 
         let store = UserStore::load(&config_dir);
         let user = store.create_user_with_password(
-            "alumno1", "contraseña_segura_123", false,
+            "alumno1", "contraseÃ±a_segura_123", false,
             vec!["read_file".into()], UserLimits::default(),
             true, false, false, false,
         ).unwrap();
@@ -784,7 +784,7 @@ mod tests {
         assert!(!user.is_admin);
 
         // Verify login
-        let verified = store.verify_password("alumno1", "contraseña_segura_123").unwrap();
+        let verified = store.verify_password("alumno1", "contraseÃ±a_segura_123").unwrap();
         assert!(verified.is_some());
 
         // Bad password
@@ -798,7 +798,7 @@ mod tests {
     fn test_admin_nonce_flow() {
         let (private_hex, public_hex) = generate_keypair();
 
-        let tmp = std::env::temp_dir().join("iaf_test_admin");
+        let tmp = std::env::temp_dir().join(format!("iaf_test_admin_{}", uuid::Uuid::new_v4()));
         let _ = std::fs::create_dir_all(&tmp);
         let config_dir = tmp.join(".config");
         let _ = std::fs::create_dir_all(&config_dir);
@@ -836,7 +836,7 @@ mod tests {
 
     #[test]
     fn test_password_too_short() {
-        let tmp = std::env::temp_dir().join("iaf_test_short");
+        let tmp = std::env::temp_dir().join(format!("iaf_test_short_{}", uuid::Uuid::new_v4()));
         let _ = std::fs::create_dir_all(&tmp);
         let config_dir = tmp.join(".config");
         let _ = std::fs::create_dir_all(&config_dir);
