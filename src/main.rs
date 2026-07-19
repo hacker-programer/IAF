@@ -1534,7 +1534,6 @@ async fn get_agent_status(State(state): State<AppState>) -> impl IntoResponse {
         "esperando_aprobacion_plan": status.esperando_aprobacion_plan,
         "plan_propuesto": status.plan_propuesto,
         "current_session_id": status.current_session_id,
-    }))
 }
 
 async fn agent_steps(
