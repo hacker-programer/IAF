@@ -1,4 +1,4 @@
-﻿// ============================================================================
+// ============================================================================
 // IAF — app.js — Cliente Web con Autenticación
 // ============================================================================
 
@@ -166,7 +166,6 @@ document.getElementById('logoutBtn').onclick = async () => {
 };
 
 // ---- Auth headers for all API calls ----
-// Versión resiliente: maneja respuestas no-JSON (404, 500, HTML) sin romperse
 async function apiCall(endpoint, method = 'GET', body = null) {
     const opts = { method, headers: { 'Content-Type': 'application/json' } };
     if (authToken && authToken !== 'admin_local') {
@@ -178,7 +177,6 @@ async function apiCall(endpoint, method = 'GET', body = null) {
     try {
         return JSON.parse(text);
     } catch (e) {
-        // Si la respuesta no es JSON (ej: 404 HTML, 500 vacío), devolver objeto de error estructurado
         if (text.length === 0) {
             console.warn('apiCall: respuesta vacía de ' + endpoint + ' (HTTP ' + res.status + ')');
         } else {
@@ -229,6 +227,40 @@ async function refreshUsersTable() {
     } catch(e) {}
 }
 
+// ============================================================================
+// EDIT USER - with schedule, activation, granular permissions
+// ============================================================================
+
+const DAY_NAMES = ['lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado', 'domingo'];
+
+function buildScheduleGrid(schedule) {
+    const grid = document.getElementById('editScheduleGrid');
+    grid.innerHTML = DAY_NAMES.map(day => {
+        const ranges = (schedule && schedule.horarios && schedule.horarios[day])
+            ? schedule.horarios[day].map(r => r.join('-')).join(',')
+            : '';
+        return `<span class="day-label">${day}</span><input type="text" data-day="${day}" value="${ranges}" placeholder="9-12,14-18">`;
+    }).join('');
+}
+
+function parseScheduleGrid() {
+    const horarios = {};
+    document.querySelectorAll('#editScheduleGrid input[type="text"]').forEach(input => {
+        const day = input.dataset.day;
+        const raw = input.value.trim();
+        if (!raw) { horarios[day] = []; return; }
+        const ranges = raw.split(',').map(s => s.trim()).filter(Boolean).map(rangeStr => {
+            const parts = rangeStr.split('-').map(Number);
+            if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
+                return [parts[0], parts[1]];
+            }
+            return null;
+        }).filter(Boolean);
+        horarios[day] = ranges;
+    });
+    return horarios;
+}
+
 async function editUser(username) {
     const res = await apiCall('/api/admin/users');
     const user = res.users.find(u => u.username === username);
@@ -236,14 +268,29 @@ async function editUser(username) {
 
     document.getElementById('editUsername').textContent = username;
     document.getElementById('editPassword').value = '';
-    document.getElementById('editMaxTokens').value = user.limits.max_tokens_per_day ?? 'null';
-    document.getElementById('editMaxApiCalls').value = user.limits.max_api_calls_per_day ?? 'null';
-    document.getElementById('editMaxSubAgents').value = user.limits.max_sub_agents;
-    document.getElementById('editCanFork').checked = user.limits.can_fork_repos;
-    document.getElementById('editCanExecPS').checked = user.limits.can_execute_powershell;
-    document.getElementById('editCanWrite').checked = user.limits.can_write_files;
-    document.getElementById('editStudyAccess').checked = user.has_study_access;
-    document.getElementById('editProgAccess').checked = user.has_programming_access;
+
+    // Limits
+    const lim = user.limits || {};
+    document.getElementById('editMaxTokens').value = lim.max_tokens_per_day ?? 0;
+    document.getElementById('editMaxApiCalls').value = lim.max_api_calls_per_day ?? 0;
+    document.getElementById('editMaxIterations').value = lim.limite_iteraciones ?? 0;
+    document.getElementById('editMaxSubAgents').value = lim.max_sub_agents ?? 1;
+
+    // Activation
+    document.getElementById('editActivacion').checked = lim.activacion !== false;
+
+    // Permission toggles
+    document.getElementById('editCanFork').checked = lim.can_fork_repos || false;
+    document.getElementById('editCanExecPS').checked = lim.can_execute_powershell || false;
+    document.getElementById('editCanWrite').checked = lim.can_write_files || false;
+    document.getElementById('editCanSearchGoogle').checked = (lim.allowed_tools || []).includes('search_google');
+    document.getElementById('editStudyAccess').checked = user.has_study_access || false;
+    document.getElementById('editProgAccess').checked = user.has_programming_access || false;
+    document.getElementById('editGlobalPromptPerm').checked = user.editar_system_prompt_global || false;
+    document.getElementById('editLocalPromptPerm').checked = user.editar_system_prompt_local || false;
+
+    // Schedule
+    buildScheduleGrid(lim.horarios || {});
 
     document.getElementById('adminEditUserModal').classList.remove('hidden');
 }
@@ -261,26 +308,42 @@ document.getElementById('saveEditUserBtn').onclick = async () => {
     const pwd = document.getElementById('editPassword').value.trim();
     const maxTokensRaw = document.getElementById('editMaxTokens').value.trim();
     const maxApiCallsRaw = document.getElementById('editMaxApiCalls').value.trim();
+    const maxIterRaw = document.getElementById('editMaxIterations').value.trim();
+    const maxSub = parseInt(document.getElementById('editMaxSubAgents').value) || 1;
+    const activacion = document.getElementById('editActivacion').checked;
+
+    // Build allowed_tools
+    const allowedTools = ['read_file', 'search_code'];
+    if (document.getElementById('editCanSearchGoogle').checked) allowedTools.push('search_google');
 
     const limits = {
-        max_tokens_per_day: maxTokensRaw === 'null' || maxTokensRaw === '' ? null : parseInt(maxTokensRaw),
-        max_api_calls_per_day: maxApiCallsRaw === 'null' || maxApiCallsRaw === '' ? null : parseInt(maxApiCallsRaw),
-        max_sub_agents: parseInt(document.getElementById('editMaxSubAgents').value) || 1,
+        activacion: activacion,
+        max_tokens_per_day: maxTokensRaw === '' || maxTokensRaw === '0' ? 0 : parseInt(maxTokensRaw),
+        max_api_calls_per_day: maxApiCallsRaw === '' || maxApiCallsRaw === '0' ? 0 : parseInt(maxApiCallsRaw),
+        limite_iteraciones: maxIterRaw === '' || maxIterRaw === '0' ? 0 : parseInt(maxIterRaw),
+        max_sub_agents: maxSub,
         max_projects: 2,
-        allowed_tools: ['read_file', 'search_code', 'search_google'],
+        allowed_tools: allowedTools,
         can_fork_repos: document.getElementById('editCanFork').checked,
         can_execute_powershell: document.getElementById('editCanExecPS').checked,
         can_write_files: document.getElementById('editCanWrite').checked,
+        horarios: { horarios: parseScheduleGrid() },
     };
 
     // Update limits
     await apiCall(`/api/admin/users/${username}/limits`, 'PUT', { limits });
 
-    // Update access
+    // Update access (granular permissions)
     await apiCall(`/api/admin/users/${username}/access`, 'PUT', {
-        study_access: document.getElementById('editStudyAccess').checked,
-        programming_access: document.getElementById('editProgAccess').checked,
+        modo_estudio: document.getElementById('editStudyAccess').checked,
+        modo_programador: document.getElementById('editProgAccess').checked,
+        editar_system_prompt_global: document.getElementById('editGlobalPromptPerm').checked,
+        editar_system_prompt_local: document.getElementById('editLocalPromptPerm').checked,
     });
+
+    // Update schedule separately
+    const horarios = parseScheduleGrid();
+    await apiCall(`/api/admin/users/${username}/schedule`, 'PUT', { horarios });
 
     // Change password if provided
     if (pwd) {
@@ -299,30 +362,37 @@ document.getElementById('deleteUserBtn').onclick = async () => {
     await refreshUsersTable();
 };
 
-// Create user
+// ============================================================================
+// CREATE USER - with granular permissions
+// ============================================================================
+
 document.getElementById('createUserBtn').onclick = async () => {
     const username = document.getElementById('newUsername').value.trim();
     const isAdmin = document.getElementById('newIsAdmin').checked;
 
     if (!username) return alert('Username requerido.');
 
+    // Build allowed_tools from checkboxes
+    const allowedTools = ['read_file', 'search_code'];
+    if (document.getElementById('newCanSearchGoogle').checked) allowedTools.push('search_google');
+
     const payload = {
         username,
         is_admin: isAdmin,
         modo_estudio: document.getElementById('newStudyAccess').checked,
         modo_programador: document.getElementById('newProgAccess').checked,
-        permissions: ['read_file', 'search_code'],
+        editar_system_prompt_global: document.getElementById('newEditGlobalPrompt').checked,
+        editar_system_prompt_local: document.getElementById('newEditLocalPrompt').checked,
+        permissions: allowedTools,
     };
 
     if (isAdmin) {
-        // Admin: requiere public_key, NO password
         const publicKey = document.getElementById('newPublicKey').value.trim();
         if (!publicKey || publicKey.length < 64) {
             return alert('Para crear un admin se requiere la clave pública (64 caracteres hex). Generala con "Generar Claves" o subí un .pem.');
         }
         payload.public_key = publicKey;
     } else {
-        // Usuario normal: requiere password
         const password = document.getElementById('newPassword').value;
         if (!password) return alert('Contraseña requerida para usuarios normales.');
         if (password.length < 8) return alert('La contraseña debe tener al menos 8 caracteres.');
@@ -335,6 +405,17 @@ document.getElementById('createUserBtn').onclick = async () => {
         document.getElementById('newUsername').value = '';
         document.getElementById('newPassword').value = '';
         document.getElementById('newPublicKey').value = '';
+        // Reset checkboxes
+        document.getElementById('newIsAdmin').checked = false;
+        document.getElementById('newStudyAccess').checked = true;
+        document.getElementById('newProgAccess').checked = false;
+        document.getElementById('newEditGlobalPrompt').checked = false;
+        document.getElementById('newEditLocalPrompt').checked = false;
+        document.getElementById('newCanFork').checked = false;
+        document.getElementById('newCanExecPS').checked = false;
+        document.getElementById('newCanWrite').checked = false;
+        document.getElementById('newCanSearchGoogle').checked = false;
+        toggleAdminCreateMode();
         await refreshUsersTable();
     } else {
         alert('Error: ' + res.message);
@@ -361,12 +442,10 @@ document.getElementById('pemFileInput').onchange = async (e) => {
     if (!file) return;
     try {
         const text = await file.text();
-        // Parse PEM: extraer hex key del formato -----BEGIN IAF ED25519 ... KEY-----
         const match = text.match(/-----BEGIN IAF ED25519 (?:PRIVATE|PUBLIC) KEY-----\s*([a-fA-F0-9]{64})\s*-----END/);
         if (match) {
             document.getElementById('newPublicKey').value = match[1].toLowerCase();
         } else {
-            // Try raw hex
             const hexMatch = text.match(/^([a-fA-F0-9]{64})$/m);
             if (hexMatch) {
                 document.getElementById('newPublicKey').value = hexMatch[1].toLowerCase();
@@ -384,7 +463,6 @@ document.getElementById('generateKeysBtn').onclick = async () => {
         if (res.status === 'ok') {
             document.getElementById('keygenPublic').value = res.public_key;
             document.getElementById('keygenPrivate').value = res.private_key;
-            // Auto-fill public key in the create form
             document.getElementById('newPublicKey').value = res.public_key;
             document.getElementById('keygenModal').classList.remove('hidden');
         } else {
@@ -518,7 +596,7 @@ document.getElementById('addLocalBtn').onclick = async () => {
     const path = document.getElementById('localProjPath').value.trim();
     if (!name || !path) return alert('Nombre y ruta requeridos.');
     const res = await apiCall('/api/projects/local', 'POST', { name, path });
-    if (res.status === 'ok') { loadProjects(); }
+    if (res.status === 'ok') { alert('Proyecto local agregado.'); loadProjects(); }
     else alert('Error: ' + res.message);
 };
 
@@ -658,70 +736,87 @@ function addMessage(role, text) {
     document.getElementById('chatArea').scrollTop = document.getElementById('chatArea').scrollHeight;
 }
 
-// ---- Agent Monitor ----
-function startAgentMonitoring() {
-    document.getElementById('interruptBtn').classList.remove('hidden');
-    document.getElementById('consoleArea').innerHTML = '';
+// ---- Agent Monitoring (Console) ----
+async function startAgentMonitoring() {
     if (agentMonitorInterval) clearInterval(agentMonitorInterval);
-
+    document.getElementById('interruptBtn').classList.remove('hidden');
     agentMonitorInterval = setInterval(async () => {
-        const status = await apiCall('/api/agent/status');
-        const consoleArea = document.getElementById('consoleArea');
-        consoleArea.innerHTML = '';
-        if (!status.steps || status.steps.length === 0) {
-            consoleArea.innerHTML = '<div class="console-empty">El agente se está preparando...</div>';
-        }
-        (status.steps || []).forEach(step => {
-            const div = document.createElement('div');
-            div.className = `console-step ${step.step_type}`;
-            div.innerHTML = `<div class="console-step-title">${step.title}</div><div class="console-step-detail">${step.detail}</div>`;
-            consoleArea.appendChild(div);
-        });
-        consoleArea.scrollTop = consoleArea.scrollHeight;
-
-        if (currentSessionId) {
-            try {
-                const chatRes = await apiCall(`/api/chats/${currentSessionId}`);
-                if (chatRes.status === 'ok') {
-                    const msgCount = document.getElementById('chatArea').querySelectorAll('.message').length;
-                    if (chatRes.session.messages.length > msgCount) {
-                        document.getElementById('chatArea').innerHTML = '';
-                        chatRes.session.messages.forEach(m => addMessage(m.role, m.content));
-                    }
-                }
-            } catch(e) {}
-        }
-
-        if (status.esperando_respuesta_usuario) {
-            document.getElementById('agentQuestionPrompt').innerText = status.pregunta_usuario;
-            document.getElementById('agentQuestionModal').classList.remove('hidden');
+        const statusRes = await apiCall('/api/agent/status');
+        if (statusRes.status === 'ok' && statusRes.active) {
+            const stepsRes = await apiCall('/api/agent/steps');
+            if (stepsRes.status === 'ok' && stepsRes.steps) {
+                renderConsoleSteps(stepsRes.steps);
+            }
+            if (statusRes.captcha_pending) {
+                document.getElementById('captchaAlert').classList.remove('hidden');
+            }
         } else {
-            document.getElementById('agentQuestionModal').classList.add('hidden');
-        }
-
-        if (status.esperando_aprobacion_plan) {
-            document.getElementById('agentPlanContent').innerText = status.plan_propuesto;
-            document.getElementById('agentPlanModal').classList.remove('hidden');
-        } else {
-            document.getElementById('agentPlanModal').classList.add('hidden');
-        }
-
-        if (!status.running) {
-            clearInterval(agentMonitorInterval);
             document.getElementById('interruptBtn').classList.add('hidden');
-            if (currentSessionId) selectChatSession(currentSessionId);
         }
-    }, 1000);
+    }, 1500);
 }
 
+function renderConsoleSteps(steps) {
+    const area = document.getElementById('consoleArea');
+    area.innerHTML = steps.map(s => {
+        let cls = 'console-step';
+        if (s.type === 'tool_call') cls += ' tool_call';
+        else if (s.type === 'tool_result') cls += ' tool_result';
+        else if (s.type === 'error') cls += ' error';
+        return `<div class="${cls}">
+            <div class="console-step-title">${s.title || s.type}</div>
+            <div class="console-step-detail">${s.detail || ''}</div>
+        </div>`;
+    }).join('');
+    area.scrollTop = area.scrollHeight;
+}
+
+document.getElementById('interruptBtn').onclick = async () => {
+    await apiCall('/api/agent/interrupt', 'POST');
+    document.getElementById('interruptBtn').classList.add('hidden');
+    if (agentMonitorInterval) clearInterval(agentMonitorInterval);
+};
+
+document.getElementById('summarizeStepsBtn').onclick = async () => {
+    const res = await apiCall('/api/agent/summary');
+    if (res.status === 'ok') {
+        const area = document.getElementById('consoleArea');
+        area.innerHTML = `<div class="console-step"><div class="console-step-title">📋 Resumen</div><div class="console-step-detail">${res.summary}</div></div>`;
+    }
+};
+
+// ---- CAPTCHA ----
+document.getElementById('openCaptchaBtn').onclick = async () => {
+    const res = await apiCall('/api/captcha/status');
+    if (res.status === 'ok' && res.url) {
+        document.getElementById('captchaLink').href = res.url;
+        document.getElementById('captchaModal').classList.remove('hidden');
+    }
+};
+
+document.getElementById('submitCaptchaBtn').onclick = async () => {
+    const solution = document.getElementById('captchaSolution').value.trim();
+    if (!solution) return;
+    const res = await apiCall('/api/captcha/solve', 'POST', { id: currentCaptcha, solved_content: solution });
+    if (res.status === 'ok') {
+        document.getElementById('captchaModal').classList.add('hidden');
+        document.getElementById('captchaAlert').classList.add('hidden');
+    } else { alert('Error: ' + res.message); }
+};
+
+document.getElementById('closeCaptchaBtn').onclick = () => {
+    document.getElementById('captchaModal').classList.add('hidden');
+};
+
+// ---- Agent Question ----
 document.getElementById('submitAgentResponseBtn').onclick = async () => {
-    const resp = document.getElementById('agentQuestionResponse').value.trim();
-    if (!resp) return alert('Ingresa una respuesta.');
-    await apiCall('/api/agent/responder', 'POST', { respuesta: resp });
-    document.getElementById('agentQuestionResponse').value = '';
+    const respuesta = document.getElementById('agentQuestionResponse').value.trim();
+    if (!respuesta) return;
+    await apiCall('/api/agent/responder', 'POST', { respuesta });
     document.getElementById('agentQuestionModal').classList.add('hidden');
 };
 
+// ---- Agent Plan ----
 document.getElementById('approvePlanBtn').onclick = async () => {
     await apiCall('/api/agent/aprobar_plan', 'POST', { aprobado: true });
     document.getElementById('agentPlanModal').classList.add('hidden');
@@ -732,47 +827,5 @@ document.getElementById('rejectPlanBtn').onclick = async () => {
     document.getElementById('agentPlanModal').classList.add('hidden');
 };
 
-document.getElementById('interruptBtn').onclick = async () => {
-    await apiCall('/api/agent/interrupt', 'POST');
-};
-
-// ---- CAPTCHA Polling (silencioso: no reporta errores 404 en consola) ----
-let captchaPollFailures = 0;
-setInterval(async () => {
-    try {
-        const res = await fetch('/api/captcha/status');
-        if (!res.ok) {
-            captchaPollFailures++;
-            // Solo loguear cada 10 fallos para no saturar la consola
-            if (captchaPollFailures % 10 === 0) {
-                console.debug('CAPTCHA polling: endpoint no disponible (HTTP ' + res.status + '), intento #' + captchaPollFailures);
-            }
-            return;
-        }
-        captchaPollFailures = 0;
-        const captcha = await res.json();
-        if (captcha && captcha.url) {
-            currentCaptcha = captcha;
-            document.getElementById('captchaAlert').classList.remove('hidden');
-            document.getElementById('captchaLink').href = captcha.url;
-        } else {
-            document.getElementById('captchaAlert').classList.add('hidden');
-        }
-    } catch(e) {
-        captchaPollFailures++;
-        // Silenciar errores de red
-    }
-}, 3000);
-
-document.getElementById('openCaptchaBtn').onclick = () => document.getElementById('captchaModal').classList.remove('hidden');
-document.getElementById('closeCaptchaBtn').onclick = () => document.getElementById('captchaModal').classList.add('hidden');
-document.getElementById('submitCaptchaBtn').onclick = async () => {
-    const sol = document.getElementById('captchaSolution').value.trim();
-    if (!sol) return;
-    await apiCall('/api/captcha/solve', 'POST', { id: currentCaptcha.id, solved_content: sol });
-    document.getElementById('captchaModal').classList.add('hidden');
-    document.getElementById('captchaAlert').classList.add('hidden');
-};
-
-// ---- Start ----
+// ---- Init ----
 init();
