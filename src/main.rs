@@ -1549,10 +1549,10 @@ async fn agent_steps(
     Json(json!({ "status": "ok", "steps": agent.steps })).into_response()
 }
     State(state): State<AppState>,
+async fn agent_summary(
+    State(state): State<AppState>,
     headers: HeaderMap,
 ) -> impl IntoResponse {
-    let _username = match require_auth(&state, &headers).await {
-        Ok(u) => u,
         Err(_) => return Json(json!({ "status": "ok", "summary": "Agente inactivo." })).into_response(),
     };
     let agent = state.active_agent.lock().unwrap();
