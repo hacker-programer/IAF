@@ -1058,11 +1058,10 @@ mod integration_tests_http {
         (0, serde_json::json!({"status":"error","message":"Max retries"}))
     }
 
-        let (status, _body) = get_json_safe("/api/agent/status").await;
 
+    #[tokio::test]
     async fn test_server_is_alive() {
-        let (status, body) = get_json_safe("/api/agent/status").await;
-        // Puede devolver 200 o 401 (sin auth) - ambos indican que el servidor responde
+        let (status, _body) = get_json_safe("/api/agent/status").await;
         assert!(status == 200 || status == 401 || status == 400,
             "Servidor debe responder en /api/agent/status (got {})", status);
     }
