@@ -28,9 +28,14 @@
 - **Lección**: Siempre verificar que la versión servida coincida con el código fuente.
 
 ### BUG #6: Modo estudio no envía mensajes
-- **Causa**: El backend `/api/chat` recibe el campo `mode` pero no hace nada distinto con él para modo estudio. El frontend correctamente envía `mode: 'study'`. Posiblemente también faltaba verificación de permisos `has_study_access()` en backend.
-- **Fix**: El frontend ya verifica `authHasStudy` antes de mostrar el botón. El backend recibe `mode` en `ChatInput`. Pendiente: agregar verificación de permiso de estudio en el endpoint chat cuando mode='study'.
+- **Causa**: El backend `/api/chat` recibe el campo `mode` pero no hace nada distinto con él para modo estudio. El frontend correctamente envía `mode: 'study'`. También faltaba verificación de permisos `has_study_access()` en el backend.
+- **Fix**: El frontend ya verifica `authHasStudy` antes de mostrar el botón. El backend recibe `mode` en `ChatInput`. Se agregó verificación de permiso de estudio/programación en el endpoint `/api/chat` cuando se especifica `mode`. Ahora rechaza con 403 si el usuario no tiene el permiso correspondiente.
 - **Lección**: Validar permisos tanto en frontend (UX) como en backend (seguridad).
+
+### BUG #7: Permisos modo_programador y modo_estudio siempre desactivados en UI de admin
+- **Causa**: El endpoint `GET /api/admin/users` serializa `UserAccount` directamente con serde. `UserAccount` tiene campos `modo_estudio` y `modo_programador`, pero el frontend (`app.js`) espera `has_study_access` y `has_programming_access` (que son métodos calculados, no campos serializables: `has_study_access()` devuelve `is_admin || admin || modo_estudio`). Como los métodos no se serializan, el JSON de respuesta no incluía esos campos, el frontend recibía `undefined`, y los checkboxes/íconos siempre mostraban estado falso.
+- **Fix**: Se modificó `admin_list_users` en `main.rs` para transformar la lista de usuarios agregando los campos calculados `has_study_access` y `has_programming_access` a cada objeto antes de serializar.
+- **Lección**: Cuando el frontend y backend usan nombres de campo diferentes, verificar que el backend serialice lo que el frontend espera. Los métodos en Rust no se serializan a JSON.
 
 ## Por qué los tests no detectaron estos bugs
 - Los tests existentes eran mayormente unitarios de estructuras JSON, no tests de UI ni E2E.
@@ -49,3 +54,4 @@
 - `PUT /api/admin/users/:username/limits` acepta campo `activacion: bool`
 - `POST /api/chat` acepta campo `mode: "study" | "programming"`
 - `POST /api/projects/local` acepta `{ "name": "...", "path": "..." }`
+- `GET /api/admin/users` ahora incluye `has_study_access` y `has_programming_access` en cada usuario
