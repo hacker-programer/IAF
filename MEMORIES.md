@@ -85,4 +85,22 @@
 - `GET /api/admin/users` ahora incluye `has_study_access` y `has_programming_access` en cada usuario
 - `GET /api/agent/status` ahora devuelve `{ "status": "ok", "active": bool, ... }`
 - `GET /api/agent/steps` — NUEVO endpoint para pasos de auditoría
+- `GET /api/agent/steps` — NUEVO endpoint para pasos de auditoría
 - `GET /api/agent/summary` — NUEVO endpoint para resumen textual del progreso
+
+### BUG #12: Las preguntas del agente no se muestran al usuario (modal agentQuestionModal nunca se abre)
+- **Síntoma**: El agente llama a `notificar_usuario` con tipo `pregunta`, el backend correctamente establece `esperando_respuesta_usuario=true` y guarda `pregunta_usuario`, pero el frontend nunca abre el modal.
+- **Causa**: `startAgentMonitoring()` en `app.js` hacía polling a `/api/agent/status` pero solo leía `statusRes.active` y `statusRes.captcha_pending`. NUNCA leía `statusRes.esperando_respuesta_usuario` ni `statusRes.pregunta_usuario`. El modal `agentQuestionModal` estaba definido en el HTML pero nunca se abría programáticamente.
+- **Fix**: Se agregó lógica en `startAgentMonitoring()` que revisa `esperando_respuesta_usuario` y `pregunta_usuario` y abre el modal. También se agregó detección de `esperando_aprobacion_plan` y `plan_propuesto` para abrir `agentPlanModal`. Se usan flags `agentQuestionShown` y `agentPlanShown` para evitar abrir el modal repetidamente durante el polling. También se agregaron los campos `esperando_aprobacion_plan` y `plan_propuesto` al endpoint `get_agent_status` (que no estaban en la respuesta JSON).
+- **Tests de regresión**: `tests/frontend_regression_tests.js` — 10 tests (A-001 a A-010) que validan: detección de pregunta, no re-mostrar, pregunta vacía, sin pregunta, detección de plan, reset de flags, CAPTCHA, pregunta+plan simultáneos, agente inactivo, respuesta de error.
+- **Lección**: El contrato API frontend-backend debe verificarse en ambos lados. Si el backend devuelve un campo pero el frontend no lo consume, es un bug tan grave como si el backend no lo devolviera.
+
+### BUG #13: copyNonceCmd no copia nada — usa event sin declararlo y no tiene fallback para HTTP
+- **Síntoma**: El botón 📋 en la pantalla de login nonce no copiaba el comando al portapapeles.
+- **Causa doble**:
+  1. `function copyNonceCmd()` usaba `event.target` sin declarar `event` como parámetro. En strict mode esto causa `ReferenceError`.
+  2. `navigator.clipboard.writeText()` solo funciona en HTTPS o localhost. En HTTP (puerto 8080) la Promise se rechaza. No había fallback con `document.execCommand('copy')`.
+- **Fix**: `copyNonceCmd(event)` ahora recibe `event` explícitamente. Se agregó `fallbackCopy()` usando `textarea + execCommand('copy')` para navegadores sin Clipboard API o HTTP. Si ambos fallan, muestra un alert con el comando para copia manual.
+- **Tests de regresión**: `tests/frontend_regression_tests.js` — 6 tests (B-001 a B-006) que validan: copia con event, sin event, sin clipboard API (fallback), fallback que falla, nonce vacío, caracteres especiales en nonce.
+- **Lección**: Las funciones que responden a eventos DOM deben declarar `event` como parámetro. El Clipboard API requiere un contexto seguro; siempre debe haber fallback.
+
