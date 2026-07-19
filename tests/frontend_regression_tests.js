@@ -49,7 +49,8 @@ let mockDocument = {
         appendChild: function(el) { el.parentNode = this; },
         removeChild: function(el) { el.parentNode = null; }
     },
-    querySelector: function(sel) { return null; }
+    document.querySelector: function(sel) { return null; },
+    execCommand: function(cmd) { return cmd === 'copy'; }
 };
 
 // Mock de window
@@ -63,8 +64,19 @@ let mockWindow = {
 let alertMessages = [];
 function mockAlert(msg) { alertMessages.push(msg); }
 
-// Mock de setTimeout
-function mockSetTimeout(fn, delay) { fn(); return 999; }
+// Mock de setTimeout — NO ejecuta inmediatamente (simula asincronía)
+let setTimeoutCallbacks = [];
+function mockSetTimeout(fn, delay) {
+    // Guarda el callback pero NO lo ejecuta — permite verificar estado intermedio
+    setTimeoutCallbacks.push(fn);
+    return 999;
+}
+function flushSetTimeout() {
+    while (setTimeoutCallbacks.length > 0) {
+        const cb = setTimeoutCallbacks.shift();
+        cb();
+    }
+}
 
 // ============================================================================
 // Implementación de la función CORREGIDA copyNonceCmd
@@ -133,6 +145,10 @@ function copyNonceCmd(event) {
         if (fallbackCopy(cmd)) {
             onSuccess();
         } else {
+            onFailure();
+        }
+    }
+}
             onFailure();
         }
     }
