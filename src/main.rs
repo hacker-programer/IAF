@@ -1548,7 +1548,7 @@ async fn agent_steps(
     let agent = state.active_agent.lock().unwrap();
     Json(json!({ "status": "ok", "steps": agent.steps })).into_response()
 }
-    State(state): State<AppState>,
+async fn agent_summary(
 async fn agent_summary(
     State(state): State<AppState>,
     headers: HeaderMap,
