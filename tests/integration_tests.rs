@@ -526,7 +526,7 @@ mod regression_tests {
             nonce
         );
 
-        // Verificar formato
+        assert!(cmd.starts_with(".\\scripts\\sign_nonce.ps1"));
         assert!(cmd.startsWith(".\\scripts\\sign_nonce.ps1"));
         assert!(cmd.contains("-Nonce"));
         assert!(cmd.contains(nonce));
