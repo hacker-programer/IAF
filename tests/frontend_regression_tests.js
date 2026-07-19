@@ -16,7 +16,7 @@
 // ============================================================================
 
 // Mock de navigator.clipboard
-let mockClipboard = {
+var mockClipboard = {
     available: true,
     written: null,
     writeText: function(text) {
@@ -26,12 +26,12 @@ let mockClipboard = {
 };
 
 // Mock de navigator
-let mockNavigator = {
+var mockNavigator = {
     clipboard: mockClipboard
 };
 
 // Mock de document
-let mockDocument = {
+var mockDocument = {
     elements: {},
     getElementById: function(id) {
         return this.elements[id] || null;
@@ -42,6 +42,7 @@ let mockDocument = {
             value: '',
             style: {},
             select: function() {},
+            focus: function() {},
             parentNode: null
         };
     },
@@ -49,31 +50,30 @@ let mockDocument = {
         appendChild: function(el) { el.parentNode = this; },
         removeChild: function(el) { el.parentNode = null; }
     },
-    document.querySelector: function(sel) { return null; },
+    querySelector: function(sel) { return null; },
     execCommand: function(cmd) { return cmd === 'copy'; }
 };
 
 // Mock de window
-let mockWindow = {
+var mockWindow = {
     _lastNonce: 'test_nonce_abc123',
     _lastAdminUser: 'admin',
     event: null
 };
 
 // Mock de alert
-let alertMessages = [];
+var alertMessages = [];
 function mockAlert(msg) { alertMessages.push(msg); }
 
 // Mock de setTimeout — NO ejecuta inmediatamente (simula asincronía)
-let setTimeoutCallbacks = [];
+var setTimeoutCallbacks = [];
 function mockSetTimeout(fn, delay) {
-    // Guarda el callback pero NO lo ejecuta — permite verificar estado intermedio
     setTimeoutCallbacks.push(fn);
     return 999;
 }
 function flushSetTimeout() {
     while (setTimeoutCallbacks.length > 0) {
-        const cb = setTimeoutCallbacks.shift();
+        var cb = setTimeoutCallbacks.shift();
         cb();
     }
 }
@@ -84,24 +84,17 @@ function flushSetTimeout() {
 // ============================================================================
 
 function copyNonceCmd(event) {
-    // Normalizar el evento (soporte cross-browser)
     event = event || mockWindow.event;
-    const nonce = mockWindow._lastNonce || '';
-    const cmd = '.\\scripts\\sign_nonce.ps1 -Nonce "' + nonce + '" -KeyPath ".config\\admin_private.pem"';
+    var nonce = mockWindow._lastNonce || '';
+    var cmd = '.\\scripts\\sign_nonce.ps1 -Nonce "' + nonce + '" -KeyPath ".config\\admin_private.pem"';
 
-    // Resolver el botón que disparó el evento
     var btn = null;
     if (event && event.target) {
         btn = event.target;
     } else {
-        // Fallback: buscar por clase
         btn = mockDocument.querySelector('.btn-copy-small');
     }
 
-    /**
-     * Fallback: copia usando textarea + execCommand.
-     * Funciona en HTTP y navegadores sin Clipboard API.
-     */
     function fallbackCopy(text) {
         var ta = mockDocument.createElement('textarea');
         ta.value = text;
@@ -132,7 +125,6 @@ function copyNonceCmd(event) {
         mockAlert('No se pudo copiar al portapapeles. Copiá manualmente:\n\n' + cmd);
     }
 
-    // Intentar primero la API moderna
     if (mockNavigator.clipboard && typeof mockNavigator.clipboard.writeText === 'function') {
         mockNavigator.clipboard.writeText(cmd).then(onSuccess).catch(function () {
             if (fallbackCopy(cmd)) {
@@ -149,59 +141,30 @@ function copyNonceCmd(event) {
         }
     }
 }
-            onFailure();
-        }
-    }
-}
 
 // ============================================================================
 // Implementación de la lógica CORREGIDA de startAgentMonitoring
 // (función que decide si mostrar el modal de pregunta/plan)
 // ============================================================================
 
-/**
- * Determina si se debe mostrar el modal de pregunta del agente.
- * Esta lógica DEBE estar en startAgentMonitoring.
- *
- * BUG #A: Esta verificación NO existía en el frontend. El backend
- * correctamente devolvía esperando_respuesta_usuario y pregunta_usuario
- * pero el frontend nunca los leía.
- */
 function shouldShowQuestionModal(statusResponse, alreadyShown) {
     if (alreadyShown) return false;
-
-    const esperando = statusResponse.esperando_respuesta_usuario;
-    const pregunta = statusResponse.pregunta_usuario;
-
-    // Debe esperar respuesta Y tener una pregunta no vacía
-    return esperando === true
-        && typeof pregunta === 'string'
-        && pregunta.length > 0;
+    var esperando = statusResponse.esperando_respuesta_usuario;
+    var pregunta = statusResponse.pregunta_usuario;
+    return esperando === true && typeof pregunta === 'string' && pregunta.length > 0;
 }
 
-/**
- * Determina si se debe mostrar el modal de aprobación de plan.
- */
 function shouldShowPlanModal(statusResponse, alreadyShown) {
     if (alreadyShown) return false;
-
-    const esperando = statusResponse.esperando_aprobacion_plan;
-    const plan = statusResponse.plan_propuesto;
-
-    return esperando === true
-        && typeof plan === 'string'
-        && plan.length > 0;
+    var esperando = statusResponse.esperando_aprobacion_plan;
+    var plan = statusResponse.plan_propuesto;
+    return esperando === true && typeof plan === 'string' && plan.length > 0;
 }
 
-/**
- * Simula el polling de startAgentMonitoring.
- * Retorna las acciones que debe tomar el frontend.
- */
 function simulateAgentPolling(statusResponse, currentState) {
-    const actions = [];
+    var actions = [];
 
     if (statusResponse.status === 'ok' && (statusResponse.active || statusResponse.running)) {
-        // Verificar pregunta pendiente
         if (shouldShowQuestionModal(statusResponse, currentState.questionShown)) {
             actions.push({
                 action: 'showQuestionModal',
@@ -211,7 +174,6 @@ function simulateAgentPolling(statusResponse, currentState) {
             currentState.questionShown = true;
         }
 
-        // Verificar plan pendiente
         if (shouldShowPlanModal(statusResponse, currentState.planShown)) {
             actions.push({
                 action: 'showPlanModal',
@@ -221,13 +183,11 @@ function simulateAgentPolling(statusResponse, currentState) {
             currentState.planShown = true;
         }
 
-        // Verificar CAPTCHA
         if (statusResponse.captcha_pending) {
             actions.push({ action: 'showCaptchaAlert' });
         }
     }
 
-    // Si ya no está esperando, resetear flags
     if (!statusResponse.esperando_respuesta_usuario) {
         currentState.questionShown = false;
     }
@@ -242,26 +202,26 @@ function simulateAgentPolling(statusResponse, currentState) {
 // TESTS
 // ============================================================================
 
-let passed = 0;
-let failed = 0;
+var passed = 0;
+var failed = 0;
 
 function assert(condition, testName) {
     if (condition) {
         passed++;
-        console.log('  ✓ ' + testName);
+        console.log('  \u2713 ' + testName);
     } else {
         failed++;
-        console.error('  ✗ FAIL: ' + testName);
+        console.error('  \u2717 FAIL: ' + testName);
     }
 }
 
 function assertEquals(actual, expected, testName) {
     if (actual === expected) {
         passed++;
-        console.log('  ✓ ' + testName);
+        console.log('  \u2713 ' + testName);
     } else {
         failed++;
-        console.error('  ✗ FAIL: ' + testName + ' — expected: ' + JSON.stringify(expected) + ', actual: ' + JSON.stringify(actual));
+        console.error('  \u2717 FAIL: ' + testName + ' — expected: ' + JSON.stringify(expected) + ', actual: ' + JSON.stringify(actual));
     }
 }
 
@@ -274,32 +234,27 @@ console.log('\n=== TESTS DE REGRESIÓN: copyNonceCmd ===\n');
 console.log('REG-B-001: copyNonceCmd con event.target válido');
 {
     alertMessages = [];
-    mockClipboard.available = true;
     mockClipboard.written = null;
     mockNavigator.clipboard = mockClipboard;
-    mockDocument.execCommand = function() { return true; };
 
-    const mockBtn = { textContent: '📋' };
-    const mockEvent = { target: mockBtn };
+    var mockBtn = { textContent: '📋' };
+    var mockEvent = { target: mockBtn };
 
     copyNonceCmd(mockEvent);
 
-    // Verificar que el texto se copió
     assert(mockClipboard.written !== null, 'El comando debe copiarse al portapapeles');
     assert(mockClipboard.written.indexOf('sign_nonce.ps1') !== -1, 'El comando debe contener sign_nonce.ps1');
     assert(mockClipboard.written.indexOf('test_nonce_abc123') !== -1, 'El comando debe contener el nonce');
     assert(mockClipboard.written.indexOf('.config\\admin_private.pem') !== -1, 'El comando debe contener el KeyPath');
-    assertEquals(mockBtn.textContent, '✓', 'El botón debe mostrar ✓ después de copiar');
+    assertEquals(mockBtn.textContent, '✓', 'El botón debe mostrar ✓ después de copiar (antes de setTimeout)');
 }
 
 console.log('REG-B-002: copyNonceCmd sin event (event = undefined)');
 {
     alertMessages = [];
-    mockClipboard.available = true;
     mockClipboard.written = null;
     mockNavigator.clipboard = mockClipboard;
 
-    // Sin evento — no debe crashear
     try {
         copyNonceCmd(undefined);
         assert(true, 'copyNonceCmd(undefined) no debe lanzar excepción');
@@ -312,15 +267,15 @@ console.log('REG-B-003: copyNonceCmd sin navigator.clipboard (fallback)');
 {
     alertMessages = [];
     mockClipboard.written = null;
-    mockNavigator.clipboard = null; // Sin Clipboard API
+    mockNavigator.clipboard = null;
     mockDocument.execCommand = function(cmd) { return cmd === 'copy'; };
 
-    const mockBtn = { textContent: '📋' };
-    const mockEvent = { target: mockBtn };
+    var mockBtn2 = { textContent: '📋' };
+    var mockEvent2 = { target: mockBtn2 };
 
     try {
-        copyNonceCmd(mockEvent);
-        assert(mockBtn.textContent === '✓', 'El fallback debe funcionar y mostrar ✓');
+        copyNonceCmd(mockEvent2);
+        assertEquals(mockBtn2.textContent, '✓', 'El fallback debe funcionar y mostrar ✓');
     } catch (e) {
         assert(false, 'copyNonceCmd sin clipboard lanzó excepción: ' + e.message);
     }
@@ -332,14 +287,13 @@ console.log('REG-B-004: copyNonceCmd con fallback que falla');
     mockNavigator.clipboard = {
         writeText: function() { return Promise.reject(new Error('Denied')); }
     };
-    mockDocument.execCommand = function() { return false; }; // fallback también falla
+    mockDocument.execCommand = function() { return false; };
 
-    const mockBtn = { textContent: '📋' };
-    const mockEvent = { target: mockBtn };
+    var mockBtn3 = { textContent: '📋' };
+    var mockEvent3 = { target: mockBtn3 };
 
-    // Debe ejecutarse sin crashear
     try {
-        copyNonceCmd(mockEvent);
+        copyNonceCmd(mockEvent3);
         assert(true, 'No debe crashear incluso si todo falla');
     } catch (e) {
         assert(false, 'Crashó: ' + e.message);
@@ -349,15 +303,14 @@ console.log('REG-B-004: copyNonceCmd con fallback que falla');
 console.log('REG-B-005: copyNonceCmd con nonce vacío');
 {
     alertMessages = [];
-    mockClipboard.available = true;
     mockClipboard.written = null;
     mockNavigator.clipboard = mockClipboard;
     mockWindow._lastNonce = '';
 
-    const mockBtn = { textContent: '📋' };
-    const mockEvent = { target: mockBtn };
+    var mockBtn4 = { textContent: '📋' };
+    var mockEvent4 = { target: mockBtn4 };
 
-    copyNonceCmd(mockEvent);
+    copyNonceCmd(mockEvent4);
 
     assert(mockClipboard.written !== null, 'Debe copiar incluso con nonce vacío');
     assert(mockClipboard.written.indexOf('-Nonce ""') !== -1, 'El comando debe tener -Nonce "" con nonce vacío');
@@ -366,18 +319,16 @@ console.log('REG-B-005: copyNonceCmd con nonce vacío');
 console.log('REG-B-006: copyNonceCmd con caracteres especiales en nonce');
 {
     alertMessages = [];
-    mockClipboard.available = true;
     mockClipboard.written = null;
     mockNavigator.clipboard = mockClipboard;
     mockWindow._lastNonce = 'abc!@#$%^&*()_+{}[]|;:<>,.?/~`';
 
-    const mockBtn = { textContent: '📋' };
-    const mockEvent = { target: mockBtn };
+    var mockBtn5 = { textContent: '📋' };
+    var mockEvent5 = { target: mockBtn5 };
 
-    copyNonceCmd(mockEvent);
+    copyNonceCmd(mockEvent5);
 
     assert(mockClipboard.written !== null, 'Debe copiar con caracteres especiales');
-    // El nonce con caracteres especiales debe estar presente en el comando
     assert(mockClipboard.written.indexOf('abc!@#$%^&*()_+{}[]|;') !== -1,
         'El nonce con caracteres especiales debe estar en el comando');
 }
@@ -390,7 +341,7 @@ console.log('\n=== TESTS DE REGRESIÓN: startAgentMonitoring (BUG #A) ===\n');
 
 console.log('REG-A-001: Detectar pregunta pendiente del agente');
 {
-    const statusResponse = {
+    var statusResponse = {
         status: 'ok',
         active: true,
         esperando_respuesta_usuario: true,
@@ -400,8 +351,8 @@ console.log('REG-A-001: Detectar pregunta pendiente del agente');
         captcha_pending: false
     };
 
-    const currentState = { questionShown: false, planShown: false };
-    const actions = simulateAgentPolling(statusResponse, currentState);
+    var currentState = { questionShown: false, planShown: false };
+    var actions = simulateAgentPolling(statusResponse, currentState);
 
     assert(actions.length === 1, 'Debe haber exactamente 1 acción');
     assert(actions[0].action === 'showQuestionModal', 'La acción debe ser showQuestionModal');
@@ -411,174 +362,145 @@ console.log('REG-A-001: Detectar pregunta pendiente del agente');
 
 console.log('REG-A-002: No mostrar modal si ya se mostró');
 {
-    const statusResponse = {
-        status: 'ok',
-        active: true,
+    var statusResponse2 = {
+        status: 'ok', active: true,
         esperando_respuesta_usuario: true,
         pregunta_usuario: '¿Qué framework usar?',
         esperando_aprobacion_plan: false,
         plan_propuesto: null
     };
-
-    const currentState = { questionShown: true, planShown: false }; // Ya mostrado
-    const actions = simulateAgentPolling(statusResponse, currentState);
-
-    assertEquals(actions.length, 0, 'No debe haber acciones si el modal ya se mostró');
+    var currentState2 = { questionShown: true, planShown: false };
+    var actions2 = simulateAgentPolling(statusResponse2, currentState2);
+    assertEquals(actions2.length, 0, 'No debe haber acciones si el modal ya se mostró');
 }
 
 console.log('REG-A-003: No mostrar modal si pregunta está vacía');
 {
-    const statusResponse = {
-        status: 'ok',
-        active: true,
+    var statusResponse3 = {
+        status: 'ok', active: true,
         esperando_respuesta_usuario: true,
-        pregunta_usuario: '',  // ¡vacía!
+        pregunta_usuario: '',
         esperando_aprobacion_plan: false,
         plan_propuesto: null
     };
-
-    const currentState = { questionShown: false, planShown: false };
-    const actions = simulateAgentPolling(statusResponse, currentState);
-
-    assertEquals(actions.length, 0, 'No debe mostrar modal si la pregunta está vacía');
+    var currentState3 = { questionShown: false, planShown: false };
+    var actions3 = simulateAgentPolling(statusResponse3, currentState3);
+    assertEquals(actions3.length, 0, 'No debe mostrar modal si la pregunta está vacía');
 }
 
 console.log('REG-A-004: No mostrar modal si no está esperando respuesta');
 {
-    const statusResponse = {
-        status: 'ok',
-        active: true,
-        esperando_respuesta_usuario: false,  // No esperando
+    var statusResponse4 = {
+        status: 'ok', active: true,
+        esperando_respuesta_usuario: false,
         pregunta_usuario: null,
         esperando_aprobacion_plan: false,
         plan_propuesto: null
     };
-
-    const currentState = { questionShown: false, planShown: false };
-    const actions = simulateAgentPolling(statusResponse, currentState);
-
-    assertEquals(actions.length, 0, 'No debe haber acciones si no hay pregunta pendiente');
-    assertEquals(currentState.questionShown, false, 'questionShown debe permanecer false');
+    var currentState4 = { questionShown: false, planShown: false };
+    var actions4 = simulateAgentPolling(statusResponse4, currentState4);
+    assertEquals(actions4.length, 0, 'No debe haber acciones si no hay pregunta pendiente');
+    assertEquals(currentState4.questionShown, false, 'questionShown debe permanecer false');
 }
 
 console.log('REG-A-005: Detectar plan propuesto');
 {
-    const statusResponse = {
-        status: 'ok',
-        active: true,
+    var statusResponse5 = {
+        status: 'ok', active: true,
         esperando_respuesta_usuario: false,
         pregunta_usuario: null,
         esperando_aprobacion_plan: true,
         plan_propuesto: '1. Modificar main.rs\n2. Agregar tests\n3. Actualizar docs',
         captcha_pending: false
     };
+    var currentState5 = { questionShown: false, planShown: false };
+    var actions5 = simulateAgentPolling(statusResponse5, currentState5);
 
-    const currentState = { questionShown: false, planShown: false };
-    const actions = simulateAgentPolling(statusResponse, currentState);
-
-    assert(actions.length === 1, 'Debe haber exactamente 1 acción');
-    assert(actions[0].action === 'showPlanModal', 'La acción debe ser showPlanModal');
-    assert(actions[0].plan.indexOf('Modificar main.rs') !== -1, 'El plan debe contener las acciones propuestas');
-    assertEquals(currentState.planShown, true, 'planShown debe ser true');
+    assert(actions5.length === 1, 'Debe haber exactamente 1 acción');
+    assert(actions5[0].action === 'showPlanModal', 'La acción debe ser showPlanModal');
+    assert(actions5[0].plan.indexOf('Modificar main.rs') !== -1, 'El plan debe contener las acciones propuestas');
+    assertEquals(currentState5.planShown, true, 'planShown debe ser true');
 }
 
 console.log('REG-A-006: Resetear flags cuando el agente deja de esperar');
 {
-    // Primera llamada: pregunta pendiente
-    const status1 = {
+    var status1 = {
         status: 'ok', active: true,
         esperando_respuesta_usuario: true,
         pregunta_usuario: '¿Qué hacer?',
         esperando_aprobacion_plan: false,
         plan_propuesto: null
     };
+    var currentState6 = { questionShown: false, planShown: false };
+    var actions6a = simulateAgentPolling(status1, currentState6);
+    assert(actions6a.length === 1, 'Debe detectar la pregunta inicial');
+    assertEquals(currentState6.questionShown, true, 'questionShown debe ser true');
 
-    const currentState = { questionShown: false, planShown: false };
-    let actions = simulateAgentPolling(status1, currentState);
-    assert(actions.length === 1, 'Debe detectar la pregunta inicial');
-    assertEquals(currentState.questionShown, true, 'questionShown debe ser true');
-
-    // Segunda llamada: usuario respondió, agente ya no espera
-    const status2 = {
+    var status2 = {
         status: 'ok', active: true,
         esperando_respuesta_usuario: false,
         pregunta_usuario: null,
         esperando_aprobacion_plan: false,
         plan_propuesto: null
     };
-
-    actions = simulateAgentPolling(status2, currentState);
-    assertEquals(currentState.questionShown, false, 'questionShown debe resetearse cuando el agente deja de esperar');
+    simulateAgentPolling(status2, currentState6);
+    assertEquals(currentState6.questionShown, false, 'questionShown debe resetearse cuando el agente deja de esperar');
 }
 
 console.log('REG-A-007: Detectar CAPTCHA pendiente');
 {
-    const statusResponse = {
-        status: 'ok',
-        active: true,
+    var statusResponse7 = {
+        status: 'ok', active: true,
         esperando_respuesta_usuario: false,
         pregunta_usuario: null,
         esperando_aprobacion_plan: false,
         plan_propuesto: null,
         captcha_pending: true
     };
-
-    const currentState = { questionShown: false, planShown: false };
-    const actions = simulateAgentPolling(statusResponse, currentState);
-
-    assert(actions.length === 1, 'Debe haber acción de CAPTCHA');
-    assert(actions[0].action === 'showCaptchaAlert', 'Debe mostrar alerta de CAPTCHA');
+    var currentState7 = { questionShown: false, planShown: false };
+    var actions7 = simulateAgentPolling(statusResponse7, currentState7);
+    assert(actions7.length === 1, 'Debe haber acción de CAPTCHA');
+    assert(actions7[0].action === 'showCaptchaAlert', 'Debe mostrar alerta de CAPTCHA');
 }
 
 console.log('REG-A-008: Pregunta y plan simultáneos (caso borde)');
 {
-    const statusResponse = {
-        status: 'ok',
-        active: true,
+    var statusResponse8 = {
+        status: 'ok', active: true,
         esperando_respuesta_usuario: true,
         pregunta_usuario: '¿Qué DB usar?',
         esperando_aprobacion_plan: true,
         plan_propuesto: 'Plan de cambios',
         captcha_pending: false
     };
+    var currentState8 = { questionShown: false, planShown: false };
+    var actions8 = simulateAgentPolling(statusResponse8, currentState8);
 
-    const currentState = { questionShown: false, planShown: false };
-    const actions = simulateAgentPolling(statusResponse, currentState);
-
-    assert(actions.length === 2, 'Debe haber 2 acciones (pregunta + plan)');
-    assert(actions.some(a => a.action === 'showQuestionModal'), 'Debe incluir showQuestionModal');
-    assert(actions.some(a => a.action === 'showPlanModal'), 'Debe incluir showPlanModal');
+    assert(actions8.length === 2, 'Debe haber 2 acciones (pregunta + plan)');
+    assert(actions8.some(function(a) { return a.action === 'showQuestionModal'; }), 'Debe incluir showQuestionModal');
+    assert(actions8.some(function(a) { return a.action === 'showPlanModal'; }), 'Debe incluir showPlanModal');
 }
 
 console.log('REG-A-009: Agente inactivo no debe mostrar nada');
 {
-    const statusResponse = {
-        status: 'ok',
-        active: false,
-        running: false,
+    var statusResponse9 = {
+        status: 'ok', active: false, running: false,
         esperando_respuesta_usuario: false,
         pregunta_usuario: null,
         esperando_aprobacion_plan: false,
         plan_propuesto: null
     };
-
-    const currentState = { questionShown: false, planShown: false };
-    const actions = simulateAgentPolling(statusResponse, currentState);
-
-    assertEquals(actions.length, 0, 'Agente inactivo no debe generar acciones');
+    var currentState9 = { questionShown: false, planShown: false };
+    var actions9 = simulateAgentPolling(statusResponse9, currentState9);
+    assertEquals(actions9.length, 0, 'Agente inactivo no debe generar acciones');
 }
 
-console.log('REG-A-010: Respuesta sin status "ok" no debe procesarse');
+console.log('REG-A-010: Respuesta sin status ok no debe procesarse');
 {
-    const statusResponse = {
-        status: 'error',
-        message: 'Unauthorized'
-    };
-
-    const currentState = { questionShown: false, planShown: false };
-    const actions = simulateAgentPolling(statusResponse, currentState);
-
-    assertEquals(actions.length, 0, 'Respuesta de error no debe generar acciones');
+    var statusResponse10 = { status: 'error', message: 'Unauthorized' };
+    var currentState10 = { questionShown: false, planShown: false };
+    var actions10 = simulateAgentPolling(statusResponse10, currentState10);
+    assertEquals(actions10.length, 0, 'Respuesta de error no debe generar acciones');
 }
 
 // ============================================================================
