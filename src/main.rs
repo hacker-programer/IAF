@@ -444,7 +444,6 @@ async fn client_check() -> impl IntoResponse {
 // ============================================================================
 
 async fn admin_list_users(
-async fn admin_list_users(
     State(state): State<AppState>,
     headers: HeaderMap,
 ) -> impl IntoResponse {
