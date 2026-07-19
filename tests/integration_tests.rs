@@ -748,8 +748,10 @@ mod acceptance_tests {
         assert!(perms_empty.is_empty());
 
         // Todos los permisos (admin)
+        // Todos los permisos (admin)
         let perms_all = vec!["*"];
-        assert!(perms_all.contains(&"*".to_string()));
+        assert!(perms_all.contains(&"*"));
+
 
         // Máximo número de permisos individuales
         let perms_many = vec![
