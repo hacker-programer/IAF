@@ -527,7 +527,7 @@ mod regression_tests {
         );
 
         assert!(cmd.starts_with(".\\scripts\\sign_nonce.ps1"));
-        assert!(cmd.startsWith(".\\scripts\\sign_nonce.ps1"));
+        assert!(cmd.starts_with(".\\scripts\\sign_nonce.ps1"));
         assert!(cmd.contains("-Nonce"));
         assert!(cmd.contains(nonce));
         assert!(cmd.contains("-KeyPath"));
