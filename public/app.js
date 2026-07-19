@@ -8,6 +8,8 @@ let currentSessionId = null;
 let agentMonitorInterval = null;
 let currentCaptcha = null;
 let pendingMessageToSend = null;
+let agentQuestionShown = false;  // evita abrir el modal repetidamente
+let agentPlanShown = false;      // evita abrir el modal repetidamente
 
 // Auth state
 let authToken = null;
@@ -38,15 +40,78 @@ function togglePassword(fieldId) {
     el.type = el.type === 'password' ? 'text' : 'password';
 }
 
-function copyNonceCmd() {
+/**
+ * Copia el comando sign_nonce al portapapeles.
+ * Ahora recibe 'event' explícitamente y tiene fallback para navegadores
+ * sin Clipboard API (HTTP, navegadores antiguos).
+ */
+function copyNonceCmd(event) {
+    // Normalizar el evento (soporte cross-browser)
+    event = event || window.event;
     const nonce = window._lastNonce || '';
-    const user = window._lastAdminUser || 'admin';
     const cmd = '.\\scripts\\sign_nonce.ps1 -Nonce "' + nonce + '" -KeyPath ".config\\admin_private.pem"';
-    navigator.clipboard.writeText(cmd).then(function() {
-        const btn = event.target;
-        btn.textContent = '✓';
-        setTimeout(function() { btn.textContent = '📋'; }, 1500);
-    }).catch(function() { alert('No se pudo copiar al portapapeles'); });
+
+    // Resolver el botón que disparó el evento
+    var btn = null;
+    if (event && event.target) {
+        btn = event.target;
+    } else {
+        // Fallback: buscar por clase
+        btn = document.querySelector('.btn-copy-small');
+    }
+
+    /**
+     * Fallback: copia usando textarea + execCommand.
+     * Funciona en HTTP y navegadores sin Clipboard API.
+     */
+    function fallbackCopy(text) {
+        var ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.position = 'fixed';
+        ta.style.left = '-9999px';
+        ta.style.top = '-9999px';
+        document.body.appendChild(ta);
+        ta.focus();
+        ta.select();
+        var ok = false;
+        try {
+            ok = document.execCommand('copy');
+        } catch (e) {
+            ok = false;
+        }
+        document.body.removeChild(ta);
+        return ok;
+    }
+
+    function onSuccess() {
+        if (btn) {
+            btn.textContent = '✓';
+            setTimeout(function () { btn.textContent = '📋'; }, 1500);
+        }
+    }
+
+    function onFailure() {
+        alert('No se pudo copiar al portapapeles. Copiá manualmente:\n\n' + cmd);
+    }
+
+    // Intentar primero la API moderna
+    if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+        navigator.clipboard.writeText(cmd).then(onSuccess).catch(function () {
+            // Si falla (HTTP no seguro), usar fallback
+            if (fallbackCopy(cmd)) {
+                onSuccess();
+            } else {
+                onFailure();
+            }
+        });
+    } else {
+        // Sin Clipboard API, usar fallback directamente
+        if (fallbackCopy(cmd)) {
+            onSuccess();
+        } else {
+            onFailure();
+        }
+    }
 }
 
 async function init() {
@@ -745,6 +810,9 @@ document.getElementById('cancelRefinedPromptBtn').onclick = async () => {
 
 async function sendMessageToAgent(text, mode) {
     addMessage('user', text);
+    // Resetear flags de modales para la nueva sesión del agente
+    agentQuestionShown = false;
+    agentPlanShown = false;
     const res = await apiCall('/api/chat', 'POST', {
         message: text, project_name: activeProject,
         session_id: currentSessionId, mode: mode
@@ -767,21 +835,53 @@ function addMessage(role, text) {
 }
 
 // ---- Agent Monitoring (Console) ----
+// BUG FIX #A: Ahora también monitorea esperando_respuesta_usuario,
+// pregunta_usuario, esperando_aprobacion_plan y plan_propuesto.
 async function startAgentMonitoring() {
     if (agentMonitorInterval) clearInterval(agentMonitorInterval);
     document.getElementById('interruptBtn').classList.remove('hidden');
     agentMonitorInterval = setInterval(async () => {
         const statusRes = await apiCall('/api/agent/status');
+
         if (statusRes.status === 'ok' && (statusRes.active || statusRes.running)) {
+            // Actualizar pasos de auditoría en la consola
             const stepsRes = await apiCall('/api/agent/steps');
             if (stepsRes.status === 'ok' && stepsRes.steps) {
                 renderConsoleSteps(stepsRes.steps);
             }
+
+            // BUG FIX #A — Mostrar pregunta del agente al usuario
+            if (statusRes.esperando_respuesta_usuario && statusRes.pregunta_usuario && !agentQuestionShown) {
+                agentQuestionShown = true;
+                document.getElementById('agentQuestionPrompt').textContent = statusRes.pregunta_usuario;
+                document.getElementById('agentQuestionResponse').value = '';
+                document.getElementById('agentQuestionModal').classList.remove('hidden');
+            }
+
+            // Mostrar plan de cambios propuesto
+            if (statusRes.esperando_aprobacion_plan && statusRes.plan_propuesto && !agentPlanShown) {
+                agentPlanShown = true;
+                document.getElementById('agentPlanContent').textContent = statusRes.plan_propuesto;
+                document.getElementById('agentPlanModal').classList.remove('hidden');
+            }
+
+            // Alerta de CAPTCHA
             if (statusRes.captcha_pending) {
                 document.getElementById('captchaAlert').classList.remove('hidden');
             }
+
+            // Si el agente ya no está esperando respuesta, resetear flag
+            if (!statusRes.esperando_respuesta_usuario) {
+                agentQuestionShown = false;
+            }
+            if (!statusRes.esperando_aprobacion_plan) {
+                agentPlanShown = false;
+            }
         } else {
+            // Agente detenido
             document.getElementById('interruptBtn').classList.add('hidden');
+            agentQuestionShown = false;
+            agentPlanShown = false;
         }
     }, 1500);
 }
@@ -793,6 +893,7 @@ function renderConsoleSteps(steps) {
         if (s.type === 'tool_call') cls += ' tool_call';
         else if (s.type === 'tool_result') cls += ' tool_result';
         else if (s.type === 'error') cls += ' error';
+        else if (s.type === 'informativo') cls += ' info';
         return `<div class="${cls}">
             <div class="console-step-title">${s.title || s.type}</div>
             <div class="console-step-detail">${s.detail || ''}</div>
@@ -838,23 +939,30 @@ document.getElementById('closeCaptchaBtn').onclick = () => {
     document.getElementById('captchaModal').classList.add('hidden');
 };
 
-// ---- Agent Question ----
+// ---- Agent Question Modal ----
+// NOTA: El modal se abre desde startAgentMonitoring cuando detecta
+// esperando_respuesta_usuario === true en el endpoint /api/agent/status.
 document.getElementById('submitAgentResponseBtn').onclick = async () => {
     const respuesta = document.getElementById('agentQuestionResponse').value.trim();
     if (!respuesta) return;
     await apiCall('/api/agent/responder', 'POST', { respuesta });
     document.getElementById('agentQuestionModal').classList.add('hidden');
+    agentQuestionShown = false;
 };
 
-// ---- Agent Plan ----
+// ---- Agent Plan Modal ----
+// NOTA: El modal se abre desde startAgentMonitoring cuando detecta
+// esperando_aprobacion_plan === true en el endpoint /api/agent/status.
 document.getElementById('approvePlanBtn').onclick = async () => {
     await apiCall('/api/agent/aprobar_plan', 'POST', { aprobado: true });
     document.getElementById('agentPlanModal').classList.add('hidden');
+    agentPlanShown = false;
 };
 
 document.getElementById('rejectPlanBtn').onclick = async () => {
     await apiCall('/api/agent/aprobar_plan', 'POST', { aprobado: false });
     document.getElementById('agentPlanModal').classList.add('hidden');
+    agentPlanShown = false;
 };
 
 // ---- Init ----
