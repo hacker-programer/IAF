@@ -885,17 +885,19 @@ async function startAgentMonitoring() {
         }
     }, 1500);
 }
-
 function renderConsoleSteps(steps) {
     const area = document.getElementById('consoleArea');
     area.innerHTML = steps.map(s => {
         let cls = 'console-step';
-        if (s.type === 'tool_call') cls += ' tool_call';
-        else if (s.type === 'tool_result') cls += ' tool_result';
-        else if (s.type === 'error') cls += ' error';
-        else if (s.type === 'informativo') cls += ' info';
+        const stype = s.step_type || s.type || ''; // Compatibilidad con ambos nombres de campo
+        if (stype === 'tool_call') cls += ' tool_call';
+        else if (stype === 'tool_result') cls += ' tool_result';
+        else if (stype === 'error') cls += ' error';
+        else if (stype === 'informativo') cls += ' info';
+        else if (stype === 'thinking') cls += ' thinking';
+        else if (stype === 'pregunta') cls += ' pregunta';
         return `<div class="${cls}">
-            <div class="console-step-title">${s.title || s.type}</div>
+            <div class="console-step-title">${s.title || s.step_type || s.type || ''}</div>
             <div class="console-step-detail">${s.detail || ''}</div>
         </div>`;
     }).join('');
