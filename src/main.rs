@@ -986,6 +986,34 @@ async fn chat_endpoint(
     };
 
     let is_admin = username == "admin_local" || state.user_store.is_admin(&username);
+
+    // Verificar permisos de modo (BUG #6 fix)
+    if !is_admin {
+        if let Some(ref mode) = payload.mode {
+            let user_opt = state.user_store.find_user(&username);
+            match mode.as_str() {
+                "study" => {
+                    let has_access = user_opt.as_ref().map(|u| u.has_study_access()).unwrap_or(false);
+                    if !has_access {
+                        return (StatusCode::FORBIDDEN, Json(json!({
+                            "status": "error",
+                            "message": "No tienes permiso para usar el modo estudio. Contacta al administrador."
+                        }))).into_response();
+                    }
+                }
+                "programming" => {
+                    let has_access = user_opt.as_ref().map(|u| u.has_programming_access()).unwrap_or(false);
+                    if !has_access {
+                        return (StatusCode::FORBIDDEN, Json(json!({
+                            "status": "error",
+                            "message": "No tienes permiso para usar el modo programador. Contacta al administrador."
+                        }))).into_response();
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
     let has_session = payload.session_id.is_some();
     let session_id = payload.session_id.unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
 
