@@ -1,4 +1,4 @@
-#![allow(dead_code, unused_imports, unused_variables, unused_mut, unused_assignments, unused_must_use)]
+﻿#![allow(dead_code, unused_imports, unused_variables, unused_mut, unused_assignments, unused_must_use)]
 use axum::{
     extract::{State, Json, Path as AxumPath},
     response::IntoResponse,
@@ -50,7 +50,7 @@ const DEFAULT_GLOBAL_SYSTEM_PROMPT: &str = include_str!("../prompts/default_syst
 const STUDY_SYSTEM_PROMPT: &str = include_str!("../prompts/study_system_prompt.txt");
 
 // ============================================================================
-// Helpers de Autenticación
+// Helpers de Autenticaci├│n
 // ============================================================================
 
 /// Extrae el token Bearer del header Authorization
@@ -72,14 +72,14 @@ async fn require_admin(
     let token = extract_bearer_token(headers)
         .ok_or_else(|| (StatusCode::UNAUTHORIZED, "Token Bearer requerido.".into()))?;
     let username = state.session_store.validate_token(&token)
-        .ok_or_else(|| (StatusCode::UNAUTHORIZED, "Token inválido o expirado.".into()))?;
+        .ok_or_else(|| (StatusCode::UNAUTHORIZED, "Token inv├ílido o expirado.".into()))?;
     if !state.user_store.is_admin(&username) {
         return Err((StatusCode::FORBIDDEN, "Se requiere rol admin.".into()));
     }
     Ok(username)
 }
 
-/// Verifica que el usuario esté autenticado (normal o admin)
+/// Verifica que el usuario est├® autenticado (normal o admin)
 async fn require_auth(
     state: &AppState,
     headers: &HeaderMap,
@@ -90,7 +90,7 @@ async fn require_auth(
     let token = extract_bearer_token(headers)
         .ok_or_else(|| (StatusCode::UNAUTHORIZED, "Token Bearer requerido.".into()))?;
     state.session_store.validate_token(&token)
-        .ok_or_else(|| (StatusCode::UNAUTHORIZED, "Token inválido o expirado.".into()))
+        .ok_or_else(|| (StatusCode::UNAUTHORIZED, "Token inv├ílido o expirado.".into()))
 }
 
 // ============================================================================
@@ -122,14 +122,14 @@ fn get_chat_path(state: &AppState, username: &str, is_admin_or_port80: bool, tit
     dir.join(format!("{}-{}.json", safe_title, id))
 }
 
-/// Determina si un nombre de archivo (sin extensión) parece un UUID
+/// Determina si un nombre de archivo (sin extensi├│n) parece un UUID
 fn looks_like_uuid_stem(stem: &str) -> bool {
     stem.len() >= 30
         && stem.chars().all(|c| c.is_ascii_hexdigit() || c == '-')
         && stem.matches('-').count() >= 3
 }
 
-/// Migración recursiva: renombra archivos <uuid>.json a <title>-<uuid>.json
+/// Migraci├│n recursiva: renombra archivos <uuid>.json a <title>-<uuid>.json
 /// dentro de un directorio dado. Retorna cantidad de archivos migrados.
 fn migrate_chats_in_dir(dir: &PathBuf) -> usize {
     if !dir.exists() || !dir.is_dir() {
@@ -176,20 +176,20 @@ fn migrate_chats_in_dir(dir: &PathBuf) -> usize {
 }
 
 /// Migra chats existentes del formato viejo (<uuid>.json) al nuevo (<title>-<uuid>.json).
-/// También migra prompts.json y local_projects.json al formato por usuario.
+/// Tambi├®n migra prompts.json y local_projects.json al formato por usuario.
 fn migrate_chats(state: &AppState) {
     let chats_dir = state.base_workspace.join(".config").join("chats");
     if !chats_dir.exists() {
         return;
     }
 
-    // 1. Migrar archivos de chat en el directorio raíz y subdirectorios
+    // 1. Migrar archivos de chat en el directorio ra├¡z y subdirectorios
     let migrated = migrate_chats_in_dir(&chats_dir);
     if migrated > 0 {
         eprintln!("[IAF] Migrados {} chats al nuevo formato <titulo>-<UUID>.json", migrated);
     }
 
-    // 2. Migrar prompts.json legacy → per-user globalPrompt.json
+    // 2. Migrar prompts.json legacy ÔåÆ per-user globalPrompt.json
     let prompts_path = state.base_workspace.join(".config").join("prompts.json");
     if prompts_path.exists() {
         if let Ok(content) = fs::read_to_string(&prompts_path) {
@@ -201,10 +201,10 @@ fn migrate_chats(state: &AppState) {
                     let admin_prompt_path = admin_prompt_dir.join("globalPrompt.json");
                     if !admin_prompt_path.exists() {
                         let _ = fs::write(&admin_prompt_path, &parsed.global_current);
-                        eprintln!("[IAF] Migrado prompts.json → data/admin/globalPrompt.json");
+                        eprintln!("[IAF] Migrado prompts.json ÔåÆ data/admin/globalPrompt.json");
                     }
                 }
-                // Migrar project prompts → per-user per-project localPrompt.json
+                // Migrar project prompts ÔåÆ per-user per-project localPrompt.json
                 for (proj_name, proj_prompt) in &parsed.projects {
                     let proj_dir = state.base_workspace.join(".config").join("data")
                         .join("admin").join(proj_name);
@@ -212,7 +212,7 @@ fn migrate_chats(state: &AppState) {
                     let local_path = proj_dir.join("localPrompt.json");
                     if !local_path.exists() {
                         let _ = fs::write(&local_path, proj_prompt);
-                        eprintln!("[IAF] Migrado prompt proyecto '{}' → data/admin/{}/localPrompt.json", proj_name, proj_name);
+                        eprintln!("[IAF] Migrado prompt proyecto '{}' ÔåÆ data/admin/{}/localPrompt.json", proj_name, proj_name);
                     }
                 }
             }
@@ -221,11 +221,11 @@ fn migrate_chats(state: &AppState) {
         let bak_path = state.base_workspace.join(".config").join("prompts.json.bak");
         if !bak_path.exists() {
             let _ = fs::rename(&prompts_path, &bak_path);
-            eprintln!("[IAF] prompts.json renombrado a prompts.json.bak (migración completada)");
+            eprintln!("[IAF] prompts.json renombrado a prompts.json.bak (migraci├│n completada)");
         }
     }
 
-    // 3. Migrar local_projects.json legacy → per-user
+    // 3. Migrar local_projects.json legacy ÔåÆ per-user
     let local_proj_path = state.base_workspace.join(".config").join("local_projects.json");
     let bak_path = state.base_workspace.join(".config").join("local_projects.json.bak");
     if local_proj_path.exists() {
@@ -297,7 +297,7 @@ async fn serve_script(
 }
 
 // ============================================================================
-// Endpoints de Autenticación
+// Endpoints de Autenticaci├│n
 // ============================================================================
 
 #[derive(Deserialize)]
@@ -319,7 +319,7 @@ async fn login(State(state): State<AppState>, Json(payload): Json<LoginRequest>)
                 "has_programming_access": user.has_programming_access(),
             }))
         }
-        Ok(None) => Json(json!({ "status": "error", "message": "Credenciales inválidas." })),
+        Ok(None) => Json(json!({ "status": "error", "message": "Credenciales inv├ílidas." })),
         Err(e) => Json(json!({ "status": "error", "message": e })),
     }
 }
@@ -335,10 +335,10 @@ async fn challenge(State(state): State<AppState>, Json(payload): Json<ChallengeR
         None => return Json(json!({ "status": "error", "message": "Usuario no encontrado." })),
     };
     if !user.is_admin {
-        return Json(json!({ "status": "error", "message": "Solo los administradores usan autenticación por nonce." }));
+        return Json(json!({ "status": "error", "message": "Solo los administradores usan autenticaci├│n por nonce." }));
     }
     if user.public_key.is_none() {
-        return Json(json!({ "status": "error", "message": "Este admin no tiene clave pública configurada." }));
+        return Json(json!({ "status": "error", "message": "Este admin no tiene clave p├║blica configurada." }));
     }
     let nonce = state.challenge_store.generate_challenge(&payload.username);
     Json(json!({ "status": "ok", "nonce": nonce }))
@@ -358,7 +358,7 @@ async fn verify(State(state): State<AppState>, Json(payload): Json<VerifyRequest
     };
     let pk = match &user.public_key {
         Some(k) => k.clone(),
-        None => return Json(json!({ "status": "error", "message": "Este usuario no tiene clave pública." })),
+        None => return Json(json!({ "status": "error", "message": "Este usuario no tiene clave p├║blica." })),
     };
     match state.challenge_store.verify_challenge(&payload.username, &payload.nonce, &payload.signature, &pk) {
         Ok(true) => {
@@ -370,7 +370,7 @@ async fn verify(State(state): State<AppState>, Json(payload): Json<VerifyRequest
                 "has_programming_access": user.has_programming_access(),
             }))
         }
-        Ok(false) => Json(json!({ "status": "error", "message": "Firma inválida." })),
+        Ok(false) => Json(json!({ "status": "error", "message": "Firma inv├ílida." })),
         Err(e) => Json(json!({ "status": "error", "message": e })),
     }
 }
@@ -381,7 +381,7 @@ async fn keygen() -> impl IntoResponse {
         "status": "ok",
         "private_key": private_hex,
         "public_key": public_hex,
-        "warning": "Guarda tu private_key en un lugar seguro. NUNCA la compartas. Esta es la ÚNICA vez que la verás."
+        "warning": "Guarda tu private_key en un lugar seguro. NUNCA la compartas. Esta es la ├ÜNICA vez que la ver├ís."
     }))
 }
 
@@ -392,7 +392,7 @@ struct LogoutRequest {
 
 async fn logout(State(state): State<AppState>, Json(payload): Json<LogoutRequest>) -> impl IntoResponse {
     state.session_store.revoke_token(&payload.token);
-    Json(json!({ "status": "ok", "message": "Sesión cerrada." }))
+    Json(json!({ "status": "ok", "message": "Sesi├│n cerrada." }))
 }
 
 /// Helper para que los scripts .ps1 firmen nonces localmente.
@@ -406,7 +406,7 @@ async fn sign_nonce(Json(payload): Json<SignRequest>) -> impl IntoResponse {
     use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
     let nonce_bytes = match BASE64.decode(&payload.nonce) {
         Ok(b) => b,
-        Err(e) => return Json(json!({ "status": "error", "message": format!("Nonce inválido: {}", e) })),
+        Err(e) => return Json(json!({ "status": "error", "message": format!("Nonce inv├ílido: {}", e) })),
     };
     match crate::auth::sign_message(&payload.private_key, &nonce_bytes) {
         Ok(signature) => Json(json!({ "status": "ok", "signature": signature })),
@@ -440,7 +440,7 @@ async fn client_check() -> impl IntoResponse {
 }
 
 // ============================================================================
-// Endpoints Admin (gestión de usuarios)
+// Endpoints Admin (gesti├│n de usuarios)
 // ============================================================================
 
 async fn admin_list_users(
@@ -605,7 +605,7 @@ async fn admin_delete_user(
         Ok(a) => a, Err(e) => return (e.0, Json(json!({ "status": "error", "message": e.1 }))).into_response(),
     };
     if username == admin_name {
-        return (StatusCode::BAD_REQUEST, Json(json!({ "status": "error", "message": "No podés eliminarte a vos mismo." }))).into_response();
+        return (StatusCode::BAD_REQUEST, Json(json!({ "status": "error", "message": "No pod├®s eliminarte a vos mismo." }))).into_response();
     }
     match state.user_store.delete_user(&username) {
         Ok(()) => Json(json!({ "status": "ok" })).into_response(),
@@ -657,12 +657,12 @@ async fn save_global_prompt(
 
     let user = state.user_store.find_user(&username);
     if !user.as_ref().map(|u| u.can_edit_global_prompt()).unwrap_or(false) {
-        return (StatusCode::FORBIDDEN, Json(json!({ "status": "error", "message": "No tenés permiso para editar el system prompt global." }))).into_response();
+        return (StatusCode::FORBIDDEN, Json(json!({ "status": "error", "message": "No ten├®s permiso para editar el system prompt global." }))).into_response();
     }
 
     match state.save_global_prompt(&username, &payload.content) {
         Ok(()) => {
-            // También actualizar en memoria
+            // Tambi├®n actualizar en memoria
             let mut prompts = state.prompts.lock().unwrap();
             prompts.global_current = payload.content.clone();
             Json(json!({ "status": "ok" })).into_response()
@@ -681,7 +681,7 @@ async fn reset_global_prompt(
 
     let user = state.user_store.find_user(&username);
     if !user.as_ref().map(|u| u.can_edit_global_prompt()).unwrap_or(false) {
-        return (StatusCode::FORBIDDEN, Json(json!({ "status": "error", "message": "No tenés permiso para editar el system prompt global." }))).into_response();
+        return (StatusCode::FORBIDDEN, Json(json!({ "status": "error", "message": "No ten├®s permiso para editar el system prompt global." }))).into_response();
     }
 
     let default_content = {
@@ -736,12 +736,12 @@ async fn save_local_prompt(
 
     let user = state.user_store.find_user(&username);
     if !user.as_ref().map(|u| u.can_edit_local_prompt()).unwrap_or(false) {
-        return (StatusCode::FORBIDDEN, Json(json!({ "status": "error", "message": "No tenés permiso para editar system prompts locales." }))).into_response();
+        return (StatusCode::FORBIDDEN, Json(json!({ "status": "error", "message": "No ten├®s permiso para editar system prompts locales." }))).into_response();
     }
 
     match state.save_local_prompt(&username, &payload.project_name, &payload.content) {
         Ok(()) => {
-            // También actualizar en memoria
+            // Tambi├®n actualizar en memoria
             let mut prompts = state.prompts.lock().unwrap();
             prompts.projects.insert(payload.project_name.clone(), payload.content);
             Json(json!({ "status": "ok" })).into_response()
@@ -794,7 +794,7 @@ async fn update_cicle(
         "ciclo4_reduccion" => CiclePhase::Reduccion,
         "ciclo5_segunda_busqueda_bugs" => CiclePhase::SegundaBusquedaBugs,
         "ciclo6_terminar" => CiclePhase::Terminar,
-        _ => return (StatusCode::BAD_REQUEST, Json(json!({ "status": "error", "message": "Fase inválida. Usar: ciclo1_implementacion, ciclo2_optimizacion, etc." }))).into_response(),
+        _ => return (StatusCode::BAD_REQUEST, Json(json!({ "status": "error", "message": "Fase inv├ílida. Usar: ciclo1_implementacion, ciclo2_optimizacion, etc." }))).into_response(),
     };
 
     let mut cicle = state.load_cicle(&username, &project_name)
@@ -838,7 +838,7 @@ async fn study_save_profile(
         None => return (StatusCode::NOT_FOUND, Json(json!({ "status": "error", "message": "Usuario no encontrado." }))).into_response(),
     };
     if !user.has_study_access() && !user.is_admin {
-        return (StatusCode::FORBIDDEN, Json(json!({ "status": "error", "message": "No tenés acceso al modo estudio." }))).into_response();
+        return (StatusCode::FORBIDDEN, Json(json!({ "status": "error", "message": "No ten├®s acceso al modo estudio." }))).into_response();
     }
 
     let mut profile = state.study_engine.get_or_create_profile(&username);
@@ -1042,7 +1042,7 @@ async fn chat_endpoint(
         if let Ok(content) = fs::read_to_string(path) {
             serde_json::from_str::<ChatSession>(&content).unwrap_or_else(|_| ChatSession {
                 id: session_id.clone(),
-                title: "Nueva conversación".to_string(),
+                title: "Nueva conversaci├│n".to_string(),
                 messages: Vec::new(),
                 project_name: payload.project_name.clone(),
                 steps: None,
@@ -1050,7 +1050,7 @@ async fn chat_endpoint(
         } else {
             ChatSession {
                 id: session_id.clone(),
-                title: "Nueva conversación".to_string(),
+                title: "Nueva conversaci├│n".to_string(),
                 messages: Vec::new(),
                 project_name: payload.project_name.clone(),
                 steps: None,
@@ -1246,7 +1246,7 @@ async fn get_chat_session(
         }
     }
 
-    // Si es admin, buscar también en subdirectorios
+    // Si es admin, buscar tambi├®n en subdirectorios
     if is_admin {
         let base_chats = state.base_workspace.join(".config").join("chats");
         if let Ok(entries) = fs::read_dir(&base_chats) {
@@ -1341,7 +1341,7 @@ async fn sync_get_history(
 }
 
 // ============================================================================
-// Endpoints del Cliente (protocolo de ejecución remota)
+// Endpoints del Cliente (protocolo de ejecuci├│n remota)
 // ============================================================================
 
 async fn client_connect(
@@ -1350,7 +1350,7 @@ async fn client_connect(
 ) -> impl IntoResponse {
     let username = match state.session_store.validate_token(&payload.token) {
         Some(u) => u,
-        None => return (StatusCode::UNAUTHORIZED, Json(json!({ "status": "error", "message": "Token inválido." }))).into_response(),
+        None => return (StatusCode::UNAUTHORIZED, Json(json!({ "status": "error", "message": "Token inv├ílido." }))).into_response(),
     };
 
     if username != payload.username {
@@ -1387,7 +1387,7 @@ async fn client_heartbeat(
     if let Some(client) = clients.get_mut(&payload.client_id) {
         let username = match state.session_store.validate_token(&payload.token) {
             Some(u) => u,
-            None => return (StatusCode::UNAUTHORIZED, Json(json!({ "status": "error", "message": "Token inválido." }))).into_response(),
+            None => return (StatusCode::UNAUTHORIZED, Json(json!({ "status": "error", "message": "Token inv├ílido." }))).into_response(),
         };
         if username != client.username {
             return (StatusCode::FORBIDDEN, Json(json!({ "status": "error", "message": "Token no coincide." }))).into_response();
@@ -1413,7 +1413,7 @@ async fn client_poll(
 
     let username = match state.session_store.validate_token(&payload.token) {
         Some(u) => u,
-        None => return (StatusCode::UNAUTHORIZED, Json(json!({ "status": "error", "message": "Token inválido." }))).into_response(),
+        None => return (StatusCode::UNAUTHORIZED, Json(json!({ "status": "error", "message": "Token inv├ílido." }))).into_response(),
     };
     if username != client.username {
         return (StatusCode::FORBIDDEN, Json(json!({ "status": "error", "message": "Token no coincide." }))).into_response();
@@ -1438,7 +1438,7 @@ async fn client_response(
 
     let username = match state.session_store.validate_token(&payload.token) {
         Some(u) => u,
-        None => return (StatusCode::UNAUTHORIZED, Json(json!({ "status": "error", "message": "Token inválido." }))).into_response(),
+        None => return (StatusCode::UNAUTHORIZED, Json(json!({ "status": "error", "message": "Token inv├ílido." }))).into_response(),
     };
     if username != client.username {
         return (StatusCode::FORBIDDEN, Json(json!({ "status": "error", "message": "Token no coincide." }))).into_response();
@@ -1548,7 +1548,6 @@ async fn agent_steps(
     let agent = state.active_agent.lock().unwrap();
     Json(json!({ "status": "ok", "steps": agent.steps })).into_response()
 }
-}
 
 async fn agent_summary(
     State(state): State<AppState>,
@@ -1572,6 +1571,9 @@ async fn agent_summary(
     };
     Json(json!({ "status": "ok", "summary": summary })).into_response()
 }
+
+// ============================================================================
+// Legacy Endpoints ÔÇö Agente
 // ============================================================================
 
 #[derive(Deserialize)]
@@ -1616,7 +1618,7 @@ async fn agent_approve_plan(
     if !payload.aprobado {
         agent.plan_propuesto = None;
     }
-    // El agente leerá el estado en la próxima iteración
+    // El agente leer├í el estado en la pr├│xima iteraci├│n
 
     Json(json!({ "status": "ok" })).into_response()
 }
@@ -1643,7 +1645,7 @@ async fn agent_interrupt(
 }
 
 // ============================================================================
-// Legacy Endpoints — Proyectos
+// Legacy Endpoints ÔÇö Proyectos
 // ============================================================================
 
 #[derive(Deserialize)]
@@ -1757,10 +1759,10 @@ async fn add_local_project(
 }
 
 // ============================================================================
-// Legacy Endpoints — Prompts (compatibilidad con frontend viejo)
+// Legacy Endpoints ÔÇö Prompts (compatibilidad con frontend viejo)
 // ============================================================================
 
-/// GET /api/prompts — devuelve el mismo formato que el frontend espera
+/// GET /api/prompts ÔÇö devuelve el mismo formato que el frontend espera
 async fn legacy_prompts_get(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -1784,7 +1786,7 @@ async fn legacy_prompts_get(
             projects_map.insert(proj.name.clone(), serde_json::Value::String(local));
         }
     }
-    // También incluir los del PromptConfig en memoria
+    // Tambi├®n incluir los del PromptConfig en memoria
     {
         let prompts = state.prompts.lock().unwrap();
         for (name, content) in &prompts.projects {
@@ -1808,7 +1810,7 @@ struct LegacyPromptsPostRequest {
     project_prompts: Option<HashMap<String, String>>,
 }
 
-/// POST /api/prompts — compatibilidad con frontend viejo
+/// POST /api/prompts ÔÇö compatibilidad con frontend viejo
 async fn legacy_prompts_post(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -1836,7 +1838,7 @@ async fn legacy_prompts_post(
     Json(json!({ "status": "ok" })).into_response()
 }
 
-/// POST /api/prompts/reset — compatibilidad con frontend viejo
+/// POST /api/prompts/reset ÔÇö compatibilidad con frontend viejo
 async fn legacy_prompts_reset(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -1852,7 +1854,7 @@ struct RefinePromptRequest {
     project_name: Option<String>,
 }
 
-/// POST /api/prompts/refine — refinar prompt con el agente
+/// POST /api/prompts/refine ÔÇö refinar prompt con el agente
 async fn legacy_prompts_refine(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -1864,7 +1866,7 @@ async fn legacy_prompts_refine(
     };
 
     // Por ahora, devolver el prompt sin modificar (refinar requiere llamar a DeepSeek)
-    // En el futuro esto llamará al agente para refinar
+    // En el futuro esto llamar├í al agente para refinar
     let mut refined = payload.prompt.clone();
     if let Some(ref fb) = payload.feedback {
         refined = format!("{}\n\n[Feedback del usuario: {}]", refined, fb);
@@ -1878,7 +1880,7 @@ async fn legacy_prompts_refine(
 }
 
 // ============================================================================
-// MAIN — Doble Puerto
+// MAIN ÔÇö Doble Puerto
 // ============================================================================
 
 fn build_app(state: AppState) -> Router {
@@ -2029,15 +2031,15 @@ async fn main() {
     let addr_80 = SocketAddr::from(([0, 0, 0, 0], 80));
     let addr_8080 = SocketAddr::from(([127, 0, 0, 1], 8080));
 
-    println!("🚀 IAF Server iniciado:");
-    println!("   • Puerto 80   — Admin local (sin auth): http://{}", addr_80);
-    println!("   • Puerto 8080 — Usuarios (requiere login): http://{}", addr_8080);
+    println!("­ƒÜÇ IAF Server iniciado:");
+    println!("   ÔÇó Puerto 80   ÔÇö Admin local (sin auth): http://{}", addr_80);
+    println!("   ÔÇó Puerto 8080 ÔÇö Usuarios (requiere login): http://{}", addr_8080);
 
     let srv_80 = tokio::spawn(async move {
         let listener = match tokio::net::TcpListener::bind(addr_80).await {
             Ok(l) => l,
             Err(e) => {
-                eprintln!("⚠️  No se pudo bindear puerto 80 (requiere admin): {}", e);
+                eprintln!("ÔÜá´©Å  No se pudo bindear puerto 80 (requiere admin): {}", e);
                 return;
             }
         };
@@ -2051,7 +2053,7 @@ async fn main() {
         let listener = match tokio::net::TcpListener::bind(addr_8080).await {
             Ok(l) => l,
             Err(e) => {
-                eprintln!("❌ Error fatal bindeando puerto 8080: {}", e);
+                eprintln!("ÔØî Error fatal bindeando puerto 8080: {}", e);
                 std::process::exit(1);
             }
         };
@@ -2068,7 +2070,7 @@ fn detect_base_workspace() -> PathBuf {
     if let Ok(env_ws) = std::env::var("IAF_WORKSPACE") {
         let p = PathBuf::from(&env_ws);
         if p.exists() && p.is_dir() {
-            eprintln!("[IAF] base_workspace vía IAF_WORKSPACE: {}", p.display());
+            eprintln!("[IAF] base_workspace v├¡a IAF_WORKSPACE: {}", p.display());
             return p;
         }
     }
@@ -2077,7 +2079,7 @@ fn detect_base_workspace() -> PathBuf {
             let mut candidate = exe_dir.to_path_buf();
             for _ in 0..5 {
                 if candidate.join(".config").exists() || candidate.join("Cargo.toml").exists() {
-                    eprintln!("[IAF] base_workspace vía exe: {}", candidate.display());
+                    eprintln!("[IAF] base_workspace v├¡a exe: {}", candidate.display());
                     return candidate;
                 }
                 if let Some(parent) = candidate.parent() { candidate = parent.to_path_buf(); }
@@ -2086,7 +2088,7 @@ fn detect_base_workspace() -> PathBuf {
         }
     }
     if let Ok(cwd) = std::env::current_dir() {
-        eprintln!("[IAF] base_workspace vía current_dir: {}", cwd.display());
+        eprintln!("[IAF] base_workspace v├¡a current_dir: {}", cwd.display());
         return cwd;
     }
     PathBuf::from(".")
