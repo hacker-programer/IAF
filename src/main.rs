@@ -1524,6 +1524,7 @@ async fn get_projects(State(state): State<AppState>) -> impl IntoResponse {
 }
 
 async fn get_agent_status(State(state): State<AppState>) -> impl IntoResponse {
+async fn get_agent_status(State(state): State<AppState>) -> impl IntoResponse {
     let status = state.active_agent.lock().unwrap().clone();
     Json(json!({
         "status": "ok",
@@ -1531,10 +1532,11 @@ async fn get_agent_status(State(state): State<AppState>) -> impl IntoResponse {
         "interrupted": status.interrupted,
         "esperando_respuesta_usuario": status.esperando_respuesta_usuario,
         "pregunta_usuario": status.pregunta_usuario,
+        "esperando_aprobacion_plan": status.esperando_aprobacion_plan,
+        "plan_propuesto": status.plan_propuesto,
         "current_session_id": status.current_session_id,
     }))
 }
-
 async fn agent_steps(
     State(state): State<AppState>,
     headers: HeaderMap,
