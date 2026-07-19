@@ -11,7 +11,6 @@ use std::path::Path;
 use base64::{engine::general_purpose, Engine as _};
 use uuid::Uuid;
 const DEEPSEEK_API_URL: &str = "https://api.deepseek.com/v1/chat/completions";
-
 pub async fn run_agent_loop(
     session_messages: Vec<crate::state::ChatMessage>,
     project_name: Option<String>,
@@ -20,49 +19,39 @@ pub async fn run_agent_loop(
     voyage_key: &str,
     openrouter_key: &str,
     session_id: Option<String>,
+    username: &str,
+    mode: &str,
 ) -> Result<String, Box<dyn Error + Send + Sync>> {
-    let global_prompt = {
-        let prompts = state.prompts.lock().unwrap();
-        prompts.global_current.clone()
-    };
-
-    let local_prompt = project_name.as_ref().and_then(|name| {
-        let prompts = state.prompts.lock().unwrap();
-        prompts.projects.get(name).cloned()
-    });
-
-    let mut system_prompt = if let Some(local) = local_prompt {
-        format!("{}\n\nProject Specific Prompt:\n{}", global_prompt, local)
+    // Construir el system prompt según el modo (BUG FIX: modo estudio vs programación)
+    let system_prompt = if mode == "study" {
+        // Modo estudio: usar STUDY_SYSTEM_PROMPT como base e inyectar perfil del estudiante
+        let base_prompt = {
+            // Intentar cargar prompt local del proyecto de estudio, si existe
+            if let Some(ref proj_name) = project_name {
+                state.load_local_prompt(username, proj_name)
+                    .unwrap_or_else(|| STUDY_SYSTEM_PROMPT.to_string())
+            } else {
+                STUDY_SYSTEM_PROMPT.to_string()
+            }
+        };
+        // Inyectar perfil del estudiante y base de conocimiento
+        let enriched = state.study_engine.build_study_system_prompt(username, &base_prompt);
+        // Agregar instrucciones de documentación y contexto
+        format!("{}{}", enriched, DOCUMENTATION_REQUIREMENT)
     } else {
-        global_prompt
+        // Modo programación: cargar global y local por usuario desde disco
+        let global_prompt = state.load_global_prompt(username);
+        let local_prompt = project_name.as_ref()
+            .and_then(|name| state.load_local_prompt(username, name));
+        let mut prompt = if let Some(local) = local_prompt {
+            format!("{}\n\nProject Specific Prompt:\n{}", global_prompt, local)
+        } else {
+            global_prompt
+        };
+        prompt.push_str(DOCUMENTATION_REQUIREMENT);
+        prompt.push_str(CONTEXT_NOTE);
+        prompt
     };
-    system_prompt.push_str(
-        "\n\nOBLIGACIÃƒâ€œN CRÃƒÂTICA DE INICIO - CREAR DOCUMENTACIÃƒâ€œN:\n\
-         Tu primera e inmediata acciÃƒÂ³n en esta sesiÃƒÂ³n DEBE ser verificar si existe el archivo `DOCUMENTATION.md` en la raÃƒÂ­z de tu proyecto actual.\n\
-         - SI NO EXISTE: Debes crearlo INMEDIATAMENTE como tu primer paso tÃƒÂ©cnico usando la herramienta `write_file_with_commit` antes de hacer cualquier otra modificaciÃƒÂ³n o anÃƒÂ¡lisis profundo de cÃƒÂ³digo.\n\
-         - SI YA EXISTE: Debes leerlo obligatoriamente para orientarte en la arquitectura y actualizarlo si realizas algÃƒÂºn cambio estructural.\n\
-         \n\
-         REQUISITOS DE DOCUMENTACIÃƒâ€œN EXHAUSTIVA:\n\
-         Este archivo `DOCUMENTATION.md` NO puede ser un resumen superficial. Debe ser un mapa tÃƒÂ©cnico detallado y exhaustivo de todo el proyecto, conteniendo:\n\
-         1. Lista completa de archivos fuente clave del repositorio.\n\
-         2. Nombre exacto de todas las estructuras (structs, enums, classes) y funciones principales de cada archivo, detallando su funcionamiento interno especÃƒÂ­fico y dependencias.\n\
-         3. Rangos de lÃƒÂ­neas exactos o aproximados donde se define cada componente importante.\n\
-         \n\
-         NOTA DE BÃƒÅ¡SQUEDA DE CÃƒâ€œDIGO:\n\
-         La herramienta `search_code` realiza bÃƒÂºsquedas de texto local de coincidencia exacta por tÃƒÂ©rminos y palabras clave (ya no utiliza embeddings de VoyageAI). Por ende, el archivo `DOCUMENTATION.md` que crees debe ser rico en tÃƒÂ©rminos descriptivos clave (como 'MunicipalFinance', 'tax_system.rs', 'GameWorld', etc.) para que puedas usar `search_code` en el futuro y encontrar la ubicaciÃƒÂ³n exacta de cualquier componente en un instante sin necesidad de leer archivos grandes enteros."
-    );
-    system_prompt.push_str(
-        "\n\nNOTA DE CONTEXTO: Para optimizar la memoria y la eficiencia, el sistema puede resumir los mensajes mÃƒÂ¡s antiguos del chat en una sola entrada con el encabezado `--- RESUMEN CONTEXTO ANTERIOR (Auto-comprimido por el sistema) ---`. Si encuentras este mensaje, debes interpretarlo como la continuaciÃƒÂ³n histÃƒÂ³rica y fidedigna de los acontecimientos y decisiones tomadas en el proyecto hasta ese momento."
-    );
-
-    let mut messages = vec![
-        json!({ "role": "system", "content": system_prompt }),
-    ];
-
-    // Cargar todo el historial del chat excepto el ÃƒÂºltimo mensaje (que es el nuevo prompt del usuario)
-    let len = session_messages.len();
-    if len > 0 {
-        for m in &session_messages[..len - 1] {
             let role = if m.role == "agent" { "assistant" } else { "user" };
             messages.push(json!({ "role": role, "content": m.content }));
         }
