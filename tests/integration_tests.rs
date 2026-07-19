@@ -400,7 +400,7 @@ mod regression_tests {
             "esperando_respuesta_usuario": false,
             "pregunta_usuario": null
         });
-        });
+        assert_eq!(estado_post_respuesta["esperando_respuesta_usuario"], false);
         assert_eq!(estado_post_respuesta["esperando_respuesta_usuario"], false);
 
         // Segunda pregunta (nueva iteración del agente)
