@@ -444,6 +444,7 @@ async fn client_check() -> impl IntoResponse {
 // ============================================================================
 
 async fn admin_list_users(
+async fn admin_list_users(
     State(state): State<AppState>,
     headers: HeaderMap,
 ) -> impl IntoResponse {
@@ -452,7 +453,14 @@ async fn admin_list_users(
     };
     let _ = admin;
     let users = state.user_store.list_users();
-    Json(json!({ "status": "ok", "users": users })).into_response()
+    // Agregar campos calculados que el frontend espera (has_study_access, has_programming_access)
+    let users_json: Vec<serde_json::Value> = users.iter().map(|u| {
+        let mut v = serde_json::to_value(u).unwrap_or(json!({}));
+        v["has_study_access"] = json!(u.has_study_access());
+        v["has_programming_access"] = json!(u.has_programming_access());
+        v
+    }).collect();
+    Json(json!({ "status": "ok", "users": users_json })).into_response()
 }
 
 #[derive(Deserialize)]
