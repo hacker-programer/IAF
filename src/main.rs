@@ -308,6 +308,7 @@ struct LoginRequest {
 
 async fn login(State(state): State<AppState>, Json(payload): Json<LoginRequest>) -> impl IntoResponse {
     match state.user_store.verify_password(&payload.username, &payload.password) {
+        Ok(Some(user)) => {
             let token = state.session_store.create_session(&user.username);
             Json(json!({
                 "status": "ok",
