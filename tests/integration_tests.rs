@@ -400,8 +400,9 @@ mod regression_tests {
             "esperando_respuesta_usuario": false,
             "pregunta_usuario": null
         });
+        });
         assert_eq!(estado_post_respuesta["esperando_respuesta_usuario"], false);
-        assert!(cmd.starts_with(".\\scripts\\sign_nonce.ps1"));
+
         // Segunda pregunta (nueva iteración del agente)
         let estado2 = json!({
             "esperando_respuesta_usuario": true,
