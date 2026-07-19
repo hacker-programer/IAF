@@ -246,7 +246,68 @@ fn migrate_chats(state: &AppState) {
         }
     }
 }
-        Ok(Some(user)) => {
+
+// ============================================================================
+// Endpoint de Descarga de Scripts
+// ============================================================================
+
+/// Sirve scripts desde la carpeta scripts/ del proyecto
+/// GET /api/scripts/generate_keys  -> scripts/generate_keys.ps1
+/// GET /api/scripts/sign_nonce     -> scripts/sign_nonce.ps1
+async fn serve_script(
+    State(state): State<AppState>,
+    AxumPath(name): AxumPath<String>,
+) -> impl IntoResponse {
+    let safe_name: String = name.chars()
+        .filter(|c| c.is_alphanumeric() || *c == '_' || *c == '-')
+        .collect();
+
+    if safe_name.is_empty() || safe_name.len() > 64 {
+        return (StatusCode::BAD_REQUEST, Json(json!({ "status": "error", "message": "Nombre de script invalido." }))).into_response();
+    }
+
+    let script_path = state.base_workspace
+        .join("scripts")
+        .join(format!("{}.ps1", safe_name));
+
+    if !script_path.exists() {
+        return (StatusCode::NOT_FOUND, Json(json!({
+            "status": "error",
+            "message": format!("Script '{}' no encontrado. Disponibles: generate_keys, sign_nonce", safe_name),
+            "available_scripts": ["generate_keys", "sign_nonce"]
+        }))).into_response();
+    }
+
+    match fs::read_to_string(&script_path) {
+        Ok(content) => {
+            let filename = format!("{}.ps1", safe_name);
+            let headers = [
+                ("Content-Type", "application/x-powershell"),
+                ("Content-Disposition", &format!("attachment; filename=\"{}\"", filename)),
+            ];
+            (StatusCode::OK, headers, content).into_response()
+        }
+        Err(e) => {
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({
+                "status": "error",
+                "message": format!("Error leyendo script: {}", e)
+            }))).into_response()
+        }
+    }
+}
+
+// ============================================================================
+// Endpoints de Autenticación
+// ============================================================================
+
+#[derive(Deserialize)]
+struct LoginRequest {
+    username: String,
+    password: String,
+}
+
+async fn login(State(state): State<AppState>, Json(payload): Json<LoginRequest>) -> impl IntoResponse {
+    match state.user_store.verify_password(&payload.username, &payload.password) {
             let token = state.session_store.create_session(&user.username);
             Json(json!({
                 "status": "ok",
