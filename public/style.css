@@ -98,7 +98,11 @@ body {
     margin-bottom: 16px;
 }
 
-input[type="text"], textarea {
+/* ---- INPUTS Y TEXTAREAS ---- */
+input[type="text"],
+input[type="password"],
+input[type="number"],
+textarea {
     width: 100%;
     background: rgba(255, 255, 255, 0.04);
     border: 1px solid var(--border-color);
@@ -110,10 +114,24 @@ input[type="text"], textarea {
     transition: all 0.3s;
 }
 
-input[type="text"]:focus, textarea:focus {
+input[type="text"]:focus,
+input[type="password"]:focus,
+input[type="number"]:focus,
+textarea:focus {
     outline: none;
     border-color: var(--primary-color);
     box-shadow: 0 0 10px rgba(99, 102, 241, 0.3);
+}
+
+/* Password-specific: subtle indicator */
+input[type="password"] {
+    font-family: 'JetBrains Mono', monospace;
+    letter-spacing: 2px;
+}
+
+input[type="password"]::placeholder {
+    font-family: 'Outfit', sans-serif;
+    letter-spacing: 0;
 }
 
 textarea {
@@ -121,6 +139,7 @@ textarea {
     font-family: 'JetBrains Mono', monospace;
 }
 
+/* ---- BOTONES ---- */
 .btn {
     border: none;
     border-radius: 8px;
@@ -136,13 +155,19 @@ textarea {
 .btn-primary:hover { background: var(--primary-hover); }
 
 .btn-success { background: var(--success); color: white; }
+.btn-success:hover { opacity: 0.85; }
+
 .btn-danger { background: var(--danger); color: white; }
+.btn-danger:hover { opacity: 0.85; }
+
 .btn-warning { background: var(--warning); color: #111; }
+.btn-warning:hover { opacity: 0.85; }
 
 .btn-group {
     display: flex;
     gap: 8px;
     margin-top: 8px;
+    flex-wrap: wrap;
 }
 
 .project-list {
@@ -294,6 +319,7 @@ textarea {
     background: rgba(255, 255, 255, 0.15);
 }
 
+/* ---- MENSAJES ---- */
 .message {
     max-width: 80%;
     padding: 14px 20px;
@@ -357,7 +383,7 @@ textarea {
 
 .hidden { display: none !important; }
 
-/* Modales */
+/* ---- MODALES ---- */
 .modal {
     position: fixed;
     top: 0;
@@ -369,7 +395,7 @@ textarea {
     display: flex;
     justify-content: center;
     align-items: center;
-    z-index: 9999; /* Asegurar que quede encima de todo el layout */
+    z-index: 9999;
 }
 
 .modal-content {
@@ -378,10 +404,10 @@ textarea {
     box-shadow: 0 0 30px rgba(99, 102, 241, 0.15);
     padding: 24px;
     border-radius: 20px;
-    max-width: 600px;
+    max-width: 700px;
     width: 90%;
-    max-height: 90vh; /* Evita salirse de la pantalla */
-    overflow-y: auto;  /* Habilita scroll si el contenido es alto */
+    max-height: 90vh;
+    overflow-y: auto;
     display: flex;
     flex-direction: column;
     gap: 16px;
@@ -393,6 +419,13 @@ textarea {
     color: #fff;
     border-bottom: 1px solid var(--border-color);
     padding-bottom: 10px;
+}
+
+.modal-content h4 {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-color);
+    margin-bottom: 4px;
 }
 
 .modal-content p {
@@ -413,7 +446,10 @@ textarea {
     white-space: pre-wrap;
 }
 
-.modal-content textarea, .modal-content input[type="text"] {
+.modal-content textarea,
+.modal-content input[type="text"],
+.modal-content input[type="password"],
+.modal-content input[type="number"] {
     width: 100%;
     background: rgba(0, 0, 0, 0.3);
     border: 1px solid var(--border-color);
@@ -426,20 +462,83 @@ textarea {
     transition: border-color 0.2s;
 }
 
-.modal-content textarea:focus, .modal-content input[type="text"]:focus {
+.modal-content textarea:focus,
+.modal-content input[type="text"]:focus,
+.modal-content input[type="password"]:focus,
+.modal-content input[type="number"]:focus {
     border-color: var(--primary-color);
 }
 
-.modal-content .btn-group {
-.modal-content textarea:focus, .modal-content input[type="text"]:focus {
-    border-color: var(--primary-color);
+.modal-content select {
+    width: 100%;
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    padding: 12px;
+    color: var(--text-color);
+    font-family: inherit;
+    font-size: 14px;
+    outline: none;
 }
 
-.modal-content .btn-group {
+.modal-content table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+}
+
+.modal-content table th {
+    color: var(--text-muted);
+    text-align: left;
+    padding: 6px 8px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.modal-content table td {
+    padding: 6px 8px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+/* Schedule Grid */
+.schedule-grid {
+    display: grid;
+    grid-template-columns: 80px 1fr;
+    gap: 4px 8px;
+    font-size: 12px;
+}
+
+.schedule-grid .day-label {
+    color: var(--text-muted);
+    padding: 6px 0;
+    text-transform: capitalize;
+}
+
+.schedule-grid input[type="text"] {
+    padding: 4px 6px;
+    font-size: 11px;
+    font-family: 'JetBrains Mono', monospace;
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    color: var(--text-color);
+}
+
+/* Permissions grid */
+.perm-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4px 12px;
+}
+
+.perm-grid label {
+    font-size: 12px;
     display: flex;
-    gap: 12px;
-    justify-content: flex-end;
-    margin-top: 8px;
+    align-items: center;
+    gap: 4px;
+}
+
+.perm-grid input[type="checkbox"] {
+    accent-color: var(--primary-color);
 }
 
 /* ===== LOGIN SCREEN ===== */
@@ -481,10 +580,16 @@ textarea {
 .login-form { display: flex; flex-direction: column; gap: 10px; }
 .login-form.hidden { display: none; }
 
-.login-form input {
+.login-form input[type="text"],
+.login-form input[type="password"] {
     padding: 10px; background: rgba(0,0,0,0.3);
     border: 1px solid var(--border-color); border-radius: 8px;
     color: var(--text-color); font-family: inherit; font-size: 14px;
+}
+
+.login-form input[type="password"] {
+    font-family: 'JetBrains Mono', monospace;
+    letter-spacing: 2px;
 }
 
 .login-form textarea {
@@ -555,3 +660,115 @@ textarea {
     border-radius: 6px; text-align: center;
 }
 
+/* ===== SCHEDULE SECTION ===== */
+.schedule-section {
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 12px;
+    margin: 8px 0;
+    background: rgba(0, 0, 0, 0.15);
+}
+
+.schedule-section h4 {
+    font-size: 13px;
+    color: var(--text-color);
+    margin-bottom: 8px;
+}
+
+.schedule-section label {
+    font-size: 11px;
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 8px;
+}
+
+.schedule-section .schedule-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 4px;
+}
+
+.schedule-section .schedule-row span {
+    font-size: 11px;
+    color: var(--text-muted);
+    width: 75px;
+    text-transform: capitalize;
+}
+
+.schedule-section .schedule-row input {
+    width: 140px;
+    padding: 4px 6px;
+    font-size: 11px;
+    font-family: 'JetBrains Mono', monospace;
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    color: var(--text-color);
+}
+
+.schedule-help {
+    font-size: 10px;
+    color: var(--text-muted);
+    margin-top: 4px;
+    font-style: italic;
+}
+
+/* ===== TOGGLE SWITCH ===== */
+.toggle-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border-color);
+    gap: 12px;
+}
+
+.toggle-row label:first-child {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-color);
+}
+
+.toggle-row input[type="checkbox"] {
+    accent-color: var(--primary-color);
+    width: 18px;
+    height: 18px;
+}
+
+/* ===== FORM GROUP ===== */
+.form-group {
+    margin-bottom: 10px;
+}
+
+.form-group label {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-bottom: 4px;
+    display: block;
+    font-weight: 500;
+}
+
+.form-group input[type="text"],
+.form-group input[type="password"],
+.form-group input[type="number"],
+.form-group select {
+    width: 100%;
+    padding: 8px 10px;
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    color: var(--text-color);
+    font-family: inherit;
+    font-size: 13px;
+}
+
+.form-group input[type="text"]:focus,
+.form-group input[type="password"]:focus,
+.form-group input[type="number"]:focus,
+.form-group select:focus {
+    border-color: var(--primary-color);
+    outline: none;
+}
