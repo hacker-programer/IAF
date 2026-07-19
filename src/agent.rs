@@ -11,6 +11,26 @@ use std::path::Path;
 use base64::{engine::general_purpose, Engine as _};
 use uuid::Uuid;
 const DEEPSEEK_API_URL: &str = "https://api.deepseek.com/v1/chat/completions";
+
+// Constante para el prompt de modo estudio (BUG FIX: antes no se usaba en agent.rs)
+const STUDY_SYSTEM_PROMPT: &str = include_str!("../prompts/study_system_prompt.txt");
+
+// Requisito de documentación (extraído del código original para reutilización)
+const DOCUMENTATION_REQUIREMENT: &str = "\n\nOBLIGACIÓN CRÍTICA DE INICIO - CREAR DOCUMENTACIÓN:\n\
+ Tu primera e inmediata acción en esta sesión DEBE ser verificar si existe el archivo `DOCUMENTATION.md` en la raíz de tu proyecto actual.\n\
+ - SI NO EXISTE: Debes crearlo INMEDIATAMENTE como tu primer paso técnico usando la herramienta `write_file_with_commit` antes de hacer cualquier otra modificación o análisis profundo de código.\n\
+ - SI YA EXISTE: Debes leerlo obligatoriamente para orientarte en la arquitectura y actualizarlo si realizas algún cambio estructural.\n\
+ \n\
+ REQUISITOS DE DOCUMENTACIÓN EXHAUSTIVA:\n\
+ Este archivo `DOCUMENTATION.md` NO puede ser un resumen superficial. Debe ser un mapa técnico detallado y exhaustivo de todo el proyecto, conteniendo:\n\
+ 1. Lista completa de archivos fuente clave del repositorio.\n\
+ 2. Nombre exacto de todas las estructuras (structs, enums, classes) y funciones principales de cada archivo, detallando su funcionamiento interno específico y dependencias.\n\
+ 3. Rangos de líneas exactos o aproximados donde se define cada componente importante.\n\
+ \n\
+ NOTA DE BÚSQUEDA DE CÓDIGO:\n\
+ La herramienta `search_code` realiza búsquedas de texto local de coincidencia exacta por términos y palabras clave (ya no utiliza embeddings de VoyageAI). Por ende, el archivo `DOCUMENTATION.md` que crees debe ser rico en términos descriptivos clave (como 'MunicipalFinance', 'tax_system.rs', 'GameWorld', etc.) para que puedas usar `search_code` en el futuro y encontrar la ubicación exacta de cualquier componente en un instante sin necesidad de leer archivos grandes enteros.";
+
+const CONTEXT_NOTE: &str = "\n\nNOTA DE CONTEXTO: Para optimizar la memoria y la eficiencia, el sistema puede resumir los mensajes más antiguos del chat en una sola entrada con el encabezado `--- RESUMEN CONTEXTO ANTERIOR (Auto-comprimido por el sistema) ---`. Si encuentras este mensaje, debes interpretarlo como la continuación histórica y fidedigna de los acontecimientos y decisiones tomadas en el proyecto hasta ese momento.";
 pub async fn run_agent_loop(
     session_messages: Vec<crate::state::ChatMessage>,
     project_name: Option<String>,
