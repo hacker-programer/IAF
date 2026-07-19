@@ -1537,6 +1537,7 @@ async fn get_agent_status(State(state): State<AppState>) -> impl IntoResponse {
     }))
 }
 }
+}
 async fn agent_steps(
     State(state): State<AppState>,
     headers: HeaderMap,
