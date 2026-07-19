@@ -1079,6 +1079,72 @@ async fn chat_endpoint(
     let _ = fs::create_dir_all(save_path.parent().unwrap());
     let _ = fs::write(&save_path, serde_json::to_string_pretty(&session).unwrap());
 
+    // Iniciar agente en background (BUG #4 fix)
+    {
+        let mut agent = state.active_agent.lock().unwrap();
+        if !agent.running {
+            agent.running = true;
+            agent.interrupted = false;
+            agent.steps.clear();
+            agent.thinking_content.clear();
+            agent.esperando_respuesta_usuario = false;
+            agent.respuesta_usuario = None;
+            agent.esperando_aprobacion_plan = false;
+            agent.plan_propuesto = None;
+            agent.pregunta_usuario = None;
+            agent.current_session_id = Some(session_id.clone());
+
+            let state_bg = state.clone();
+            let session_bg = session.clone();
+            let sid_bg = session_id.clone();
+            let uname_bg = username.clone();
+            let is_admin_bg = is_admin;
+            let dk = deepseek_key().to_string();
+            let vk = std::env::var("VOYAGE_API_KEY").unwrap_or_default();
+            let ok = std::env::var("OPENROUTER_API_KEY").unwrap_or_default();
+
+            tokio::spawn(async move {
+                let result = crate::agent::run_agent_loop(
+                    session_bg.messages.clone(),
+                    session_bg.project_name.clone(),
+                    state_bg.clone(),
+                    &dk, &vk, &ok,
+                    Some(sid_bg.clone()),
+                ).await;
+
+                let save_p_bg = get_chat_path(&state_bg, &uname_bg, is_admin_bg, &session_bg.title, &sid_bg);
+                let mut updated = if let Ok(c) = fs::read_to_string(&save_p_bg) {
+                    serde_json::from_str::<ChatSession>(&c).unwrap_or_else(|_| session_bg.clone())
+                } else { session_bg.clone() };
+
+                match result {
+                    Ok(resp) => {
+                        updated.messages.push(ChatMessage {
+                            role: "agent".to_string(), content: resp,
+                            timestamp: std::time::SystemTime::now()
+                                .duration_since(std::time::UNIX_EPOCH).unwrap().as_secs(),
+                        });
+                    }
+                    Err(e) => {
+                        updated.messages.push(ChatMessage {
+                            role: "agent_error".to_string(),
+                            content: format!("Error: {}", e),
+                            timestamp: std::time::SystemTime::now()
+                                .duration_since(std::time::UNIX_EPOCH).unwrap().as_secs(),
+                        });
+                    }
+                }
+
+                let steps = { let ag = state_bg.active_agent.lock().unwrap(); ag.steps.clone() };
+                updated.steps = Some(steps);
+                let _ = fs::write(&save_p_bg, serde_json::to_string_pretty(&updated).unwrap());
+
+                let mut ag = state_bg.active_agent.lock().unwrap();
+                ag.running = false;
+            });
+        }
+    }
+
     Json(json!({
         "status": "ok",
         "session_id": session.id,
@@ -1460,11 +1526,48 @@ async fn get_projects(State(state): State<AppState>) -> impl IntoResponse {
 async fn get_agent_status(State(state): State<AppState>) -> impl IntoResponse {
     let status = state.active_agent.lock().unwrap().clone();
     Json(json!({
-        "running": status.running,
+        "status": "ok",
+        "active": status.running,
         "interrupted": status.interrupted,
         "esperando_respuesta_usuario": status.esperando_respuesta_usuario,
+        "pregunta_usuario": status.pregunta_usuario,
         "current_session_id": status.current_session_id,
     }))
+}
+
+async fn agent_steps(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> impl IntoResponse {
+    let _username = match require_auth(&state, &headers).await {
+        Ok(u) => u,
+        Err(_) => return Json(json!({ "status": "ok", "steps": [] })).into_response(),
+    };
+    let agent = state.active_agent.lock().unwrap();
+    Json(json!({ "status": "ok", "steps": agent.steps })).into_response()
+}
+
+async fn agent_summary(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> impl IntoResponse {
+    let _username = match require_auth(&state, &headers).await {
+        Ok(u) => u,
+        Err(_) => return Json(json!({ "status": "ok", "summary": "Agente inactivo." })).into_response(),
+    };
+    let agent = state.active_agent.lock().unwrap();
+    let summary = if agent.steps.is_empty() {
+        if agent.running {
+            "El agente esta ejecutando su primera iteracion...".to_string()
+        } else {
+            "Agente inactivo.".to_string()
+        }
+    } else {
+        let total = agent.steps.len();
+        let last = agent.steps.last().map(|s| s.title.clone()).unwrap_or_default();
+        format!("{} pasos ejecutados. Ultimo: {}", total, last)
+    };
+    Json(json!({ "status": "ok", "summary": summary })).into_response()
 }
 
 // ============================================================================
@@ -1795,6 +1898,8 @@ fn build_app(state: AppState) -> Router {
         .route("/api/projects/fork", post(fork_project))
         .route("/api/projects/local", post(add_local_project))
         .route("/api/agent/status", get(get_agent_status))
+        .route("/api/agent/steps", get(agent_steps))
+        .route("/api/agent/summary", get(agent_summary))
         .route("/api/agent/responder", post(agent_responder))
         .route("/api/agent/aprobar_plan", post(agent_approve_plan))
         .route("/api/agent/interrupt", post(agent_interrupt))

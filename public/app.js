@@ -30,6 +30,25 @@ const adminPanel = document.getElementById('adminPanel');
 const studyProfileSection = document.getElementById('studyProfileSection');
 
 // ---- Init ----
+
+// ---- Helpers: Toggle Password Visibility ----
+function togglePassword(fieldId) {
+    const el = document.getElementById(fieldId);
+    if (!el) return;
+    el.type = el.type === 'password' ? 'text' : 'password';
+}
+
+function copyNonceCmd() {
+    const nonce = window._lastNonce || '';
+    const user = window._lastAdminUser || 'admin';
+    const cmd = '.\\scripts\\sign_nonce.ps1 -Nonce "' + nonce + '" -KeyPath ".config\\admin_private.pem"';
+    navigator.clipboard.writeText(cmd).then(function() {
+        const btn = event.target;
+        btn.textContent = '✓';
+        setTimeout(function() { btn.textContent = '📋'; }, 1500);
+    }).catch(function() { alert('No se pudo copiar al portapapeles'); });
+}
+
 async function init() {
     if (isPort80) {
         // Puerto 80: acceso directo como admin local
@@ -99,6 +118,9 @@ document.getElementById('getChallengeBtn').onclick = async () => {
         const res = await apiCall('/api/auth/challenge', 'POST', { username });
         if (res.status === 'ok') {
             document.getElementById('nonceValue').value = res.nonce;
+            document.getElementById('nonceLabelValue').textContent = res.nonce;
+            window._lastNonce = res.nonce;
+            window._lastAdminUser = document.getElementById('nonceUser').value.trim();
             document.getElementById('nonceStep1').classList.add('hidden');
             document.getElementById('nonceStep2').classList.remove('hidden');
             loginError.classList.add('hidden');
@@ -371,6 +393,14 @@ document.getElementById('createUserBtn').onclick = async () => {
     const isAdmin = document.getElementById('newIsAdmin').checked;
 
     if (!username) return alert('Username requerido.');
+
+    // Validar confirmacion de contrasena
+    if (!isAdmin) {
+        const pwd = document.getElementById('newPassword').value;
+        const pwdConfirm = document.getElementById('newPasswordConfirm').value;
+        if (!pwd) return alert('La contrasena es requerida para usuarios no-admin.');
+        if (pwd !== pwdConfirm) return alert('Las contrasenas no coinciden.');
+    }
 
     // Build allowed_tools from checkboxes
     const allowedTools = ['read_file', 'search_code'];
@@ -742,7 +772,7 @@ async function startAgentMonitoring() {
     document.getElementById('interruptBtn').classList.remove('hidden');
     agentMonitorInterval = setInterval(async () => {
         const statusRes = await apiCall('/api/agent/status');
-        if (statusRes.status === 'ok' && statusRes.active) {
+        if (statusRes.status === 'ok' && (statusRes.active || statusRes.running)) {
             const stepsRes = await apiCall('/api/agent/steps');
             if (stepsRes.status === 'ok' && stepsRes.steps) {
                 renderConsoleSteps(stepsRes.steps);

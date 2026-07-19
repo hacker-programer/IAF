@@ -26,7 +26,7 @@
             <!-- Password login -->
             <div id="loginPassword" class="login-form">
                 <input type="text" id="loginUser" placeholder="Usuario" autocomplete="username">
-                <input type="password" id="loginPass" placeholder="Contraseña" autocomplete="current-password">
+<div class="password-wrapper"><input type="password" id="loginPass" placeholder="Contraseña" autocomplete="current-password"><button class="toggle-password" onclick="togglePassword(&#39;loginPass&#39;)" tabindex="-1" type="button">👁</button></div>
                 <button id="loginBtn" class="btn btn-primary" style="width:100%">Iniciar Sesión</button>
             </div>
             <!-- Nonce login -->
@@ -36,7 +36,7 @@
                     <button id="getChallengeBtn" class="btn btn-primary" style="width:100%">Obtener Challenge</button>
                 </div>
                 <div id="nonceStep2" class="hidden">
-                    <label>Nonce (firmalo con: .\scripts\sign_nonce.ps1 -Nonce "&lt;nonce&gt;")</label>
+                    <label>Nonce (firmalo con: <code>.\scripts\sign_nonce.ps1 -Nonce "<span id="nonceLabelValue">&lt;nonce&gt;</span>"</code>) <button class="btn-copy-small" onclick="copyNonceCmd()" title="Copiar comando">📋</button></label>
                     <textarea id="nonceValue" rows="2" readonly></textarea>
                     <input type="text" id="nonceSignature" placeholder="Firma (base64)">
                     <button id="verifyNonceBtn" class="btn btn-success" style="width:100%">Verificar Firma</button>
@@ -172,7 +172,9 @@
                 <h4 style="margin-bottom:8px;">Crear Nuevo Usuario</h4>
                 <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
                     <input type="text" id="newUsername" placeholder="Username" style="padding:6px;background:rgba(0,0,0,0.3);border:1px solid var(--border-color);border-radius:6px;color:var(--text-color);">
-                    <div id="newPasswordContainer"><input type="password" id="newPassword" placeholder="Contraseña (8+ chars)" style="width:100%;padding:6px;background:rgba(0,0,0,0.3);border:1px solid var(--border-color);border-radius:6px;color:var(--text-color);"></div>
+<div class="password-wrapper"><input type="password" id="newPassword" placeholder="Contraseña (dejar vacío si es admin)"><button class="toggle-password" onclick="togglePassword(&#39;newPassword&#39;)" tabindex="-1" type="button">👁</button></div>
+                <label>Confirmar Contraseña:</label>
+                <div class="password-wrapper"><input type="password" id="newPasswordConfirm" placeholder="Repetir contraseña"><button class="toggle-password" onclick="togglePassword(&#39;newPasswordConfirm&#39;)" tabindex="-1" type="button">👁</button></div>
                     <div id="newPublicKeyContainer" class="hidden"><input type="text" id="newPublicKey" placeholder="Clave pública (hex 64 chars) o subir .pem" style="width:100%;padding:6px;background:rgba(0,0,0,0.3);border:1px solid var(--border-color);border-radius:6px;color:var(--text-color);"></div>
                 </div>
                 <div style="margin-top:4px;">
