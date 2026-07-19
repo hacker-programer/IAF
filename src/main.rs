@@ -1534,19 +1534,13 @@ async fn get_agent_status(State(state): State<AppState>) -> impl IntoResponse {
         "esperando_aprobacion_plan": status.esperando_aprobacion_plan,
         "plan_propuesto": status.plan_propuesto,
         "current_session_id": status.current_session_id,
+    }))
 }
 
-async fn agent_steps(
 async fn agent_steps(
     State(state): State<AppState>,
     headers: HeaderMap,
 ) -> impl IntoResponse {
-    let _username = match require_auth(&state, &headers).await {
-        Ok(u) => u,
-        Err(_) => return Json(json!({ "status": "ok", "steps": [] })).into_response(),
-    };
-    let agent = state.active_agent.lock().unwrap();
-    Json(json!({ "status": "ok", "steps": agent.steps })).into_response()
 }
 
 async fn agent_summary(
