@@ -202,33 +202,33 @@ function simulateAgentPolling(statusResponse, currentState) {
 // TESTS
 // ============================================================================
 
-var passed = 0;
-var failed = 0;
+console.log('REG-B-001: copyNonceCmd con event.target válido');
+{
+    alertMessages = [];
+    setTimeoutCallbacks = [];
+    mockClipboard.written = null;
+    mockNavigator.clipboard = mockClipboard;
 
-function assert(condition, testName) {
-    if (condition) {
-        passed++;
-        console.log('  \u2713 ' + testName);
-    } else {
-        failed++;
-        console.error('  \u2717 FAIL: ' + testName);
-    }
+    var mockBtn = { textContent: '📋' };
+    var mockEvent = { target: mockBtn };
+
+    copyNonceCmd(mockEvent);
+
+    // Verificar que el texto se copió (esto es sincrónico con nuestro mock)
+    assert(mockClipboard.written !== null, 'El comando debe copiarse al portapapeles');
+    assert(mockClipboard.written.indexOf('sign_nonce.ps1') !== -1, 'El comando debe contener sign_nonce.ps1');
+    assert(mockClipboard.written.indexOf('test_nonce_abc123') !== -1, 'El comando debe contener el nonce');
+    assert(mockClipboard.written.indexOf('.config\\admin_private.pem') !== -1, 'El comando debe contener el KeyPath');
+
+    // Flush del setTimeout simulado para verificar el cambio visual del botón
+    // (en el navegador, navigator.clipboard.writeText es async, así que
+    //  el cambio de texto ocurre después de que la Promise se resuelve)
+    flushSetTimeout();
+
+    // Después de flushSetTimeout, el botón debe mostrar ✓ porque onSuccess
+    // se ejecutó en el .then() de la Promise (nuestro mock es sincrónico)
+    assertEquals(mockBtn.textContent, '✓', 'El botón debe mostrar ✓ después de copiar');
 }
-
-function assertEquals(actual, expected, testName) {
-    if (actual === expected) {
-        passed++;
-        console.log('  \u2713 ' + testName);
-    } else {
-        failed++;
-        console.error('  \u2717 FAIL: ' + testName + ' — expected: ' + JSON.stringify(expected) + ', actual: ' + JSON.stringify(actual));
-    }
-}
-
-// ============================================================================
-// BATERÍA DE TESTS: copyNonceCmd
-// ============================================================================
-
 console.log('\n=== TESTS DE REGRESIÓN: copyNonceCmd ===\n');
 
 console.log('REG-B-001: copyNonceCmd con event.target válido');
