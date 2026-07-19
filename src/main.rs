@@ -1556,6 +1556,10 @@ async fn agent_summary(
 ) -> impl IntoResponse {
     let _username = match require_auth(&state, &headers).await {
         Ok(u) => u,
+        Err(_) => return Json(json!({ "status": "ok", "summary": "Agente inactivo." })).into_response(),
+    };
+    let agent = state.active_agent.lock().unwrap();
+    let summary = if agent.steps.is_empty() {
         if agent.running {
             "El agente esta ejecutando su primera iteracion...".to_string()
         } else {
@@ -1568,9 +1572,6 @@ async fn agent_summary(
     };
     Json(json!({ "status": "ok", "summary": summary })).into_response()
 }
-
-// ============================================================================
-// Legacy Endpoints — Agente
 // ============================================================================
 
 #[derive(Deserialize)]
