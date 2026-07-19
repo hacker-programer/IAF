@@ -37,6 +37,32 @@
 - **Fix**: Se modificó `admin_list_users` en `main.rs` para transformar la lista de usuarios agregando los campos calculados `has_study_access` y `has_programming_access` a cada objeto antes de serializar.
 - **Lección**: Cuando el frontend y backend usan nombres de campo diferentes, verificar que el backend serialice lo que el frontend espera. Los métodos en Rust no se serializan a JSON.
 
+### BUG #8: Nonce muestra placeholder `<nonce>` en vez del nonce real
+- **Causa**: El label HTML era estático: `Nonce (firmalo con: .\scripts\sign_nonce.ps1 -Nonce "&lt;nonce&gt;")`. El JS solo actualizaba el textarea con el nonce, nunca el label. Además no había botón de copiar comando.
+- **Fix**: Se agregó `<span id="nonceLabelValue">` en el label para que JS lo actualice dinámicamente. Se agregó botón 📋 para copiar el comando completo al portapapeles. El JS ahora actualiza `nonceLabelValue.textContent` al recibir el challenge y almacena `_lastNonce` y `_lastAdminUser` para la función `copyNonceCmd()`.
+- **Lección**: Los placeholders estáticos en HTML deben ser reemplazados con spans dinámicos cuando el valor viene del backend.
+
+### BUG #9: Crear usuario no pide confirmar contraseña
+- **Causa**: El formulario de crear usuario solo tenía un campo de contraseña (`newPassword`), sin campo de confirmación.
+- **Fix**: Se agregó `newPasswordConfirm` con su toggle de visibilidad. El JS ahora valida que ambas contraseñas coincidan antes de enviar (solo para usuarios no-admin, ya que los admin usan nonce).
+- **Lección**: Siempre incluir confirmación de contraseña en formularios de creación de usuarios.
+
+### BUG #10: No hay toggle de visibilidad en campos de contraseña
+- **Causa**: Los `<input type="password">` no tenían botón para mostrar/ocultar la contraseña.
+- **Fix**: Se agregaron botones 👁️ con clase `toggle-password` en los tres campos: `loginPass`, `newPassword`, `newPasswordConfirm`. La función `togglePassword(fieldId)` cambia el `type` entre "password" y "text".
+- **Lección**: UX básica de formularios de auth debe incluir toggle de visibilidad.
+
+### BUG #11: Ningún modo funciona - muestra "iniciando agente" pero no hace nada
+- **Causa Triple**:
+  1. `chat_endpoint` solo guardaba el mensaje en disco y devolvía `{ status: "ok" }`. NUNCA spawneaba el agente. El agente (`run_agent_loop` en `agent.rs`) jamás se ejecutaba.
+  2. `/api/agent/status` devolvía `{ running: bool, ... }` sin wrapper `status: "ok"`, y sin campo `active`. El frontend chequeaba `statusRes.status === 'ok' && statusRes.active` — ambas condiciones siempre daban `false`.
+  3. Faltaban los endpoints `/api/agent/steps` y `/api/agent/summary` que el frontend llamaba.
+- **Fix**:
+  1. `chat_endpoint` ahora spawnea el agente en `tokio::spawn` después de guardar el mensaje. Al terminar, guarda la respuesta del agente en la sesión y actualiza los steps de auditoría.
+  2. `get_agent_status` ahora devuelve `{ "status": "ok", "active": status.running, ... }`.
+  3. Se agregaron `agent_steps` y `agent_summary` como nuevos handlers, y sus rutas en `build_app()`.
+- **Lección**: Un endpoint de chat que solo guarda mensajes no es un agente. El agente debe spawnearse. El contrato API entre frontend y backend debe coincidir exactamente en nombres de campos.
+
 ## Por qué los tests no detectaron estos bugs
 - Los tests existentes eran mayormente unitarios de estructuras JSON, no tests de UI ni E2E.
 - No había tests que verificaran la correspondencia entre campos del frontend y backend.
@@ -47,11 +73,16 @@
 - `cargo check` en este proyecto es muy lento por la cantidad de dependencias (axum, tokio, ed25519, argon2, reqwest, etc.)
 - El validador de archivos confunde declaraciones `const` locales de JS con definiciones duplicadas (falso positivo)
 - Los tags `</div>` duplicados en HTML son normales y no deben marcarse como error
+- **CRÍTICO**: La herramienta `write_file_with_commit` con `start_line`/`end_line` es PROPENSA A DUPLICAR CÓDIGO. Siempre que sea posible, usar scripts externos (Python/PowerShell) para ediciones complejas y luego commitear con git CLI.
+- `git reset --hard` + `write_file_with_commit` parcial deja residuos de ediciones anteriores. Usar `git stash` + `git reset --hard` para limpieza completa.
 
 ## APIs y comportamiento verificado
 - `POST /api/admin/users` acepta campos opcionales: `editar_system_prompt_global`, `editar_system_prompt_local`
 - `PUT /api/admin/users/:username/schedule` acepta `{ "horarios": { "lunes": [[9,12], [14,18]], ... } }`
 - `PUT /api/admin/users/:username/limits` acepta campo `activacion: bool`
-- `POST /api/chat` acepta campo `mode: "study" | "programming"`
+- `POST /api/chat` acepta campo `mode: "study" | "programming"` y ahora SPAWNEA el agente en background
 - `POST /api/projects/local` acepta `{ "name": "...", "path": "..." }`
 - `GET /api/admin/users` ahora incluye `has_study_access` y `has_programming_access` en cada usuario
+- `GET /api/agent/status` ahora devuelve `{ "status": "ok", "active": bool, ... }`
+- `GET /api/agent/steps` — NUEVO endpoint para pasos de auditoría
+- `GET /api/agent/summary` — NUEVO endpoint para resumen textual del progreso
