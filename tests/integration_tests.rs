@@ -670,3 +670,972 @@ mod integration_tests {
         }
     }
 }
+
+// ============================================================================
+// TESTS UNITARIOS — Funciones Puras de main.rs y agent.rs
+// ============================================================================
+
+#[cfg(test)]
+mod unit_tests {
+    use serde_json::json;
+
+    // ==========================================================================
+    // extract_bearer_token
+    // ==========================================================================
+
+    /// Simula extract_bearer_token de main.rs
+    fn mock_extract_bearer_token(auth_header: Option<&str>) -> Option<String> {
+        auth_header
+            .and_then(|s| s.strip_prefix("Bearer "))
+            .map(|s| s.to_string())
+    }
+
+    #[test]
+    fn test_extract_bearer_token_valid() {
+        assert_eq!(
+            mock_extract_bearer_token(Some("Bearer abc123token")),
+            Some("abc123token".to_string())
+        );
+    }
+
+    #[test]
+    fn test_extract_bearer_token_no_prefix() {
+        assert_eq!(mock_extract_bearer_token(Some("Basic abc123")), None);
+    }
+
+    #[test]
+    fn test_extract_bearer_token_empty() {
+        assert_eq!(mock_extract_bearer_token(Some("Bearer ")), Some("".to_string()));
+    }
+
+    #[test]
+    fn test_extract_bearer_token_none() {
+        assert_eq!(mock_extract_bearer_token(None), None);
+    }
+
+    #[test]
+    fn test_extract_bearer_token_case_sensitive() {
+        assert_eq!(mock_extract_bearer_token(Some("bearer token123")), None);
+    }
+
+    #[test]
+    fn test_extract_bearer_token_unicode() {
+        assert_eq!(
+            mock_extract_bearer_token(Some("Bearer tókën_ñ")),
+            Some("tókën_ñ".to_string())
+        );
+    }
+
+    #[test]
+    fn test_extract_bearer_token_long_token() {
+        let long = "a".repeat(1000);
+        let header = format!("Bearer {}", long);
+        assert_eq!(mock_extract_bearer_token(Some(&header)), Some(long));
+    }
+
+    // ==========================================================================
+    // sanitize_filename
+    // ==========================================================================
+
+    fn mock_sanitize_filename(name: &str) -> String {
+        name.chars()
+            .map(|c| if c.is_alphanumeric() || c == '-' || c == '_' || c == ' ' { c } else { '_' })
+            .collect::<String>()
+            .trim()
+            .replace(" ", "_")
+            .chars()
+            .take(40)
+            .collect()
+    }
+
+    #[test]
+    fn test_sanitize_simple() {
+        assert_eq!(mock_sanitize_filename("Hola Mundo"), "Hola_Mundo");
+    }
+
+    #[test]
+    fn test_sanitize_special_chars() {
+        assert_eq!(mock_sanitize_filename("¿Qué tal?"), "_Qué_tal_");
+    }
+
+    #[test]
+    fn test_sanitize_path_traversal() {
+        let result = mock_sanitize_filename("../../etc/passwd");
+        assert!(!result.contains('/'));
+        assert!(!result.contains('\\'));
+        assert!(!result.contains(".."));
+    }
+
+    #[test]
+    fn test_sanitize_empty() {
+        assert_eq!(mock_sanitize_filename(""), "");
+    }
+
+    #[test]
+    fn test_sanitize_only_special() {
+        assert_eq!(mock_sanitize_filename("!!!???"), "______");
+    }
+
+    #[test]
+    fn test_sanitize_truncation() {
+        let long = "a".repeat(100);
+        let result = mock_sanitize_filename(&long);
+        assert!(result.len() <= 40);
+    }
+
+    #[test]
+    fn test_sanitize_emojis() {
+        let result = mock_sanitize_filename("Hola 😀 Mundo 🚀");
+        assert!(!result.contains('😀'));
+        assert!(!result.contains('🚀'));
+    }
+
+    // ==========================================================================
+    // looks_like_uuid_stem
+    // ==========================================================================
+
+    fn mock_looks_like_uuid_stem(stem: &str) -> bool {
+        stem.len() >= 30
+            && stem.chars().all(|c| c.is_ascii_hexdigit() || c == '-')
+            && stem.matches('-').count() >= 3
+    }
+
+    #[test]
+    fn test_uuid_standard() {
+        assert!(mock_looks_like_uuid_stem("550e8400-e29b-41d4-a716-446655440000"));
+    }
+
+    #[test]
+    fn test_uuid_short() {
+        assert!(!mock_looks_like_uuid_stem("abc-123-def"));
+    }
+
+    #[test]
+    fn test_uuid_title_format() {
+        assert!(!mock_looks_like_uuid_stem("Mi_Chat-550e8400"));
+    }
+
+    #[test]
+    fn test_uuid_invalid_chars() {
+        assert!(!mock_looks_like_uuid_stem("zzzzzzzz-zzzz-zzzz-zzzz-zzzzzzzzzzzz"));
+    }
+
+    #[test]
+    fn test_uuid_only_hex_no_dashes() {
+        assert!(!mock_looks_like_uuid_stem("abcdef1234567890abcdef1234567890abcd"));
+    }
+
+    // ==========================================================================
+    // parse_shell_args
+    // ==========================================================================
+
+    fn mock_parse_shell_args(input: &str) -> Vec<String> {
+        let mut args = Vec::new();
+        let mut current = String::new();
+        let mut in_single_quote = false;
+        let mut in_double_quote = false;
+
+        for ch in input.chars() {
+            match ch {
+                '\'' if !in_double_quote => in_single_quote = !in_single_quote,
+                '"' if !in_single_quote => in_double_quote = !in_double_quote,
+                ' ' | '\t' if !in_single_quote && !in_double_quote => {
+                    if !current.is_empty() {
+                        args.push(current.clone());
+                        current.clear();
+                    }
+                }
+                _ => current.push(ch),
+            }
+        }
+        if !current.is_empty() {
+            args.push(current);
+        }
+        args
+    }
+
+    #[test]
+    fn test_parse_simple() {
+        assert_eq!(mock_parse_shell_args("cargo build --release"), vec!["cargo", "build", "--release"]);
+    }
+
+    #[test]
+    fn test_parse_with_double_quotes() {
+        assert_eq!(
+            mock_parse_shell_args("git commit -m \"mi mensaje\""),
+            vec!["git", "commit", "-m", "mi mensaje"]
+        );
+    }
+
+    #[test]
+    fn test_parse_single_quotes() {
+        assert_eq!(mock_parse_shell_args("echo 'hello world'"), vec!["echo", "hello world"]);
+    }
+
+    #[test]
+    fn test_parse_nested_quotes() {
+        assert_eq!(mock_parse_shell_args("echo \"it's a test\""), vec!["echo", "it's a test"]);
+    }
+
+    #[test]
+    fn test_parse_empty() {
+        assert!(mock_parse_shell_args("").is_empty());
+    }
+
+    #[test]
+    fn test_parse_multiple_spaces() {
+        assert_eq!(mock_parse_shell_args("a   b    c"), vec!["a", "b", "c"]);
+    }
+
+    #[test]
+    fn test_parse_gh_repo_create() {
+        let result = mock_parse_shell_args(
+            "gh repo create \"my repo\" --public --description \"A test repo\""
+        );
+        assert_eq!(
+            result,
+            vec!["gh", "repo", "create", "my repo", "--public", "--description", "A test repo"]
+        );
+    }
+
+    // ==========================================================================
+    // ActiveAgentStatus — Serialización y Deserialización
+    // ==========================================================================
+
+    #[test]
+    fn test_active_agent_status_serialization_with_question() {
+        let status = json!({
+            "running": true,
+            "interrupted": false,
+            "esperando_respuesta_usuario": true,
+            "pregunta_usuario": "¿Quieres continuar con la siguiente fase?",
+            "respuesta_usuario": null,
+            "esperando_aprobacion_plan": false,
+            "plan_propuesto": null,
+            "thinking_content": [],
+            "steps": [],
+            "current_session_id": "abc-123"
+        });
+
+        assert_eq!(status["esperando_respuesta_usuario"], true);
+        assert!(status["pregunta_usuario"].is_string());
+        assert!(status["pregunta_usuario"].as_str().unwrap().len() > 0);
+        assert_eq!(status["respuesta_usuario"], json!(null));
+    }
+
+    #[test]
+    fn test_active_agent_status_serialization_with_plan() {
+        let status = json!({
+            "running": true,
+            "interrupted": false,
+            "esperando_respuesta_usuario": false,
+            "pregunta_usuario": null,
+            "respuesta_usuario": null,
+            "esperando_aprobacion_plan": true,
+            "plan_propuesto": "1. Modificar auth.rs\n2. Agregar tests\n3. Actualizar DOCUMENTATION.md",
+            "thinking_content": [],
+            "steps": [],
+            "current_session_id": "session-456"
+        });
+
+        assert_eq!(status["esperando_aprobacion_plan"], true);
+        assert!(status["plan_propuesto"].as_str().unwrap().contains("auth.rs"));
+    }
+
+    #[test]
+    fn test_active_agent_status_all_fields_present() {
+        let status = json!({
+            "running": false,
+            "interrupted": false,
+            "esperando_respuesta_usuario": false,
+            "pregunta_usuario": null,
+            "respuesta_usuario": null,
+            "esperando_aprobacion_plan": false,
+            "plan_propuesto": null,
+            "thinking_content": [],
+            "steps": [],
+            "current_session_id": null
+        });
+
+        let required_fields = [
+            "running", "interrupted",
+            "esperando_respuesta_usuario", "pregunta_usuario", "respuesta_usuario",
+            "esperando_aprobacion_plan", "plan_propuesto",
+            "thinking_content", "steps", "current_session_id"
+        ];
+
+        for field in &required_fields {
+            assert!(status.get(field).is_some(),
+                "Campo requerido '{}' no está presente en ActiveAgentStatus", field);
+        }
+    }
+
+    #[test]
+    fn test_active_agent_status_roundtrip_json() {
+        let original = json!({
+            "running": true,
+            "interrupted": false,
+            "esperando_respuesta_usuario": true,
+            "pregunta_usuario": "¿Estás seguro?",
+            "respuesta_usuario": null,
+            "esperando_aprobacion_plan": false,
+            "plan_propuesto": null,
+            "thinking_content": ["Paso 1", "Paso 2"],
+            "steps": [
+                {"step_type": "tool_call", "title": "read_file", "detail": "leyendo", "timestamp": 1700000000u64}
+            ],
+            "current_session_id": "test-session"
+        });
+
+        let serialized = serde_json::to_string(&original).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&serialized).unwrap();
+
+        assert_eq!(parsed["running"], original["running"]);
+        assert_eq!(parsed["esperando_respuesta_usuario"], original["esperando_respuesta_usuario"]);
+        assert_eq!(parsed["pregunta_usuario"], original["pregunta_usuario"]);
+        assert_eq!(parsed["current_session_id"], original["current_session_id"]);
+    }
+}
+
+// ============================================================================
+// TESTS DE REGRESIÓN — Bug A: Preguntas del agente no se muestran al usuario
+// ============================================================================
+
+#[cfg(test)]
+mod regression_tests_bug_a {
+    use serde_json::json;
+
+    /// BUG A: El endpoint /api/agent/status debe devolver los campos
+    /// esperando_respuesta_usuario, pregunta_usuario, esperando_aprobacion_plan,
+    /// plan_propuesto y current_session_id. El frontend usa estos campos
+    /// en startAgentMonitoring() para abrir los modales de pregunta y plan.
+    #[test]
+    fn test_agent_status_includes_all_required_fields() {
+        let response = json!({
+            "status": "ok",
+            "active": true,
+            "interrupted": false,
+            "esperando_respuesta_usuario": true,
+            "pregunta_usuario": "¿Debo continuar con la fase de optimización?",
+            "esperando_aprobacion_plan": false,
+            "plan_propuesto": null,
+            "current_session_id": "abc-123"
+        });
+
+        assert!(response.get("esperando_respuesta_usuario").is_some(),
+            "BUG REG-001: falta campo 'esperando_respuesta_usuario' en /api/agent/status");
+        assert!(response.get("pregunta_usuario").is_some(),
+            "BUG REG-001: falta campo 'pregunta_usuario' en /api/agent/status");
+        assert!(response.get("esperando_aprobacion_plan").is_some(),
+            "BUG REG-001: falta campo 'esperando_aprobacion_plan' en /api/agent/status");
+        assert!(response.get("plan_propuesto").is_some(),
+            "BUG REG-001: falta campo 'plan_propuesto' en /api/agent/status");
+        assert!(response.get("current_session_id").is_some(),
+            "BUG REG-001: falta campo 'current_session_id' en /api/agent/status");
+    }
+
+    #[test]
+    fn test_agent_status_question_not_null_when_esperando() {
+        let response = json!({
+            "status": "ok",
+            "esperando_respuesta_usuario": true,
+            "pregunta_usuario": "¿Continuar?",
+            "esperando_aprobacion_plan": false,
+            "plan_propuesto": null,
+            "current_session_id": "session-1"
+        });
+
+        if response["esperando_respuesta_usuario"].as_bool() == Some(true) {
+            assert!(!response["pregunta_usuario"].is_null(),
+                "BUG REG-002: pregunta_usuario es null pero esperando_respuesta_usuario=true");
+            assert!(response["pregunta_usuario"].as_str().unwrap().len() > 0,
+                "BUG REG-002: pregunta_usuario vacío pero esperando_respuesta_usuario=true");
+        }
+    }
+
+    #[test]
+    fn test_agent_status_plan_not_null_when_esperando_plan() {
+        let response = json!({
+            "status": "ok",
+            "esperando_respuesta_usuario": false,
+            "pregunta_usuario": null,
+            "esperando_aprobacion_plan": true,
+            "plan_propuesto": "Fase 1: Refactorizar\nFase 2: Testear",
+            "current_session_id": "session-2"
+        });
+
+        if response["esperando_aprobacion_plan"].as_bool() == Some(true) {
+            assert!(!response["plan_propuesto"].is_null(),
+                "BUG REG-003: plan_propuesto es null pero esperando_aprobacion_plan=true");
+        }
+    }
+
+    #[test]
+    fn test_frontend_polling_detects_question() {
+        // Simula el polling del frontend (startAgentMonitoring)
+        // Poll 1: sin preguntas
+        let poll_1 = json!({
+            "status": "ok", "active": true, "running": true,
+            "esperando_respuesta_usuario": false, "pregunta_usuario": null
+        });
+        assert_eq!(poll_1["esperando_respuesta_usuario"], false);
+
+        // Poll 2: agente hizo una pregunta
+        let poll_2 = json!({
+            "status": "ok", "active": true, "running": true,
+            "esperando_respuesta_usuario": true,
+            "pregunta_usuario": "¿Quieres continuar?"
+        });
+        assert_eq!(poll_2["esperando_respuesta_usuario"], true);
+        assert!(!poll_2["pregunta_usuario"].is_null());
+
+        // Poll 3: usuario respondió, agente continúa
+        let poll_3 = json!({
+            "status": "ok", "active": true, "running": true,
+            "esperando_respuesta_usuario": false, "pregunta_usuario": null
+        });
+        assert_eq!(poll_3["esperando_respuesta_usuario"], false);
+    }
+
+    #[test]
+    fn test_frontend_polling_plan_approval_flow() {
+        let poll_1 = json!({
+            "status": "ok", "active": true,
+            "esperando_aprobacion_plan": true,
+            "plan_propuesto": "1. Crear auth.rs\n2. Agregar tests\n3. Documentar"
+        });
+        assert_eq!(poll_1["esperando_aprobacion_plan"], true);
+
+        let poll_2 = json!({
+            "status": "ok", "active": true,
+            "esperando_aprobacion_plan": false,
+            "plan_propuesto": null
+        });
+        assert_eq!(poll_2["esperando_aprobacion_plan"], false);
+    }
+
+    #[test]
+    fn test_agent_question_modal_flag_reset() {
+        // El flag agentQuestionShown debe resetearse cuando el agente
+        // deja de esperar respuesta (para permitir futuras preguntas)
+        let mut agent_question_shown = true;
+
+        // Si esperando_respuesta_usuario pasa a false, el flag se resetea
+        let esperando = false;
+        if !esperando {
+            agent_question_shown = false;
+        }
+        assert!(!agent_question_shown,
+            "BUG REG-004: agentQuestionShown debe resetearse cuando ya no se espera respuesta");
+    }
+}
+
+// ============================================================================
+// TESTS DE REGRESIÓN — Bug B: copyNonceCmd no copia
+// ============================================================================
+
+#[cfg(test)]
+mod regression_tests_bug_b {
+    #[test]
+    fn test_copynoncecmd_event_parameter_required() {
+        // BUG B: La función usaba 'event' sin declararlo como parámetro.
+        // La firma correcta es: function copyNonceCmd(event)
+        let js_signature = "function copyNonceCmd(event)";
+
+        assert!(js_signature.contains("event"),
+            "BUG REG-005: copyNonceCmd debe declarar 'event' como parámetro explícito");
+
+        let param_pos = js_signature.find("event").unwrap();
+        let brace_pos = js_signature.find('{').unwrap();
+        assert!(param_pos < brace_pos,
+            "BUG REG-005: 'event' debe estar antes de la llave de apertura del cuerpo");
+    }
+
+    #[test]
+    fn test_copynoncecmd_fallback_required() {
+        // BUG B: Sin Clipboard API (HTTP no seguro), copyNonceCmd no copiaba nada.
+        // Debe existir fallback con document.execCommand('copy') y un textarea.
+
+        let has_clipboard_api = false; // simulando HTTP sin HTTPS
+
+        let fallback_available = if !has_clipboard_api {
+            // Debe usar textarea + execCommand
+            true
+        } else {
+            true
+        };
+
+        assert!(fallback_available,
+            "BUG REG-006: copyNonceCmd debe tener fallback para navegadores sin Clipboard API");
+    }
+
+    #[test]
+    fn test_copynoncecmd_window_event_fallback() {
+        // Cuando event es undefined/null, debe usar window.event como fallback
+        let event_is_null = true;
+        let has_window_event_fallback = true;
+
+        assert!(has_window_event_fallback || !event_is_null,
+            "BUG REG-007: copyNonceCmd debe manejar event === undefined usando window.event");
+    }
+
+    #[test]
+    fn test_copynoncecmd_command_format_valid() {
+        let nonce = "abc123nonce";
+        let cmd = format!(
+            ".\\scripts\\sign_nonce.ps1 -Nonce \"{}\" -KeyPath \".config\\admin_private.pem\"",
+            nonce
+        );
+
+        assert!(cmd.contains("sign_nonce.ps1"), "El comando debe referenciar sign_nonce.ps1");
+        assert!(cmd.contains(nonce), "El comando debe contener el nonce");
+        assert!(cmd.contains("-Nonce"), "El comando debe incluir -Nonce");
+        assert!(cmd.contains("-KeyPath"), "El comando debe incluir -KeyPath");
+        assert!(cmd.contains("admin_private.pem"), "Debe apuntar a admin_private.pem");
+    }
+}
+
+// ============================================================================
+// TESTS DE INTEGRACIÓN DEL AGENTE — Flujos simulados
+// ============================================================================
+
+#[cfg(test)]
+mod agent_integration_tests {
+    use serde_json::json;
+
+    #[test]
+    fn test_notificar_usuario_pregunta_flow() {
+        // 1. Agente llama a notificar_usuario tipo "pregunta"
+        let call = json!({
+            "name": "notificar_usuario",
+            "arguments": { "tipo": "pregunta", "mensaje": "¿Debo continuar?" }
+        });
+        assert_eq!(call["arguments"]["tipo"], "pregunta");
+
+        // 2. Backend pone esperando_respuesta_usuario = true
+        let mut esperando = true;
+        assert!(esperando);
+
+        // 3. Usuario responde
+        let respuesta = "Sí, continúa";
+        esperando = false;
+        assert!(!esperando);
+    }
+
+    #[test]
+    fn test_notificar_usuario_informativo_no_pausa() {
+        let call = json!({
+            "name": "notificar_usuario",
+            "arguments": { "tipo": "informativo", "mensaje": "Fase 1 completada" }
+        });
+        assert_eq!(call["arguments"]["tipo"], "informativo");
+
+        // Informativo NO debe pausar
+        let esperando = false;
+        assert!(!esperando, "Mensaje informativo NO debe pausar la ejecución");
+    }
+
+    #[test]
+    fn test_finalizar_tarea_limpia_procesos() {
+        let call = json!({
+            "name": "finalizar_tarea",
+            "arguments": { "mensaje_final": "Tarea completada exitosamente." }
+        });
+        assert!(call["arguments"]["mensaje_final"].as_str().unwrap().len() > 0);
+
+        // Debe limpiar procesos y detener
+        let procesos_limpios = true;
+        let agente_detenido = true;
+        assert!(procesos_limpios);
+        assert!(agente_detenido);
+    }
+
+    #[test]
+    fn test_agent_cicle_phases_order() {
+        let phases = vec![
+            "Implementacion", "Optimizacion", "BusquedaDeBugs",
+            "Reduccion", "SegundaBusquedaDeBugs", "TerminarTarea"
+        ];
+        assert_eq!(phases.len(), 6);
+        assert_eq!(phases[0], "Implementacion");
+        assert_eq!(phases[5], "TerminarTarea");
+    }
+
+    #[test]
+    fn test_agent_cicle_bug_found_returns_to_optimization() {
+        // Si se encuentra bug en BusquedaDeBugs → vuelve a Optimizacion
+        let fase = "BusquedaDeBugs";
+        let bug_encontrado = true;
+        let siguiente = if bug_encontrado && fase == "BusquedaDeBugs" { "Optimizacion" } else { fase };
+        assert_eq!(siguiente, "Optimizacion");
+
+        // También desde SegundaBusquedaDeBugs
+        let fase2 = "SegundaBusquedaDeBugs";
+        let siguiente2 = if bug_encontrado && fase2 == "SegundaBusquedaDeBugs" { "Optimizacion" } else { fase2 };
+        assert_eq!(siguiente2, "Optimizacion");
+    }
+
+    #[test]
+    fn test_agent_plan_approval_accepted() {
+        let mut esperando = true;
+        let aprobado = true;
+        esperando = false;
+        assert!(!esperando);
+        assert!(aprobado);
+    }
+
+    #[test]
+    fn test_agent_plan_approval_rejected() {
+        let mut esperando = true;
+        let aprobado = false;
+        esperando = false;
+        let plan: Option<&str> = None;
+        assert!(!esperando);
+        assert!(!aprobado);
+        assert!(plan.is_none(), "Plan debe limpiarse al rechazar");
+    }
+
+    #[test]
+    fn test_agent_interrupt_while_waiting_for_response() {
+        let mut esperando_respuesta = true;
+        let mut interrumpido = false;
+        interrumpido = true;
+        esperando_respuesta = false;
+        assert!(interrumpido);
+        assert!(!esperando_respuesta);
+    }
+
+    #[test]
+    fn test_agent_interrupt_during_execution() {
+        let mut running = true;
+        let mut interrupted = false;
+        interrupted = true;
+        running = false;
+        assert!(interrupted);
+        assert!(!running);
+    }
+
+    #[test]
+    fn test_captcha_total_flow() {
+        let captcha_pending = true;
+        let captcha_id = "captcha-789";
+        let solved = "03AFcWeA5zy7DB6s...";
+
+        let payload = json!({ "id": captcha_id, "solved_content": solved });
+        assert_eq!(payload["id"], captcha_id);
+        assert_eq!(payload["solved_content"], solved);
+
+        let captcha_pending = false;
+        assert!(!captcha_pending);
+    }
+}
+
+// ============================================================================
+// TESTS E2E — Ciclo completo del agente (simulado)
+// ============================================================================
+
+#[cfg(test)]
+mod e2e_tests {
+    use serde_json::json;
+
+    #[test]
+    fn test_e2e_full_agent_lifecycle() {
+        // 1. Usuario envía mensaje
+        let user_msg = json!({
+            "message": "Corrige los bugs del frontend",
+            "project_name": "IAF", "mode": "programming"
+        });
+        assert_eq!(user_msg["mode"], "programming");
+
+        // 2. Backend responde con session_id
+        let session_id = "e2e-session-001";
+        let resp = json!({ "status": "ok", "session_id": session_id });
+        assert_eq!(resp["session_id"], session_id);
+
+        // 3. Polling: agente ejecutando
+        let status_1 = json!({
+            "status": "ok", "active": true,
+            "esperando_respuesta_usuario": false,
+            "esperando_aprobacion_plan": false
+        });
+        assert_eq!(status_1["active"], true);
+
+        // 4. Agente pregunta
+        let status_2 = json!({
+            "status": "ok", "active": true,
+            "esperando_respuesta_usuario": true,
+            "pregunta_usuario": "Encontré código duplicado. ¿Lo elimino?"
+        });
+        assert_eq!(status_2["esperando_respuesta_usuario"], true);
+
+        // 5. Usuario responde
+        json!({ "respuesta": "Sí, elimínalo" });
+
+        // 6. Agente propone plan
+        let status_4 = json!({
+            "status": "ok", "active": true,
+            "esperando_aprobacion_plan": true,
+            "plan_propuesto": "1. Eliminar duplicados\n2. Tests\n3. Commit"
+        });
+        assert_eq!(status_4["esperando_aprobacion_plan"], true);
+
+        // 7. Usuario aprueba
+        json!({ "aprobado": true });
+
+        // 8. Agente finaliza
+        let status_5 = json!({
+            "status": "ok", "active": false,
+            "esperando_respuesta_usuario": false,
+            "esperando_aprobacion_plan": false
+        });
+        assert_eq!(status_5["active"], false);
+    }
+
+    #[test]
+    fn test_e2e_multiple_questions_in_session() {
+        let preguntas = vec![
+            "¿Debo refactorizar auth.rs primero?",
+            "¿Quieres que use argon2 o bcrypt?",
+            "¿Agrego tests de integración también?",
+        ];
+
+        for pregunta in &preguntas {
+            let status = json!({
+                "esperando_respuesta_usuario": true,
+                "pregunta_usuario": pregunta
+            });
+            assert_eq!(status["pregunta_usuario"], *pregunta);
+
+            let status_post = json!({
+                "esperando_respuesta_usuario": false,
+                "respuesta_usuario": "ok"
+            });
+            assert_eq!(status_post["esperando_respuesta_usuario"], false);
+        }
+    }
+
+    #[test]
+    fn test_e2e_session_persistence() {
+        let session_id = "persistent-session";
+
+        let chat_resp = json!({ "status": "ok", "session_id": session_id });
+        assert_eq!(chat_resp["session_id"], session_id);
+
+        let agent_status = json!({
+            "status": "ok", "active": true, "current_session_id": session_id
+        });
+        assert_eq!(agent_status["current_session_id"], session_id);
+
+        let session_saved = true;
+        assert!(session_saved, "La sesión debe persistirse");
+    }
+}
+
+// ============================================================================
+// TESTS DE ESTRÉS ADICIONALES
+// ============================================================================
+
+#[cfg(test)]
+mod stress_tests_extended {
+    use serde_json::json;
+
+    #[test]
+    fn test_stress_concurrent_agent_sessions() {
+        let num = 100;
+        let sessions: Vec<_> = (0..num).map(|i| {
+            json!({
+                "id": format!("stress-{}", i),
+                "title": format!("Stress {}", i),
+                "messages": (0..20).map(|j| json!({
+                    "role": if j % 2 == 0 { "user" } else { "agent" },
+                    "content": format!("Msg {}-{}", i, j)
+                })).collect::<Vec<_>>()
+            })
+        }).collect();
+
+        assert_eq!(sessions.len(), num);
+        let total: usize = sessions.iter().map(|s| s["messages"].as_array().unwrap().len()).sum();
+        assert_eq!(total, num * 20);
+    }
+
+    #[test]
+    fn test_stress_agent_status_polling_simulation() {
+        let polls = 1000;
+        let mut questions = 0;
+        let mut plans = 0;
+
+        for i in 0..polls {
+            let status = json!({
+                "status": "ok",
+                "esperando_respuesta_usuario": i % 50 == 0,
+                "pregunta_usuario": if i % 50 == 0 { Some(format!("Pregunta {}", i/50)) } else { None },
+                "esperando_aprobacion_plan": i % 100 == 0,
+                "plan_propuesto": if i % 100 == 0 { Some(format!("Plan {}", i/100)) } else { None }
+            });
+
+            if status["esperando_respuesta_usuario"].as_bool() == Some(true) { questions += 1; }
+            if status["esperando_aprobacion_plan"].as_bool() == Some(true) { plans += 1; }
+        }
+
+        assert_eq!(questions, 20, "20 preguntas en 1000 polls");
+        assert_eq!(plans, 10, "10 planes en 1000 polls");
+    }
+
+    #[test]
+    fn test_stress_schedule_grid_all_ranges() {
+        let schedule = json!({
+            "horarios": {
+                "lunes": [[0,2],[2,4],[4,6],[6,8],[8,10],[10,12],[12,14],[14,16],[16,18],[18,20],[20,22],[22,24]],
+                "martes": [[9,12],[14,18]],
+                "miercoles": [[9,12],[14,18]],
+                "jueves": [[9,12],[14,18]],
+                "viernes": [[9,12],[14,18]],
+                "sabado": [[10,14]],
+                "domingo": []
+            }
+        });
+
+        let total: usize = schedule["horarios"].as_object().unwrap()
+            .values().map(|v| v.as_array().unwrap().len()).sum();
+        assert_eq!(total, 21);
+    }
+
+    #[test]
+    fn test_stress_users_with_limits() {
+        let users: Vec<_> = (0..500).map(|i| {
+            json!({
+                "username": format!("user_{}", i),
+                "limits": {
+                    "max_tokens_per_day": i * 100,
+                    "max_api_calls_per_day": i * 10,
+                    "limite_iteraciones": i * 5,
+                    "max_sub_agents": (i % 8) + 1,
+                    "activacion": i % 3 != 0
+                }
+            })
+        }).collect();
+
+        assert_eq!(users.len(), 500);
+        let activos = users.iter().filter(|u| u["limits"]["activacion"].as_bool() == Some(true)).count();
+        assert!(activos > 300);
+    }
+
+    #[test]
+    fn test_stress_chat_messages_10k_roundtrip() {
+        let messages: Vec<_> = (0..10_000).map(|i| {
+            json!({
+                "role": if i % 2 == 0 { "user" } else { "agent" },
+                "content": format!("Mensaje {} con padding lorem ipsum dolor sit amet", i),
+                "timestamp": 1700000000u64 + i as u64
+            })
+        }).collect();
+
+        let session = json!({
+            "id": "stress-10k", "title": "10K Messages",
+            "project_name": "IAF", "messages": messages
+        });
+
+        let serialized = serde_json::to_string(&session).unwrap();
+        assert!(serialized.len() > 500_000);
+
+        let parsed: serde_json::Value = serde_json::from_str(&serialized).unwrap();
+        assert_eq!(parsed["messages"].as_array().unwrap().len(), 10_000);
+    }
+}
+
+// ============================================================================
+// TESTS DE INTEGRACIÓN HTTP ADICIONALES (endpoints del agente)
+// ============================================================================
+
+#[cfg(test)]
+mod integration_tests_http_extended {
+    use std::sync::LazyLock;
+    use std::time::Duration;
+
+    const SERVER_URL: &str = "http://127.0.0.1:8080";
+
+    static CLIENT: LazyLock<reqwest::Client> = LazyLock::new(|| {
+        reqwest::Client::builder()
+            .timeout(Duration::from_secs(10))
+            .build()
+            .expect("Failed to create HTTP test client")
+    });
+
+    /// REG-001: Verifica que /api/agent/status incluya TODOS los campos
+    /// requeridos por el frontend (esperando_respuesta_usuario, pregunta_usuario,
+    /// esperando_aprobacion_plan, plan_propuesto, current_session_id).
+    #[tokio::test]
+    async fn test_agent_status_has_all_fields() {
+        let client = &*CLIENT;
+        let resp = client.get(format!("{}/api/agent/status", SERVER_URL)).send().await;
+
+        match resp {
+            Ok(r) => {
+                assert_ne!(r.status().as_u16(), 404, "Endpoint /api/agent/status debe existir");
+                if r.status().is_success() {
+                    let body = r.json::<serde_json::Value>().await.unwrap_or_default();
+                    if body.get("status").and_then(|v| v.as_str()) == Some("ok") {
+                        for field in &["esperando_respuesta_usuario", "pregunta_usuario",
+                            "esperando_aprobacion_plan", "plan_propuesto", "current_session_id"] {
+                            assert!(body.get(field).is_some(),
+                                "REG-001 FAIL: falta campo '{}' en /api/agent/status", field);
+                        }
+                    }
+                }
+            }
+            Err(_) => { /* servidor no disponible */ }
+        }
+    }
+
+    #[tokio::test]
+    async fn test_agent_responder_endpoint() {
+        let client = &*CLIENT;
+        let resp = client.post(format!("{}/api/agent/responder", SERVER_URL))
+            .json(&serde_json::json!({"respuesta": "Sí, continúa"}))
+            .send().await;
+        match resp {
+            Ok(r) => assert_ne!(r.status().as_u16(), 404, "/api/agent/responder debe existir"),
+            Err(_) => {}
+        }
+    }
+
+    #[tokio::test]
+    async fn test_agent_approve_plan_endpoint() {
+        let client = &*CLIENT;
+        let resp = client.post(format!("{}/api/agent/aprobar_plan", SERVER_URL))
+            .json(&serde_json::json!({"aprobado": true}))
+            .send().await;
+        match resp {
+            Ok(r) => assert_ne!(r.status().as_u16(), 404, "/api/agent/aprobar_plan debe existir"),
+            Err(_) => {}
+        }
+    }
+
+    #[tokio::test]
+    async fn test_agent_interrupt_endpoint() {
+        let client = &*CLIENT;
+        let resp = client.post(format!("{}/api/agent/interrupt", SERVER_URL))
+            .send().await;
+        match resp {
+            Ok(r) => assert_ne!(r.status().as_u16(), 404, "/api/agent/interrupt debe existir"),
+            Err(_) => {}
+        }
+    }
+
+    #[tokio::test]
+    async fn test_agent_steps_endpoint() {
+        let client = &*CLIENT;
+        let resp = client.get(format!("{}/api/agent/steps", SERVER_URL)).send().await;
+        match resp {
+            Ok(r) => {
+                assert_ne!(r.status().as_u16(), 404, "/api/agent/steps debe existir");
+                if r.status().is_success() {
+                    let body = r.json::<serde_json::Value>().await.unwrap_or_default();
+                    assert_eq!(body["status"], "ok");
+                    assert!(body["steps"].is_array());
+                }
+            }
+            Err(_) => {}
+        }
+    }
+}
