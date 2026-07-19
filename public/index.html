@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
@@ -82,12 +82,12 @@
             <section class="section config-section">
                 <h3>System Prompts</h3>
                 <div class="form-group"><label>Global</label><textarea id="globalPrompt" rows="4"></textarea></div>
-                <div class="btn-group">
-                    <button id="savePromptsBtn" class="btn btn-success">Guardar</button>
-                    <button id="resetPromptBtn" class="btn btn-danger">Restaurar</button>
-                </div>
                 <div class="form-group project-prompt-group" style="margin-top:12px;">
                     <label>Prompt Local</label><textarea id="localPrompt" rows="4" placeholder="Instrucciones del proyecto..."></textarea>
+                </div>
+                <div class="btn-group">
+                    <button id="savePromptsBtn" class="btn btn-success">Guardar Ambos</button>
+                    <button id="resetPromptBtn" class="btn btn-danger">Restaurar Global</button>
                 </div>
             </section>
 
@@ -180,10 +180,22 @@
                     <button id="uploadPemBtn" class="btn btn-secondary btn-sm hidden" style="font-size:11px;">Subir .pem</button>
                     <button id="generateKeysBtn" class="btn btn-secondary btn-sm hidden" style="font-size:11px;">Generar Claves</button>
                 </div>
-                <div style="display:flex;gap:12px;margin-top:8px;align-items:center;">
-                    <label style="font-size:12px;"><input type="checkbox" id="newIsAdmin" onchange="toggleAdminCreateMode()"> Admin</label>
-                    <label style="font-size:12px;"><input type="checkbox" id="newStudyAccess" checked> Estudio</label>
-                    <label style="font-size:12px;"><input type="checkbox" id="newProgAccess"> Programar</label>
+                <!-- Permisos granulares -->
+                <div style="margin-top:8px;padding:8px;background:rgba(0,0,0,0.2);border-radius:8px;">
+                    <p style="font-size:11px;color:var(--text-muted);margin-bottom:6px;">Permisos:</p>
+                    <div class="perm-grid">
+                        <label><input type="checkbox" id="newIsAdmin" onchange="toggleAdminCreateMode()"> Admin (todos los permisos)</label>
+                        <label><input type="checkbox" id="newStudyAccess" checked> Modo Estudio</label>
+                        <label><input type="checkbox" id="newProgAccess"> Modo Programador</label>
+                        <label><input type="checkbox" id="newEditGlobalPrompt"> Editar Prompt Global</label>
+                        <label><input type="checkbox" id="newEditLocalPrompt"> Editar Prompt Local</label>
+                        <label><input type="checkbox" id="newCanFork"> Fork Repos</label>
+                        <label><input type="checkbox" id="newCanExecPS"> PowerShell</label>
+                        <label><input type="checkbox" id="newCanWrite"> Escribir Archivos</label>
+                        <label><input type="checkbox" id="newCanSearchGoogle"> Buscar en Google</label>
+                    </div>
+                </div>
+                <div style="margin-top:8px;">
                     <button id="createUserBtn" class="btn btn-success btn-sm">Crear</button>
                 </div>
             </div>
@@ -195,21 +207,48 @@
 
     <!-- ===== ADMIN: User Edit Modal ===== -->
     <div id="adminEditUserModal" class="modal hidden">
-        <div class="modal-content" style="max-width:500px;">
+        <div class="modal-content" style="max-width:600px;">
             <h3>Editar Usuario: <span id="editUsername"></span></h3>
+
+            <!-- Activación -->
+            <div class="toggle-row">
+                <label>Activación (límites habilitados)</label>
+                <input type="checkbox" id="editActivacion" checked>
+            </div>
+
             <div class="form-group"><label>Nueva Contraseña</label><input type="password" id="editPassword" placeholder="Dejar vacío para no cambiar" style="width:100%;padding:8px;background:rgba(0,0,0,0.3);border:1px solid var(--border-color);border-radius:6px;color:var(--text-color);"></div>
-            <div class="form-group"><label>Límite Tokens/día (null=ilimitado)</label><input type="text" id="editMaxTokens" style="width:100%;padding:8px;background:rgba(0,0,0,0.3);border:1px solid var(--border-color);border-radius:6px;color:var(--text-color);"></div>
-            <div class="form-group"><label>Límite API Calls/día</label><input type="text" id="editMaxApiCalls" style="width:100%;padding:8px;background:rgba(0,0,0,0.3);border:1px solid var(--border-color);border-radius:6px;color:var(--text-color);"></div>
-            <div class="form-group"><label>Máx Sub-agentes</label><input type="number" id="editMaxSubAgents" style="width:100%;padding:8px;background:rgba(0,0,0,0.3);border:1px solid var(--border-color);border-radius:6px;color:var(--text-color);"></div>
+
+            <!-- Límites -->
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+                <div class="form-group"><label>Límite Tokens/día (0=∞)</label><input type="number" id="editMaxTokens" placeholder="0" style="width:100%;padding:8px;background:rgba(0,0,0,0.3);border:1px solid var(--border-color);border-radius:6px;color:var(--text-color);"></div>
+                <div class="form-group"><label>Límite API Calls/día (0=∞)</label><input type="number" id="editMaxApiCalls" placeholder="0" style="width:100%;padding:8px;background:rgba(0,0,0,0.3);border:1px solid var(--border-color);border-radius:6px;color:var(--text-color);"></div>
+                <div class="form-group"><label>Límite Iteraciones (0=∞)</label><input type="number" id="editMaxIterations" placeholder="0" style="width:100%;padding:8px;background:rgba(0,0,0,0.3);border:1px solid var(--border-color);border-radius:6px;color:var(--text-color);"></div>
+                <div class="form-group"><label>Máx Sub-agentes</label><input type="number" id="editMaxSubAgents" placeholder="1" style="width:100%;padding:8px;background:rgba(0,0,0,0.3);border:1px solid var(--border-color);border-radius:6px;color:var(--text-color);"></div>
+            </div>
+
+            <!-- Permisos -->
             <div style="display:flex;gap:8px;flex-wrap:wrap;margin:8px 0;">
                 <label style="font-size:12px;"><input type="checkbox" id="editCanFork"> Fork</label>
                 <label style="font-size:12px;"><input type="checkbox" id="editCanExecPS"> PowerShell</label>
                 <label style="font-size:12px;"><input type="checkbox" id="editCanWrite"> Escribir</label>
+                <label style="font-size:12px;"><input type="checkbox" id="editCanSearchGoogle"> Google</label>
                 <label style="font-size:12px;"><input type="checkbox" id="editStudyAccess"> Estudio</label>
                 <label style="font-size:12px;"><input type="checkbox" id="editProgAccess"> Programar</label>
+                <label style="font-size:12px;"><input type="checkbox" id="editGlobalPromptPerm"> Prompt Global</label>
+                <label style="font-size:12px;"><input type="checkbox" id="editLocalPromptPerm"> Prompt Local</label>
             </div>
+
+            <!-- Horarios -->
+            <div class="schedule-section">
+                <h4>📅 Horarios de Activación (formato: 9-12,14-18)</h4>
+                <p class="schedule-help">Dejar vacío = siempre activo. Ej: "9-12,14-18" = activo de 9 a 12 y de 14 a 18.</p>
+                <div id="editScheduleGrid" class="schedule-grid">
+                    <!-- Filled by JS -->
+                </div>
+            </div>
+
             <div class="btn-group">
-                <button id="saveEditUserBtn" class="btn btn-success">Guardar</button>
+                <button id="saveEditUserBtn" class="btn btn-success">Guardar Todo</button>
                 <button id="deleteUserBtn" class="btn btn-danger">Eliminar</button>
                 <button id="closeEditUserBtn" class="btn btn-secondary">Cancelar</button>
             </div>
@@ -237,7 +276,6 @@
     <div id="agentPlanModal" class="modal hidden">
         <div class="modal-content" style="max-width:650px;"><h3>Plan de Cambios Propuesto</h3><div id="agentPlanContent" style="background:rgba(0,0,0,0.3);border:1px solid var(--border-color);padding:16px;border-radius:8px;max-height:250px;overflow-y:auto;font-family:'JetBrains Mono',monospace;font-size:12px;white-space:pre-wrap;margin-bottom:12px;"></div><div class="btn-group"><button id="approvePlanBtn" class="btn btn-success">Aprobar</button><button id="rejectPlanBtn" class="btn btn-danger">Rechazar</button></div></div>
     </div>
-
 
     <!-- ===== KEY GENERATION MODAL ===== -->
     <div id="keygenModal" class="modal hidden">
