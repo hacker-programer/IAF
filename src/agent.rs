@@ -52,56 +52,14 @@ pub async fn run_agent_loop(
         prompt.push_str(CONTEXT_NOTE);
         prompt
     };
-            let role = if m.role == "agent" { "assistant" } else { "user" };
-            messages.push(json!({ "role": role, "content": m.content }));
-        }
+    let mut messages = vec![
+        json!({ "role": "system", "content": system_prompt }),
+    ];
 
-        // Inyectar memoria de ejecuciÃƒÂ³n reciente (pasos de auditorÃƒÂ­a de herramientas) si existen
-        let steps = {
-            let status = state.active_agent.lock().unwrap();
-            status.steps.clone()
-        };
-
-        if !steps.is_empty() {
-            let mut steps_text = String::new();
-            // Tomar todos los pasos de auditorÃƒÂ­a desde el principio para evitar amnesia
-            let start_idx = 0;
-            for (i, step) in steps.iter().enumerate() {
-                // Truncar de forma segura a 20000 caracteres sin romper UTF-8
-                let detail_short = if step.detail.chars().count() > 20000 {
-                    let truncated: String = step.detail.chars().take(20000).collect();
-                    format!("{}... [Truncado en memoria]", truncated)
-                } else {
-                    step.detail.clone()
-                };
-                steps_text.push_str(&format!(
-                    "Paso #{}: Tipo={}, TÃƒÂ­tulo={}\nDetalle: {}\n\n",
-                    start_idx + i + 1, step.step_type, step.title, detail_short
-                ));
-            }
-
-            if !steps_text.is_empty() {
-                let context_msg = json!({
-                    "role": "system",
-                    "content": format!(
-                        "--- MEMORIA DE EJECUCIÃƒâ€œN RECIENTE (ACCIONES ANTES DE SER INTERRUMPIDO) ---\n\
-                         El agente estaba trabajando en esta sesiÃƒÂ³n y fue interrumpido por el nuevo mensaje del usuario que leerÃƒÂ¡s a continuaciÃƒÂ³n. \
-                         AquÃƒÂ­ tienes el registro tÃƒÂ©cnico de las ÃƒÂºltimas acciones y herramientas ejecutadas antes del nuevo mensaje. \
-                         AnalÃƒÂ­zalo para saber quÃƒÂ© archivos modificaste, quÃƒÂ© errores obtuviste y quÃƒÂ© descubriste para no perder el progreso:\n\n{}",
-                        steps_text
-                    )
-                });
-                messages.push(context_msg);
-            }
-        }
-
-        // Cargar el ÃƒÂºltimo mensaje del usuario (el prompt activo)
-        let last_msg = &session_messages[len - 1];
-        let role = if last_msg.role == "agent" { "assistant" } else { "user" };
-        messages.push(json!({ "role": role, "content": last_msg.content }));
-    } else {
-        // Por si acaso el historial estuviese vacÃƒÂ­o (no deberÃƒÂ­a ocurrir)
-        for m in session_messages {
+    // Cargar todo el historial del chat excepto el último mensaje (que es el nuevo prompt del usuario)
+    let len = session_messages.len();
+    if len > 0 {
+        for m in &session_messages[..len - 1] {
             let role = if m.role == "agent" { "assistant" } else { "user" };
             messages.push(json!({ "role": role, "content": m.content }));
         }
