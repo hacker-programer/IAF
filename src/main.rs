@@ -1548,15 +1548,14 @@ async fn agent_steps(
     let agent = state.active_agent.lock().unwrap();
     Json(json!({ "status": "ok", "steps": agent.steps })).into_response()
 }
-async fn agent_summary(
+}
+
 async fn agent_summary(
     State(state): State<AppState>,
     headers: HeaderMap,
 ) -> impl IntoResponse {
-        Err(_) => return Json(json!({ "status": "ok", "summary": "Agente inactivo." })).into_response(),
-    };
-    let agent = state.active_agent.lock().unwrap();
-    let summary = if agent.steps.is_empty() {
+    let _username = match require_auth(&state, &headers).await {
+        Ok(u) => u,
         if agent.running {
             "El agente esta ejecutando su primera iteracion...".to_string()
         } else {
