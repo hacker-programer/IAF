@@ -20,8 +20,8 @@ pub async fn run_agent_loop(
     voyage_key: &str,
     openrouter_key: &str,
     session_id: Option<String>,
-    username: &str,
-    mode: &str,
+    _username: &str,
+    _mode: &str,
 ) -> Result<String, Box<dyn Error + Send + Sync>> {
     let global_prompt = {
         let prompts = state.prompts.lock().unwrap();
@@ -611,7 +611,7 @@ pub async fn run_agent_loop(
         if let Some(tool_calls) = message_val["tool_calls"].as_array() {
             messages.push(message_val.clone());
             let mut tool_responses = Vec::new();
-            let mut final_message: Option<String> = None;
+            let mut final_message = None;
 
             for tool_call in tool_calls {
                 // Verificar seÃƒÂ±al de interrupciÃƒÂ³n antes de cada herramienta
@@ -664,13 +664,15 @@ pub async fn run_agent_loop(
                                     match std::process::Command::new("pdftotext").args(["-layout", &path_str, "-"]).output() {
                                         Ok(out) if out.status.success() => {
                                             let t = String::from_utf8_lossy(&out.stdout).to_string();
-                                            if t.trim().is_empty() { "PDF sin texto extraible. Usa analyze_images para OCR.".to_string() }
-                                            else { format!("[PDF: {}]\n\n{}", rel_path, t) }
+                                            if t.trim().is_empty() { "PDF sin texto extraible. Usa analyze_images para ver el PDF.".to_string() }
+                                            else { format!("[PDF: {}]
+
+{}", rel_path, t) }
                                         }
                                         _ => "No se pudo leer el PDF. Instala pdftotext o PyPDF2. Usa analyze_images como alternativa.".to_string()
                                     }
                                 } else {
-                                    "El archivo DOCX no se puede leer directamente. Instala python-docx (pip install python-docx) o usa analyze_images para analizarlo visualmente.".to_string()
+                                    "El archivo DOCX no se puede leer directamente. Instala python-docx: pip install python-docx. Usa analyze_images como alternativa.".to_string()
                                 }
                             } else {
                                 match fs::read_to_string(&full_path) {
@@ -695,7 +697,6 @@ pub async fn run_agent_loop(
                                 Err(e) => format!("Error leyendo archivo: {}", e),
                             }
                             }
-                        } else {
                             "No hay ningÃƒÂºn proyecto activo seleccionado.".to_string()
                         }
                     }
@@ -898,22 +899,6 @@ pub async fn run_agent_loop(
                             
                             if start_line_opt.is_some() || end_line_opt.is_some() {
                                 // EdiciÃƒÂ³n por rango de lÃƒÂ­neas en archivo existente
-                                let ext = full_path.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
-                            if ext == "pdf" || ext == "docx" {
-                                let path_str = full_path.to_string_lossy().to_string();
-                                if ext == "pdf" {
-                                    match std::process::Command::new("pdftotext").args(["-layout", &path_str, "-"]).output() {
-                                        Ok(out) if out.status.success() => {
-                                            let t = String::from_utf8_lossy(&out.stdout).to_string();
-                                            if t.trim().is_empty() { "PDF sin texto extraible. Usa analyze_images para OCR.".to_string() }
-                                            else { format!("[PDF: {}]\n\n{}", rel_path, t) }
-                                        }
-                                        _ => "No se pudo leer el PDF. Instala pdftotext o PyPDF2. Usa analyze_images como alternativa.".to_string()
-                                    }
-                                } else {
-                                    "El archivo DOCX no se puede leer directamente. Instala python-docx (pip install python-docx) o usa analyze_images para analizarlo visualmente.".to_string()
-                                }
-                            } else {
                                 match fs::read_to_string(&full_path) {
                                     Ok(orig_content) => {
                                         let line_ending = if orig_content.contains("\r\n") { "\r\n" } else { "\n" };
@@ -1325,7 +1310,7 @@ pub async fn run_agent_loop(
                                 let mut status = state.active_agent.lock().unwrap();
                                 status.info_messages.push(mensaje.to_string());
                                 if status.info_messages.len() > 100 { status.info_messages.remove(0); }
-                                                                status.steps.push(crate::state::AuditStep {
+                                status.steps.push(crate::state::AuditStep {
                                     step_type: "informativo".to_string(),
                                     title: "NotificaciÃƒÂ³n del Agente".to_string(),
                                     detail: mensaje.to_string(),
@@ -1355,7 +1340,7 @@ pub async fn run_agent_loop(
                         }
                         final_message = Some(final_msg);
                         "Tarea finalizada correctamente.".to_string()
-                    }
+                        }
                     "image_fetch" => {
                         let url = args["url"].as_str().unwrap_or("");
                         if url.is_empty() {
@@ -1753,7 +1738,7 @@ fn find_chat_file_by_session_id(base_workspace: &Path, session_id: &str) -> Opti
                         let sub_path = sub_entry.path();
                         if sub_path.is_file() {
                             if let Some(fname) = sub_path.file_stem().and_then(|s| s.to_str()) {
-                                if fname.contains(session_id) && sub_path.extension().and_then(|e| e.to_str()) == Some("json") {
+                                if fname.contains(session_id) and sub_path.extension().and_then(|e| e.to_str()) == Some("json") {
                                     return Some(sub_path);
                                 }
                             }
@@ -1762,7 +1747,7 @@ fn find_chat_file_by_session_id(base_workspace: &Path, session_id: &str) -> Opti
                 }
             } else if path.is_file() {
                 if let Some(fname) = path.file_stem().and_then(|s| s.to_str()) {
-                    if fname.contains(session_id) && path.extension().and_then(|e| e.to_str()) == Some("json") {
+                    if fname.contains(session_id) and path.extension().and_then(|e| e.to_str()) == Some("json") {
                         return Some(path);
                     }
                 }
@@ -2071,7 +2056,36 @@ async fn compress_active_messages_if_needed(
                             messages.extend(last_messages); // AÃƒÂ±adir los ÃƒÂºltimos 4 mensajes
 
                             // Guardar en el archivo JSON de la conversaciÃƒÂ³n en disco de forma persistente
-                            if let Some(ref session_id) = *session_id_opt {                                if let Some(chat_file) = find_chat_file_by_session_id(&state.base_workspace, session_id) {                                    if let Ok(content) = fs::read_to_string(&chat_file) {                                        if let Ok(mut session) = serde_json::from_str::<crate::state::ChatSession>(&content) {                                            let mut disk_messages = Vec::new();                                            for m in messages.iter() {                                                let role = m["role"].as_str().unwrap_or("");                                                let content_str = m["content"].as_str().unwrap_or("");                                                if role == "user" {                                                    disk_messages.push(crate::state::ChatMessage {                                                        role: "user".to_string(),                                                        content: content_str.to_string(),                                                        timestamp: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs(),                                                    });                                                } else if role == "assistant" {                                                    disk_messages.push(crate::state::ChatMessage {                                                        role: "agent".to_string(),                                                        content: content_str.to_string(),                                                        timestamp: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs(),                                                    });                                                }                                            }                                            session.messages = disk_messages;                                            let _ = fs::write(&chat_file, serde_json::to_string_pretty(&session).unwrap());                                        }                                    }                                }                            }
+                            if let Some(ref session_id) = *session_id_opt {
+                                if let Some(chat_file) = find_chat_file_by_session_id(&state.base_workspace, session_id) {
+                                if chat_file.exists() {
+                                    if let Ok(content) = fs::read_to_string(&chat_file) {
+                                        if let Ok(mut session) = serde_json::from_str::<crate::state::ChatSession>(&content) {
+                                            let mut disk_messages = Vec::new();
+                                            for m in messages.iter() {
+                                                let role = m["role"].as_str().unwrap_or("");
+                                                let content_str = m["content"].as_str().unwrap_or("");
+                                                if role == "user" {
+                                                    disk_messages.push(crate::state::ChatMessage {
+                                                        role: "user".to_string(),
+                                                        content: content_str.to_string(),
+                                                        timestamp: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs(),
+                                                    });
+                                                } else if role == "assistant" {
+                                                    disk_messages.push(crate::state::ChatMessage {
+                                                        role: "agent".to_string(),
+                                                        content: content_str.to_string(),
+                                                        timestamp: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs(),
+                                                    });
+                                                }
+                                            }
+                                            session.messages = disk_messages;
+                                            let _ = fs::write(&chat_file, serde_json::to_string_pretty(&session).unwrap());
+                                        }
+                                    }
+                                }
+                            }
+
                             // Registrar ÃƒÂ©xito en auditorÃƒÂ­a
                             {
                                 let mut status = state.active_agent.lock().unwrap();
