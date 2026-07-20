@@ -14,8 +14,8 @@
 // ============================================================================
 
 use serde_json::json;
-use std::path::PathBuf;
-use std::fs;
+// std::path::PathBuf y std::fs no se usan directamente en tests simulados;
+// se eliminan para evitar warnings.
 
 // ============================================================================
 // BUG #1: notificar_usuario informativo no se muestra en tiempo real
