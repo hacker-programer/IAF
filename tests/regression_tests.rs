@@ -14,8 +14,8 @@
 // ============================================================================
 
 use serde_json::json;
-// std::path::PathBuf y std::fs no se usan directamente en tests simulados;
-// se eliminan para evitar warnings.
+use iaf::utils::sanitize_filename;
+
 
 // ============================================================================
 // BUG #1: notificar_usuario informativo no se muestra en tiempo real
