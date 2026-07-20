@@ -1,4 +1,4 @@
-#![allow(dead_code, unused_imports, unused_variables)]
+﻿#![allow(dead_code, unused_imports, unused_variables)]
 use serde_json::{json, Value};
 use std::error::Error;
 use std::process::Command;
@@ -12,26 +12,6 @@ use base64::{engine::general_purpose, Engine as _};
 use uuid::Uuid;
 const DEEPSEEK_API_URL: &str = "https://api.deepseek.com/v1/chat/completions";
 
-
-// Constante para el prompt de modo estudio (BUG FIX: antes no se usaba en agent.rs)
-const STUDY_SYSTEM_PROMPT: &str = include_str!("../prompts/study_system_prompt.txt");
-
-// Requisito de documentación (BUG FIX: extraído para reutilización)
-const DOCUMENTATION_REQUIREMENT: &str = "\n\nOBLIGACIÓN CRÍTICA DE INICIO - CREAR DOCUMENTACIÓN:\n\
- Tu primera e inmediata acción en esta sesión DEBE ser verificar si existe el archivo `DOCUMENTATION.md` en la raíz de tu proyecto actual.\n\
- - SI NO EXISTE: Debes crearlo INMEDIATAMENTE como tu primer paso técnico usando la herramienta `write_file_with_commit` antes de hacer cualquier otra modificación o análisis profundo de código.\n\
- - SI YA EXISTE: Debes leerlo obligatoriamente para orientarte en la arquitectura y actualizarlo si realizas algún cambio estructural.\n\
- \n\
- REQUISITOS DE DOCUMENTACIÓN EXHAUSTIVA:\n\
- Este archivo `DOCUMENTATION.md` NO puede ser un resumen superficial. Debe ser un mapa técnico detallado y exhaustivo de todo el proyecto, conteniendo:\n\
- 1. Lista completa de archivos fuente clave del repositorio.\n\
- 2. Nombre exacto de todas las estructuras (structs, enums, classes) y funciones principales de cada archivo, detallando su funcionamiento interno específico y dependencias.\n\
- 3. Rangos de líneas exactos o aproximados donde se define cada componente importante.\n\
- \n\
- NOTA DE BÚSQUEDA DE CÓDIGO:\n\
- La herramienta `search_code` realiza búsquedas de texto local de coincidencia exacta por términos y palabras clave (ya no utiliza embeddings de VoyageAI). Por ende, el archivo `DOCUMENTATION.md` que crees debe ser rico en términos descriptivos clave (como MunicipalFinance, tax_system.rs, GameWorld, etc.) para que puedas usar `search_code` en el futuro y encontrar la ubicación exacta de cualquier componente en un instante sin necesidad de leer archivos grandes enteros.";
-
-const CONTEXT_NOTE: &str = "\n\nNOTA DE CONTEXTO: Para optimizar la memoria y la eficiencia, el sistema puede resumir los mensajes más antiguos del chat en una sola entrada con el encabezado `--- RESUMEN CONTEXTO ANTERIOR (Auto-comprimido por el sistema) ---`. Si encuentras este mensaje, debes interpretarlo como la continuación histórica y fidedigna de los acontecimientos y decisiones tomadas en el proyecto hasta ese momento.";
 pub async fn run_agent_loop(
     session_messages: Vec<crate::state::ChatMessage>,
     project_name: Option<String>,
@@ -40,34 +20,41 @@ pub async fn run_agent_loop(
     voyage_key: &str,
     openrouter_key: &str,
     session_id: Option<String>,
-    username: &str,
-    mode: &str,
 ) -> Result<String, Box<dyn Error + Send + Sync>> {
-    // Construir el system prompt según el modo (BUG FIX: modo estudio vs programación)
-    let system_prompt = if mode == "study" {
-        // Modo estudio: usar STUDY_SYSTEM_PROMPT como base e inyectar perfil del estudiante
-        let base_prompt = if let Some(ref proj_name) = project_name {
-            state.load_local_prompt(username, proj_name)
-                .unwrap_or_else(|| STUDY_SYSTEM_PROMPT.to_string())
-        } else {
-            STUDY_SYSTEM_PROMPT.to_string()
-        };
-        // Inyectar perfil del estudiante y base de conocimiento
-        state.study_engine.build_study_system_prompt(username, &base_prompt)
-    } else {
-        // Modo programación: cargar global y local por usuario desde disco
-        let global_prompt = state.load_global_prompt(username);
-        let local_prompt = project_name.as_ref()
-            .and_then(|name| state.load_local_prompt(username, name));
-        let mut prompt = if let Some(local) = local_prompt {
-            format!("{}\n\nProject Specific Prompt:\n{}", global_prompt, local)
-        } else {
-            global_prompt
-        };
-        prompt.push_str(DOCUMENTATION_REQUIREMENT);
-        prompt.push_str(CONTEXT_NOTE);
-        prompt
+    let global_prompt = {
+        let prompts = state.prompts.lock().unwrap();
+        prompts.global_current.clone()
     };
+
+    let local_prompt = project_name.as_ref().and_then(|name| {
+        let prompts = state.prompts.lock().unwrap();
+        prompts.projects.get(name).cloned()
+    });
+
+    let mut system_prompt = if let Some(local) = local_prompt {
+        format!("{}\n\nProject Specific Prompt:\n{}", global_prompt, local)
+    } else {
+        global_prompt
+    };
+    system_prompt.push_str(
+        "\n\nOBLIGACIÃƒâ€œN CRÃƒÂTICA DE INICIO - CREAR DOCUMENTACIÃƒâ€œN:\n\
+         Tu primera e inmediata acciÃƒÂ³n en esta sesiÃƒÂ³n DEBE ser verificar si existe el archivo `DOCUMENTATION.md` en la raÃƒÂ­z de tu proyecto actual.\n\
+         - SI NO EXISTE: Debes crearlo INMEDIATAMENTE como tu primer paso tÃƒÂ©cnico usando la herramienta `write_file_with_commit` antes de hacer cualquier otra modificaciÃƒÂ³n o anÃƒÂ¡lisis profundo de cÃƒÂ³digo.\n\
+         - SI YA EXISTE: Debes leerlo obligatoriamente para orientarte en la arquitectura y actualizarlo si realizas algÃƒÂºn cambio estructural.\n\
+         \n\
+         REQUISITOS DE DOCUMENTACIÃƒâ€œN EXHAUSTIVA:\n\
+         Este archivo `DOCUMENTATION.md` NO puede ser un resumen superficial. Debe ser un mapa tÃƒÂ©cnico detallado y exhaustivo de todo el proyecto, conteniendo:\n\
+         1. Lista completa de archivos fuente clave del repositorio.\n\
+         2. Nombre exacto de todas las estructuras (structs, enums, classes) y funciones principales de cada archivo, detallando su funcionamiento interno especÃƒÂ­fico y dependencias.\n\
+         3. Rangos de lÃƒÂ­neas exactos o aproximados donde se define cada componente importante.\n\
+         \n\
+         NOTA DE BÃƒÅ¡SQUEDA DE CÃƒâ€œDIGO:\n\
+         La herramienta `search_code` realiza bÃƒÂºsquedas de texto local de coincidencia exacta por tÃƒÂ©rminos y palabras clave (ya no utiliza embeddings de VoyageAI). Por ende, el archivo `DOCUMENTATION.md` que crees debe ser rico en tÃƒÂ©rminos descriptivos clave (como 'MunicipalFinance', 'tax_system.rs', 'GameWorld', etc.) para que puedas usar `search_code` en el futuro y encontrar la ubicaciÃƒÂ³n exacta de cualquier componente en un instante sin necesidad de leer archivos grandes enteros."
+    );
+    system_prompt.push_str(
+        "\n\nNOTA DE CONTEXTO: Para optimizar la memoria y la eficiencia, el sistema puede resumir los mensajes mÃƒÂ¡s antiguos del chat en una sola entrada con el encabezado `--- RESUMEN CONTEXTO ANTERIOR (Auto-comprimido por el sistema) ---`. Si encuentras este mensaje, debes interpretarlo como la continuaciÃƒÂ³n histÃƒÂ³rica y fidedigna de los acontecimientos y decisiones tomadas en el proyecto hasta ese momento."
+    );
+
     let mut messages = vec![
         json!({ "role": "system", "content": system_prompt }),
     ];
@@ -654,6 +641,8 @@ pub async fn run_agent_loop(
                 let args_str = tool_call["function"]["arguments"].as_str().unwrap_or("{}");
                 let args: Value = serde_json::from_str(args_str).unwrap_or(json!({}));
 
+                if func_name == "notificar_usuario" {
+                }
 
                 {
                     let mut status = state.active_agent.lock().unwrap();
@@ -1715,9 +1704,8 @@ pub async fn run_agent_loop(
 
 fn save_chat_steps_to_disk(state: &AppState, session_id_opt: &Option<String>, steps: &[crate::state::AuditStep]) {
     if let Some(ref session_id) = *session_id_opt {
-        // Buscar el archivo por UUID en el nombre (formato: <title>-<uuid>.json)
-        // o en subdirectorios de usuario
-        if let Some(chat_file) = find_chat_file_by_session_id(&state.base_workspace, session_id) {
+        let chat_file = state.base_workspace.join(".config").join("chats").join(format!("{}.json", session_id));
+        if chat_file.exists() {
             if let Ok(content) = fs::read_to_string(&chat_file) {
                 if let Ok(mut session) = serde_json::from_str::<crate::state::ChatSession>(&content) {
                     session.steps = Some(steps.to_vec());
@@ -1728,80 +1716,7 @@ fn save_chat_steps_to_disk(state: &AppState, session_id_opt: &Option<String>, st
     }
 }
 
-/// Busca un archivo de chat (.json) que contenga el session_id (UUID) en su nombre.
-/// Busca recursivamente en el directorio de chats y sus subdirectorios (por usuario).
-/// Soporta tanto el formato nuevo (<title>-<uuid>.json) como el antiguo (<uuid>.json).
-fn find_chat_file_by_session_id(base_workspace: &Path, session_id: &str) -> Option<PathBuf> {
-    let chats_dir = base_workspace.join(".config").join("chats");
-    if !chats_dir.exists() {
-        return None;
-    }
-    
-    // Buscar recursivamente en chats/ y subdirectorios
-    let entries = std::fs::read_dir(&chats_dir).ok()?;
-    for entry in entries.filter_map(|e| e.ok()) {
-        let path = entry.path();
-        if path.is_dir() {
-            // Buscar en subdirectorio (por usuario)
-            if let Ok(sub_entries) = std::fs::read_dir(&path) {
-                for sub_entry in sub_entries.filter_map(|e| e.ok()) {
-                    let sub_path = sub_entry.path();
-                    if sub_path.is_file() {
-                        if let Some(fname) = sub_path.file_stem().and_then(|s| s.to_str()) {
-                            if fname.contains(session_id) && sub_path.extension().and_then(|e| e.to_str()) == Some("json") {
-                                return Some(sub_path);
-                            }
-                        }
-                    }
-                }
-            }
-        } else if path.is_file() {
-            if let Some(fname) = path.file_stem().and_then(|s| s.to_str()) {
-                if fname.contains(session_id) && path.extension().and_then(|e| e.to_str()) == Some("json") {
-                    return Some(path);
-                }
-            }
-        }
-    }
-    
-    // Fallback: intentar el formato antiguo <uuid>.json directamente
-    let old_format = chats_dir.join(format!("{}.json", session_id));
-    if old_format.exists() {
-        return Some(old_format);
-    }
-    
-    None
-}
-
-/// Guarda un mensaje en el archivo JSON de la conversación en disco de forma persistente.
-/// Busca el archivo por session_id usando find_chat_file_by_session_id.
-fn save_agent_message_to_disk(state: &AppState, session_id: &str, role: &str, content: &str) {
-    if let Some(chat_file) = find_chat_file_by_session_id(&state.base_workspace, session_id) {
-        if let Ok(file_content) = fs::read_to_string(&chat_file) {
-            if let Ok(mut session) = serde_json::from_str::<crate::state::ChatSession>(&file_content) {
-                let is_duplicate = session.messages.last()
-                    .map(|m| m.content == content && m.role == role)
-                    .unwrap_or(false);
-                if !is_duplicate {
-                    session.messages.push(crate::state::ChatMessage {
-                        role: role.to_string(),
-                        content: content.to_string(),
-                        timestamp: std::time::SystemTime::now()
-                            .duration_since(std::time::UNIX_EPOCH).unwrap().as_secs(),
 fn get_project_path(state: &AppState, name: &str) -> String {
-    let projs = state.projects.lock().unwrap();
-    projs.iter()
-        .find(|p| p.name == name)
-        .map(|p| p.path.clone())
-        .unwrap_or_else(|| state.base_workspace.join(name).to_string_lossy().to_string())
-}
-                    }
-                    let _ = fs::write(&chat_file, serde_json::to_string_pretty(&session).unwrap());
-                }
-            }
-        }
-    }
-}
     let projs = state.projects.lock().unwrap();
     projs.iter()
         .find(|p| p.name == name)
