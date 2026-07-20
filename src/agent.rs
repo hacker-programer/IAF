@@ -11,6 +11,38 @@ use std::io::Read;
 use std::path::{Path, PathBuf};
 use base64::{engine::general_purpose, Engine as _};
 use uuid::Uuid;
+// BUG-001: Soporte nativo PDF/DOCX
+use std::io::Read;
+fn extract_text_from_docx(path: &std::path::Path) -> Result<String, String> {
+    let file = std::fs::File::open(path).map_err(|e| format!("No se pudo abrir el DOCX: {}", e))?;
+    let mut archive = zip::ZipArchive::new(file).map_err(|e| format!("No se pudo leer el ZIP del DOCX: {}", e))?;
+    let mut doc_xml = archive.by_name("word/document.xml").map_err(|e| format!("No se encontro word/document.xml en el DOCX: {}", e))?;
+    let mut xml = String::new();
+    doc_xml.read_to_string(&mut xml).map_err(|e| format!("Error leyendo XML del DOCX: {}", e))?;
+    // Extraer texto de tags <w:t>
+    let mut text = String::new();
+    let mut reader = quick_xml::Reader::from_str(&xml);
+    reader.trim_text(true);
+    let mut in_text = false;
+    loop {
+        match reader.read_event() {
+            Ok(quick_xml::events::Event::Start(ref e)) => {
+                if e.local_name().as_ref() == b"t" { in_text = true; }
+            }
+            Ok(quick_xml::events::Event::Text(ref e)) => {
+                if in_text { text.push_str(&e.unescape().unwrap_or_default()); }
+            }
+            Ok(quick_xml::events::Event::End(ref e)) => {
+                if e.local_name().as_ref() == b"t" { in_text = false; }
+                if e.local_name().as_ref() == b"p" { text.push('\n'); }
+            }
+            Ok(quick_xml::events::Event::Eof) => break,
+            Err(e) => return Err(format!("Error parseando XML del DOCX: {}", e)),
+            _ => {}
+        }
+    }
+    Ok(text)
+}
 const DEEPSEEK_API_URL: &str = "https://api.deepseek.com/v1/chat/completions";
 pub async fn run_agent_loop(
     session_messages: Vec<crate::state::ChatMessage>,
@@ -628,8 +660,6 @@ pub async fn run_agent_loop(
                 let args_str = tool_call["function"]["arguments"].as_str().unwrap_or("{}");
                 let args: Value = serde_json::from_str(args_str).unwrap_or(json!({}));
 
-                if func_name == "notificar_usuario" {
-                }
 
                 {
                     let mut status = state.active_agent.lock().unwrap();
@@ -669,17 +699,7 @@ pub async fn run_agent_loop(
                                             format!("[PDF: {}]\n\n{}", rel_path, text)
                                         }
                                     }
-                                    Err(e) => {
-                                        // Fallback: intentar pdftotext como CLI si pdf-extract falla
-                                        match std::process::Command::new("pdftotext")
-                                            .args(["-layout", &path_str, "-"])
-                                            .output()
-                                        {
-                                            Ok(out) if out.status.success() => {
-                                                let t = String::from_utf8_lossy(&out.stdout).to_string();
-                                                if t.trim().is_empty() {
-                                                    "PDF sin texto extraíble. Usa analyze_images para ver el PDF visualmente.".to_string()
-                                                } else {
+                                    Err(e) => { else {
                                                     format!("[PDF: {}]\n\n{}", rel_path, t)
                                                 }
                                             }
