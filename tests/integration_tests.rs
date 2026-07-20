@@ -599,9 +599,8 @@ mod regression_tests {
 // ============================================================================
 
 #[cfg(test)]
-#[cfg(feature = "integration")]
+#[cfg(test)]
 mod integration_tests {
-    use once_cell::sync::Lazy;
     use reqwest::Client;
 
     static SERVER_URL: Lazy<String> = Lazy::new(|| {
