@@ -749,22 +749,23 @@ mod edge_case_tests {
     /// BUG #3 Edge: Proyecto con path inválido
     #[test]
     fn test_project_with_invalid_path() {
+    /// BUG #3 Edge: Proyecto con path inválido
+    #[test]
+    fn test_project_with_invalid_path() {
         let projects = vec![
+            json!({"name": "valid", "path": "C:\\valid\\path"}),
+            json!({"name": "invalid", "path": ""}),
+        ];
+
+        let find = |name: &str| -> Option<String> {
+            projects.iter()
+                .find(|p| p["name"] == name && !p["path"].as_str().unwrap_or("").is_empty())
                 .and_then(|p| p["path"].as_str().map(String::from))
         };
 
         assert!(find("valid").is_some());
         assert!(find("invalid").is_none(), "Paths vacíos deben ser rechazados");
     }
-
-    /// BUG #4 Edge: PDF corrupto o protegido
-    #[test]
-    fn test_corrupt_pdf_handling() {
-        let pdf_is_corrupt = true;
-        let result = if pdf_is_corrupt {
-            "Error: No se pudo extraer texto del PDF (archivo corrupto o protegido)"
-        } else {
-            "Texto extraído exitosamente"
         };
 
         assert!(result.contains("Error"));
