@@ -128,20 +128,82 @@ pub struct StudyEngine {
 impl StudyEngine {
     pub fn new(data_dir: PathBuf) -> Self {
         let _ = fs::create_dir_all(data_dir.join("profiles"));
+impl StudyEngine {
+    pub fn new(data_dir: PathBuf) -> Self {
+        let _ = fs::create_dir_all(data_dir.join("profiles"));
         let _ = fs::create_dir_all(data_dir.join("knowledge"));
         let _ = fs::create_dir_all(data_dir.join("projects"));
+
+        // Cargar perfiles guardados desde disco
+        let profiles: HashMap<String, UserLearningProfile> = {
+            let profiles_dir = data_dir.join("profiles");
+            let mut map = HashMap::new();
+            if profiles_dir.exists() {
+                if let Ok(entries) = fs::read_dir(&profiles_dir) {
+                    for entry in entries.filter_map(Result::ok) {
+                        let path = entry.path();
+                        if path.extension().and_then(|e| e.to_str()) == Some("json") {
+                            if let Ok(content) = fs::read_to_string(&path) {
+                                if let Ok(profile) = serde_json::from_str::<UserLearningProfile>(&content) {
+                                    map.insert(profile.username.clone(), profile);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            map
+        };
+
+        // Cargar knowledge bases guardadas desde disco
+        let knowledge_bases: HashMap<String, UserKnowledgeBase> = {
+            let kb_dir = data_dir.join("knowledge");
+            let mut map = HashMap::new();
+            if kb_dir.exists() {
+                if let Ok(entries) = fs::read_dir(&kb_dir) {
+                    for entry in entries.filter_map(Result::ok) {
+                        let path = entry.path();
+                        if path.extension().and_then(|e| e.to_str()) == Some("json") {
+                            if let Ok(content) = fs::read_to_string(&path) {
+                                if let Ok(kb) = serde_json::from_str::<UserKnowledgeBase>(&content) {
+                                    map.insert(kb.username.clone(), kb);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            map
+        };
+
+        // Cargar proyectos de estudio guardados desde disco
+        let projects: HashMap<String, StudyProject> = {
+            let proj_dir = data_dir.join("projects");
+            let mut map = HashMap::new();
+            if proj_dir.exists() {
+                if let Ok(entries) = fs::read_dir(&proj_dir) {
+                    for entry in entries.filter_map(Result::ok) {
+                        let path = entry.path();
+                        if path.extension().and_then(|e| e.to_str()) == Some("json") {
+                            if let Ok(content) = fs::read_to_string(&path) {
+                                if let Ok(project) = serde_json::from_str::<StudyProject>(&content) {
+                                    map.insert(project.id.clone(), project);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            map
+        };
+
         StudyEngine {
-            profiles: Arc::new(Mutex::new(HashMap::new())),
-            knowledge_bases: Arc::new(Mutex::new(HashMap::new())),
-            projects: Arc::new(Mutex::new(HashMap::new())),
+            profiles: Arc::new(Mutex::new(profiles)),
+            knowledge_bases: Arc::new(Mutex::new(knowledge_bases)),
+            projects: Arc::new(Mutex::new(projects)),
             data_dir,
         }
     }
-
-    pub fn get_profile(&self, username: &str) -> Option<UserLearningProfile> {
-        self.profiles.lock().unwrap().get(username).cloned()
-    }
-
     pub fn get_or_create_profile(&self, username: &str) -> UserLearningProfile {
         let mut profiles = self.profiles.lock().unwrap();
         if let Some(p) = profiles.get(username) { return p.clone(); }
