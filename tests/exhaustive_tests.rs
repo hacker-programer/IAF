@@ -842,3 +842,93 @@ mod smoke_tests {
         assert!(valid_tools.contains(&"notificar_usuario"));
     }
 }
+
+
+// ============================================================================
+// SECCIÓN 6: TESTS DE VERIFICACIÓN DE CÓDIGO FUENTE
+// Detectan regresiones verificando que el código fuente contiene las correcciones.
+// ============================================================================
+
+#[cfg(test)]
+mod source_code_verification_tests {
+
+    #[test]
+    fn verify_css_has_slidein_keyframes() {
+        let css = include_str!("../public/style.css");
+        assert!(css.contains("@keyframes slideIn"),
+            "BUG-002 REGRESION: CSS no contiene @keyframes slideIn.");
+        assert!(css.contains(".info-toast"),
+            "BUG-002 REGRESION: CSS no contiene .info-toast.");
+    }
+
+    #[test]
+    fn verify_js_has_show_info_toast() {
+        let js = include_str!("../public/app.js");
+        assert!(js.contains("function showInfoToast"),
+            "BUG-002 REGRESION: app.js no contiene showInfoToast.");
+        assert!(js.contains("info_messages"),
+            "BUG-002 REGRESION: app.js no monitorea info_messages.");
+    }
+
+    #[test]
+    fn verify_app_js_polls_info_messages() {
+        let js = include_str!("../public/app.js");
+        assert!(js.contains("statusRes.info_messages"),
+            "BUG-002 REGRESION: app.js no consume info_messages.");
+    }
+
+    #[test]
+    fn verify_agent_uses_pdf_extract_not_pdftotext() {
+        let agent_src = include_str!("../src/agent.rs");
+        assert!(agent_src.contains("pdf_extract::extract_text"),
+            "BUG-001 REGRESION: agent.rs no usa pdf_extract.");
+        assert!(!agent_src.contains("pdftotext"),
+            "BUG-001 REGRESION: agent.rs contiene pdftotext.");
+    }
+
+    #[test]
+    fn verify_agent_has_extract_text_from_docx() {
+        let agent_src = include_str!("../src/agent.rs");
+        assert!(agent_src.contains("fn extract_text_from_docx"),
+            "BUG-001 REGRESION: Falta fn extract_text_from_docx.");
+        assert!(agent_src.contains("zip::ZipArchive"),
+            "BUG-001 REGRESION: No usa zip::ZipArchive.");
+    }
+
+    #[test]
+    fn verify_cargo_toml_has_pdf_docx_deps() {
+        let cargo = include_str!("../Cargo.toml");
+        assert!(cargo.contains("pdf-extract"), "BUG-001: Falta pdf-extract en Cargo.toml");
+        assert!(cargo.contains("zip"), "BUG-001: Falta zip en Cargo.toml");
+        assert!(cargo.contains("quick-xml"), "BUG-001: Falta quick-xml en Cargo.toml");
+    }
+
+    #[test]
+    fn verify_main_rs_has_info_messages_in_status() {
+        let main_src = include_str!("../src/main.rs");
+        assert!(main_src.contains("info_messages"),
+            "BUG-002 REGRESION: main.rs no incluye info_messages.");
+    }
+
+    #[test]
+    fn verify_finalizar_tarea_usa_mensaje_final() {
+        let agent_src = include_str!("../src/agent.rs");
+        assert!(agent_src.contains("mensaje_final"),
+            "BUG-004 REGRESION: finalizar_tarea no usa mensaje_final.");
+    }
+
+    #[test]
+    fn verify_css_balanced_braces() {
+        let css = include_str!("../public/style.css");
+        let open = css.matches('{').count();
+        let close = css.matches('}').count();
+        assert_eq!(open, close, "CSS ROTO: llaves desbalanceadas.");
+    }
+
+    #[test]
+    fn verify_agent_no_empty_notificar_usuario_block() {
+        let agent_src = include_str!("../src/agent.rs");
+        let count = agent_src.matches("if func_name == \"notificar_usuario\"").count();
+        assert!(count <= 1, "CODIGO MUERTO: bloque vacio de notificar_usuario.");
+    }
+}
