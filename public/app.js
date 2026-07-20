@@ -949,6 +949,8 @@ function showInfoToast(message) {
             setTimeout(() => { if (toast.parentNode) toast.remove(); }, 300);
         }
     }, 8000);
+}
+
 function renderConsoleSteps(steps) {
     const area = document.getElementById('consoleArea');
     area.innerHTML = steps.map(s => {
