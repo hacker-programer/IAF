@@ -406,7 +406,7 @@ mod bug6_perfil_usuario_no_inyectado {
     /// Test: Demuestra que el perfil del usuario no está en el system prompt actual
     #[test]
     fn test_user_profile_not_in_current_system_prompt() {
-        let profile = json!({
+        let _profile = json!({
             "username": "alumno_test",
             "age": 14,
             "high_capabilities": "Matemáticas avanzadas",
