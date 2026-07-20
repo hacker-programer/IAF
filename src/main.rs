@@ -1083,6 +1083,8 @@ async fn chat_endpoint(
     {
         let mut agent = state.active_agent.lock().unwrap();
         if !agent.running {
+            agent.running = true;
+            agent.interrupted = false;
             agent.finished = false;
             agent.final_message = None;
             // BUG FIX: Solo limpiar steps si es conversacion NUEVA. Si es existente, cargar desde sesion.
@@ -1091,12 +1093,13 @@ async fn chat_endpoint(
             } else {
                 agent.steps.clear();
             }
-
             agent.thinking_content.clear();
+            agent.esperando_respuesta_usuario = false;
             agent.respuesta_usuario = None;
             agent.esperando_aprobacion_plan = false;
             agent.plan_propuesto = None;
             agent.pregunta_usuario = None;
+            agent.current_session_id = Some(session_id.clone());
             agent.current_session_id = Some(session_id.clone());
 
             let state_bg = state.clone();
