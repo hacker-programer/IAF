@@ -517,8 +517,7 @@ mod regression_tests {
     #[test]
     fn reg010_copy_nonce_command_format_is_correct() {
         let nonce = "abc123def456";
-        let user = "admin";
-
+        let _user = "admin";
         // El comando que genera copyNonceCmd
         let cmd = format!(
             ".\\scripts\\sign_nonce.ps1 -Nonce \"{}\" -KeyPath \".config\\admin_private.pem\"",
