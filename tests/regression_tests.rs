@@ -164,8 +164,8 @@ mod bug2_titulo_chat_truncado {
 
     /// Test: Verifica el sanitizado del título para nombre de archivo
     /// Test: Verifica el sanitizado del título para nombre de archivo
+    /// Test: Verifica el sanitizado del título para nombre de archivo
     #[test]
-    fn test_title_sanitization_for_filename() {
         let title = "Análisis de bugs: Citybound (refactor)";
         let sanitized = sanitize_filename(title);
 
