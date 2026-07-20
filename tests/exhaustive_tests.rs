@@ -1110,9 +1110,11 @@ mod edge_case_tests {
                 assert!(normalized == "study" || normalized == "programming");
             }
         }
+    }
+
+    /// Caso límite: Rango de líneas con start > end
+    #[test]
     fn edge_rango_lineas_invertido() {
-        let total_lines = 100;
-        let start = 50;
         let end = 10;
 
         // El sistema debe detectar rango inválido
