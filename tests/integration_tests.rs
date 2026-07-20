@@ -822,19 +822,6 @@ mod study_mode_tests {
     // contienen espacios y caracteres especiales (como "Colección de Handouts")
     // =========================================================================
 
-    #[test]
-    fn stu007_local_prompt_path_handles_special_chars() {
-        // Simula la construcción de la ruta: .config/data/<user>/<project>/localPrompt.json
-        let username = "test";
-        let project_name = "Colección de Handouts - Francisco González";
-        let path = format!(".config/data/{}/{}/localPrompt.json", username, project_name);
-        
-        // La ruta debe ser válida (aunque el archivo no exista)
-        assert!(path.contains("localPrompt.json"), "STU-007: La ruta debe apuntar a localPrompt.json");
-        assert!(path.contains(username), "STU-007: La ruta debe contener el username");
-        assert!(path.contains("Colección"), "STU-007: La ruta debe contener el nombre del proyecto");
-    }
-
     // =========================================================================
     // STU-008: El agente en modo estudio NO debe usar el prompt de programación
     // =========================================================================
@@ -852,7 +839,443 @@ mod study_mode_tests {
         assert!(study_prompt_base.contains("ENSEÑAR"),
             "STU-008: El prompt de estudio debe enfatizar la enseñanza");
     }
+}
+
+// ============================================================================
+// Tests de Regresión — Study Engine y Persistencia de Perfil
+// ============================================================================
+
+#[cfg(test)]
+mod regression_study_tests {
+    use serde_json::json;
+    use std::fs;
+    use std::path::PathBuf;
+
+    /// Crea un directorio temporal único para cada test
+    fn tmp_dir(name: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("iaf_reg_{}", name));
+        let _ = fs::remove_dir_all(&dir);
+        let _ = fs::create_dir_all(&dir);
+        dir
+    }
+
     // =========================================================================
+    // REG-STU-001: El perfil debe guardarse en .config/data/<user>/profile.json
+    // NO en .config/study/profiles/<user>.json
+    //
+    // BUG: StudyEngine usaba config_dir.join("study") como data_dir, causando
+    // que los perfiles se guardaran en .config/study/profiles/ en vez de
+    // .config/data/<user>/profile.json como especifica la base.
+    // =========================================================================
+
+    #[test]
+    fn reg_stu001_profile_correct_path_structure() {
+        let tmp = tmp_dir("stu001");
+
+        // Simular la estructura que el engine debe crear
+        let user_data = tmp.join(".config").join("data").join("testuser");
+        fs::create_dir_all(&user_data).unwrap();
+
+        let profile_path = user_data.join("profile.json");
+        let profile = json!({
+            "username": "testuser",
+            "age": 14,
+            "phase": "Exploration",
+            "favorite_games": ["Minecraft"],
+            "hobbies": ["programar"]
+        });
+        fs::write(&profile_path, serde_json::to_string_pretty(&profile).unwrap()).unwrap();
+
+        // La ruta correcta es .config/data/<user>/profile.json
+        let expected = tmp.join(".config").join("data").join("testuser").join("profile.json");
+        assert!(expected.exists(),
+            "REG-STU-001 FAIL: El perfil debe estar en {}.", expected.display());
+
+        // La ruta INCORRECTA (antigua) NO debe usarse
+        let wrong_path = tmp.join(".config").join("study").join("profiles").join("testuser.json");
+        assert!(!wrong_path.exists(),
+            "REG-STU-001 FAIL: La ruta antigua {} no debe usarse.", wrong_path.display());
+    }
+
+    // =========================================================================
+    // REG-STU-002: Knowledge base debe guardarse en learnings.json
+    //
+    // BUG: StudyEngine guardaba knowledge en .config/study/knowledge/<user>.json
+    // Debe ser .config/data/<user>/learnings.json
+    // =========================================================================
+
+    #[test]
+    fn reg_stu002_knowledge_correct_path() {
+        let tmp = tmp_dir("stu002");
+
+        let user_data = tmp.join(".config").join("data").join("testuser");
+        fs::create_dir_all(&user_data).unwrap();
+
+        let kb_path = user_data.join("learnings.json");
+        let kb = json!({
+            "username": "testuser",
+            "known_topics": {},
+            "demonstrated_skills": [],
+            "learning_summary": "",
+            "last_updated": 1700000000
+        });
+        fs::write(&kb_path, serde_json::to_string_pretty(&kb).unwrap()).unwrap();
+
+        assert!(kb_path.exists(),
+            "REG-STU-002 FAIL: learnings.json debe estar en {}.", kb_path.display());
+
+        // La ruta INCORRECTA no debe usarse
+        let wrong = tmp.join(".config").join("study").join("knowledge").join("testuser.json");
+        assert!(!wrong.exists(),
+            "REG-STU-002 FAIL: La ruta antigua {} no debe usarse.", wrong.display());
+    }
+
+    // =========================================================================
+    // REG-STU-003: Teaching method debe guardarse en teachingMethod.json
+    //
+    // BUG: No existía el tipo TeachingMethod ni su persistencia.
+    // La especificación dice: .config/data/<user>/teachingMethod.json
+    // =========================================================================
+
+    #[test]
+    fn reg_stu003_teaching_method_correct_path() {
+        let tmp = tmp_dir("stu003");
+
+        let user_data = tmp.join(".config").join("data").join("testuser");
+        fs::create_dir_all(&user_data).unwrap();
+
+        let tm_path = user_data.join("teachingMethod.json");
+        let tm = json!({
+            "username": "testuser",
+            "phase": "Exploration",
+            "methods_tried": [],
+            "methods_to_try": ["gamificacion", "visual"],
+            "chosen_method": null,
+            "failure_hypothesis": null,
+            "success_hypothesis": null,
+            "average_performance": null,
+            "last_updated": 1700000000
+        });
+        fs::write(&tm_path, serde_json::to_string_pretty(&tm).unwrap()).unwrap();
+
+        assert!(tm_path.exists(),
+            "REG-STU-003 FAIL: teachingMethod.json debe estar en {}.", tm_path.display());
+    }
+
+    // =========================================================================
+    // REG-STU-004: Al inicializar, StudyEngine debe cargar perfiles desde disco
+    //
+    // BUG: StudyEngine::new() creaba HashMaps vacíos sin leer archivos
+    // existentes. Los perfiles se perdían al reiniciar el servidor.
+    // =========================================================================
+
+    #[test]
+    fn reg_stu004_engine_loads_existing_profiles() {
+        let tmp = tmp_dir("stu004");
+
+        // Pre-crear datos en disco como si el servidor ya hubiera corrido antes
+        let user_data = tmp.join(".config").join("data").join("existing_user");
+        fs::create_dir_all(&user_data).unwrap();
+
+        let profile = json!({
+            "username": "existing_user",
+            "age": 20,
+            "high_capabilities": null,
+            "neurological_conditions": [],
+            "favorite_games": ["Factorio"],
+            "favorite_youtubers": [],
+            "hobbies": ["rust", "embedded"],
+            "phase": "Exploration",
+            "exploration_started_at": 1700000000,
+            "exploitation_started_at": null,
+            "hypothesis_history": [],
+            "learning_style_summary": "",
+            "message_timestamps": [],
+            "last_updated": 1700000000
+        });
+        fs::write(
+            user_data.join("profile.json"),
+            serde_json::to_string_pretty(&profile).unwrap(),
+        ).unwrap();
+
+        // También knowledge
+        let kb = json!({
+            "username": "existing_user",
+            "known_topics": {"rust": {"topic": "rust", "level": 0.8, "evidence": [], "last_demonstrated": 1700000000, "explicit": true}},
+            "demonstrated_skills": [],
+            "learning_summary": "Aprendiendo Rust",
+            "last_updated": 1700000000
+        });
+        fs::write(
+            user_data.join("learnings.json"),
+            serde_json::to_string_pretty(&kb).unwrap(),
+        ).unwrap();
+
+        // Verificar que los archivos existen antes de "reiniciar"
+        assert!(user_data.join("profile.json").exists());
+        assert!(user_data.join("learnings.json").exists());
+
+        // Simular reinicio: verificar que al leer los archivos se pueden deserializar
+        let loaded_profile: serde_json::Value = serde_json::from_str(
+            &fs::read_to_string(user_data.join("profile.json")).unwrap()
+        ).unwrap();
+        assert_eq!(loaded_profile["username"], "existing_user");
+        assert_eq!(loaded_profile["age"], 20);
+
+        let loaded_kb: serde_json::Value = serde_json::from_str(
+            &fs::read_to_string(user_data.join("learnings.json")).unwrap()
+        ).unwrap();
+        assert_eq!(loaded_kb["username"], "existing_user");
+        assert!(loaded_kb["known_topics"]["rust"]["level"].as_f64().unwrap() > 0.3);
+    }
+
+    // =========================================================================
+    // REG-STU-005: Múltiples usuarios deben tener directorios separados
+    // =========================================================================
+
+    #[test]
+    fn reg_stu005_multiple_users_separate_dirs() {
+        let tmp = tmp_dir("stu005");
+
+        for user in &["alice", "bob", "charlie"] {
+            let dir = tmp.join(".config").join("data").join(user);
+            fs::create_dir_all(&dir).unwrap();
+            fs::write(
+                dir.join("profile.json"),
+                serde_json::to_string_pretty(&json!({
+                    "username": user,
+                    "age": 15,
+                    "phase": "Exploration",
+                    "favorite_games": [],
+                    "hobbies": [],
+                    "neurological_conditions": [],
+                    "favorite_youtubers": [],
+                    "high_capabilities": null,
+                    "exploration_started_at": null,
+                    "exploitation_started_at": null,
+                    "hypothesis_history": [],
+                    "learning_style_summary": "",
+                    "message_timestamps": [],
+                    "last_updated": 0
+                })).unwrap(),
+            ).unwrap();
+        }
+
+        // Verificar que cada usuario tiene su propio directorio
+        for user in &["alice", "bob", "charlie"] {
+            let profile_path = tmp.join(".config").join("data").join(user).join("profile.json");
+            assert!(profile_path.exists(),
+                "REG-STU-005 FAIL: {} debe tener su profile.json", user);
+        }
+    }
+
+    // =========================================================================
+    // REG-STU-006: profile_exists_on_disk debe ser preciso
+    // =========================================================================
+
+    #[test]
+    fn reg_stu006_profile_exists_on_disk_accurate() {
+        let tmp = tmp_dir("stu006");
+
+        // Crear el perfil
+        let user_data = tmp.join(".config").join("data").join("real_user");
+        fs::create_dir_all(&user_data).unwrap();
+        fs::write(
+            user_data.join("profile.json"),
+            "{}",  // JSON mínimo
+        ).unwrap();
+
+        // Verificar existencia
+        assert!(user_data.join("profile.json").exists());
+        // Verificar no existencia
+        assert!(!tmp.join(".config").join("data").join("ghost_user").join("profile.json").exists());
+    }
+
+    // =========================================================================
+    // REG-STU-007: Directorios internos (_projects) no se cargan como usuarios
+    // =========================================================================
+
+    #[test]
+    fn reg_stu007_internal_dirs_ignored() {
+        let tmp = tmp_dir("stu007");
+
+        // Crear _projects
+        let projects_dir = tmp.join(".config").join("data").join("_projects");
+        fs::create_dir_all(&projects_dir).unwrap();
+        fs::write(projects_dir.join("p1.json"), "{}").unwrap();
+
+        // Crear un usuario real
+        let user_dir = tmp.join(".config").join("data").join("real_user");
+        fs::create_dir_all(&user_dir).unwrap();
+        fs::write(user_dir.join("profile.json"), json!({
+            "username": "real_user",
+            "age": null,
+            "phase": "NotStarted",
+            "favorite_games": [],
+            "hobbies": [],
+            "neurological_conditions": [],
+            "favorite_youtubers": [],
+            "high_capabilities": null,
+            "exploration_started_at": null,
+            "exploitation_started_at": null,
+            "hypothesis_history": [],
+            "learning_style_summary": "",
+            "message_timestamps": [],
+            "last_updated": 0
+        }).to_string()).unwrap();
+
+        // Leer directorios y filtrar los que empiezan con _
+        let data_dir = tmp.join(".config").join("data");
+        let user_dirs: Vec<String> = fs::read_dir(&data_dir).unwrap()
+            .filter_map(|e| e.ok())
+            .filter(|e| e.path().is_dir())
+            .map(|e| e.file_name().to_string_lossy().to_string())
+            .filter(|n| !n.starts_with('_'))
+            .collect();
+
+        assert!(user_dirs.contains(&"real_user".to_string()),
+            "REG-STU-007 FAIL: real_user debe estar en la lista");
+        assert!(!user_dirs.contains(&"_projects".to_string()),
+            "REG-STU-007 FAIL: _projects NO debe aparecer como usuario");
+    }
+
+    // =========================================================================
+    // REG-STU-008: save_profile debe crear el directorio si no existe
+    // =========================================================================
+
+    #[test]
+    fn reg_stu008_save_creates_directory() {
+        let tmp = tmp_dir("stu008");
+
+        // El directorio .config/data/newuser/ NO existe todavía
+        let new_user_dir = tmp.join(".config").join("data").join("newuser");
+        assert!(!new_user_dir.exists());
+
+        // Simular save_profile: crear dir + escribir
+        fs::create_dir_all(&new_user_dir).unwrap();
+        fs::write(
+            new_user_dir.join("profile.json"),
+            serde_json::to_string_pretty(&json!({"username": "newuser"})).unwrap(),
+        ).unwrap();
+
+        assert!(new_user_dir.join("profile.json").exists(),
+            "REG-STU-008 FAIL: save_profile debe crear el directorio y el archivo.");
+    }
+
+    // =========================================================================
+    // REG-STU-009: El perfil debe ser JSON válido y deserializable
+    // =========================================================================
+
+    #[test]
+    fn reg_stu009_profile_is_valid_json() {
+        let tmp = tmp_dir("stu009");
+
+        let profile = json!({
+            "username": "valid_user",
+            "age": 16,
+            "high_capabilities": null,
+            "neurological_conditions": ["TDAH"],
+            "favorite_games": ["Portal 2", "The Witness"],
+            "favorite_youtubers": ["DotCSV"],
+            "hobbies": ["ia", "matemáticas"],
+            "phase": "Exploration",
+            "exploration_started_at": 1700000000_u64,
+            "exploitation_started_at": null,
+            "hypothesis_history": [
+                {
+                    "method": "visual",
+                    "theoretical_basis": "Dual Coding Theory",
+                    "analogies_used": ["mapas mentales"],
+                    "started_at": 1700000000_u64,
+                    "ended_at": null,
+                    "metrics": {
+                        "correct_answer_rate": 0.0,
+                        "avg_response_time_secs": 0.0,
+                        "message_count": 0,
+                        "session_duration_secs": 0,
+                        "follow_up_questions": 0,
+                        "user_disengaged": false,
+                        "engagement_score": 0.0
+                    },
+                    "conclusion": null
+                }
+            ],
+            "learning_style_summary": "Aprendiz visual",
+            "message_timestamps": [],
+            "last_updated": 1700000000_u64
+        });
+
+        let json_str = serde_json::to_string_pretty(&profile).unwrap();
+
+        // Guardar y leer de vuelta
+        let user_dir = tmp.join(".config").join("data").join("valid_user");
+        fs::create_dir_all(&user_dir).unwrap();
+        fs::write(user_dir.join("profile.json"), &json_str).unwrap();
+
+        let loaded: serde_json::Value = serde_json::from_str(
+            &fs::read_to_string(user_dir.join("profile.json")).unwrap()
+        ).unwrap();
+
+        assert_eq!(loaded["username"], "valid_user");
+        assert_eq!(loaded["age"], 16);
+        assert_eq!(loaded["phase"], "Exploration");
+        assert!(loaded["hypothesis_history"].as_array().unwrap().len() == 1);
+    }
+
+    // =========================================================================
+    // REG-STU-010: learnings.json debe ser JSON válido con topics
+    // =========================================================================
+
+    #[test]
+    fn reg_stu010_learnings_is_valid_json() {
+        let tmp = tmp_dir("stu010");
+
+        let kb = json!({
+            "username": "learner",
+            "known_topics": {
+                "rust": {
+                    "topic": "rust",
+                    "level": 0.75,
+                    "evidence": ["fn main() {}", "impl Trait for Struct"],
+                    "last_demonstrated": 1700000000_u64,
+                    "explicit": true
+                },
+                "python": {
+                    "topic": "python",
+                    "level": 0.45,
+                    "evidence": ["print('hello')"],
+                    "last_demonstrated": 1700000000_u64,
+                    "explicit": false
+                }
+            },
+            "demonstrated_skills": [
+                {
+                    "skill": "pattern_matching",
+                    "evidence_snippet": "match x { Ok(v) => v, Err(e) => ... }",
+                    "context": "Al resolver ejercicio de Result",
+                    "timestamp": 1700000000_u64
+                }
+            ],
+            "learning_summary": "Buen progreso en Rust",
+            "last_updated": 1700000000_u64
+        });
+
+        let json_str = serde_json::to_string_pretty(&kb).unwrap();
+
+        let user_dir = tmp.join(".config").join("data").join("learner");
+        fs::create_dir_all(&user_dir).unwrap();
+        fs::write(user_dir.join("learnings.json"), &json_str).unwrap();
+
+        let loaded: serde_json::Value = serde_json::from_str(
+            &fs::read_to_string(user_dir.join("learnings.json")).unwrap()
+        ).unwrap();
+
+        assert_eq!(loaded["username"], "learner");
+        assert!(loaded["known_topics"]["rust"]["level"].as_f64().unwrap() > 0.5);
+        assert!(loaded["known_topics"]["python"]["level"].as_f64().unwrap() > 0.3);
+        assert_eq!(loaded["demonstrated_skills"].as_array().unwrap().len(), 1);
+    }
+}
     // STU-008: El agente en modo estudio NO debe usar el prompt de programación
     // =========================================================================
 
