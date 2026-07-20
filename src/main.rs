@@ -1531,6 +1531,8 @@ async fn get_agent_status(State(state): State<AppState>) -> impl IntoResponse {
         "status": "ok",
         "active": status.running,
         "running": status.running,
+        "finished": status.finished,
+        "final_message": status.final_message,
         "interrupted": status.interrupted,
         "esperando_respuesta_usuario": status.esperando_respuesta_usuario,
         "pregunta_usuario": status.pregunta_usuario,
@@ -1538,7 +1540,6 @@ async fn get_agent_status(State(state): State<AppState>) -> impl IntoResponse {
         "plan_propuesto": status.plan_propuesto,
         "current_session_id": status.current_session_id,
     }))
-}
 async fn agent_steps(
     State(state): State<AppState>,
     headers: HeaderMap,
