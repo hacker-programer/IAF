@@ -1038,13 +1038,13 @@ mod e2e_tests {
 
         // 2. El servidor crea la sesión
         let session_id = "test-uuid-123";
-        let initial_title: String = chat_input["message"].as_str().unwrap()
-            .chars().take(30).collect();
+        // 2. El servidor crea la sesión
+        let _session_id = "test-uuid-123";
+        let initial_title = sanitize_filename(chat_input["message"].as_str().unwrap());
 
-        // BUG #2: El título es el mensaje truncado
-        assert_eq!(initial_title, "Analiza el código de citybo");
-
-        // 3. El system prompt DEBE incluir el path del proyecto (BUG #3)
+        // El título sanitizado: espacios → _, no-ASCII → _, truncado a 40 chars
+        assert_eq!(initial_title, "Analiza_el_c_digo_de_citybound");
+        assert!(initial_title.chars().all(|c| c.is_ascii()));
         let project_path = "C:\\Users\\Fa\\Desktop\\IAF\\citybound";
         let system_prompt_has_path = false; // Actualmente false
         assert!(!system_prompt_has_path, 
