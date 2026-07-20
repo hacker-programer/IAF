@@ -1124,13 +1124,6 @@ mod regression_study_tests {
     }
 
     // REG-STU-008: save_profile crea directorio si no existe
-    #[test]
-    fn reg_stu008_save_creates_directory() {
-        let tmp = tmp_dir("stu008");
-        let new_user_dir = tmp.join(".config").join("data").join("newuser");
-        assert!(!new_user_dir.exists());
-        fs::create_dir_all(&new_user_dir).unwrap();
-        fs::write(new_user_dir.join("profile.json"), "{}").unwrap();
     // REG-STU-008: save_profile crea directorio si no existe
     #[test]
     fn reg_stu008_save_creates_directory() {
@@ -1147,6 +1140,7 @@ mod regression_study_tests {
 // ============================================================================
 // SECCIÓN: TESTS DE INTEGRACIÓN PARA BUG-001, BUG-002, BUG-004
 // Agregados para verificar que los bugs no reaparezcan.
+// ============================================================================
 // ============================================================================
 
 #[cfg(test)]
