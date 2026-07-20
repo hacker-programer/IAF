@@ -657,32 +657,94 @@ pub async fn run_agent_loop(
                         if let Some(ref proj_name) = project_name {
                             let proj_path = get_project_path(&state, proj_name);
                             let full_path = Path::new(&proj_path).join(rel_path);
-                            match fs::read_to_string(&full_path) {
-                                Ok(content) => {
-                                    if start_line_opt.is_some() || end_line_opt.is_some() {
-                                        let lines: Vec<&str> = content.lines().collect();
-                                        let total_lines = lines.len();
-                                        let start = start_line_opt.unwrap_or(1).max(1) as usize;
-                                        let end = end_line_opt.unwrap_or(total_lines as i64).max(1) as usize;
-                                        let start_idx = start.saturating_sub(1);
-                                        let end_idx = end.min(total_lines);
-                                        if start_idx >= total_lines || start_idx > end_idx {
-                                            format!("Error: El rango de lÃƒÂ­neas {}-{} es invÃƒÂ¡lido para un archivo de {} lÃƒÂ­neas.", start, end, total_lines)
-                                        } else {
-                                            let chunk = lines[start_idx..end_idx].join("\n");
-                                            format!("// LÃƒÂ­neas {}-{} de {} en {}\n{}", start_idx + 1, end_idx, total_lines, rel_path, chunk)
+
+                            // Detectar extensión para formatos especiales (BUG-001 fix)
+                            let extension = full_path
+                                .extension()
+                                .and_then(|e| e.to_str())
+                                .unwrap_or("")
+                                .to_lowercase();
+
+                            // --- PDF: extraer texto con pdf-extract ---
+                            if extension == "pdf" {
+                                match std::fs::read(&full_path) {
+                                    Ok(bytes) => {
+                                        match pdf_extract::extract_text_from_mem(&bytes) {
+                                            Ok(text) => {
+                                                if text.trim().is_empty() {
+                                                    "El PDF fue leído pero no contiene texto extraíble (puede ser escaneado o basado en imágenes).".to_string()
+                                                } else {
+                                                    format!("[PDF extraído: {}]\n\n{}", rel_path, text)
+                                                }
+                                            }
+                                            Err(e) => format!("Error al extraer texto del PDF '{}': {}", rel_path, e),
                                         }
-                                    } else {
-                                        content
                                     }
+                                    Err(e) => format!("Error leyendo archivo PDF: {}", e),
                                 }
-                                Err(e) => format!("Error leyendo archivo: {}", e),
+                            }
+                            // --- DOCX: extraer texto del XML interno ---
+                            else if extension == "docx" {
+                                match std::fs::read(&full_path) {
+                                    Ok(bytes) => {
+                                        let cursor = std::io::Cursor::new(bytes);
+                                        match zip::ZipArchive::new(cursor) {
+                                            Ok(mut archive) => {
+                                                // Buscar word/document.xml dentro del ZIP
+                                                match archive.by_name("word/document.xml") {
+                                                    Ok(mut doc_xml) => {
+                                                        use std::io::Read;
+                                                        let mut xml_content = String::new();
+                                                        match doc_xml.read_to_string(&mut xml_content) {
+                                                            Ok(_) => {
+                                                                // Extraer texto de los tags <w:t>
+                                                                let text = extract_text_from_docx_xml(&xml_content);
+                                                                if text.trim().is_empty() {
+                                                                    "El DOCX fue leído pero no contiene texto extraíble.".to_string()
+                                                                } else {
+                                                                    format!("[DOCX extraído: {}]\n\n{}", rel_path, text)
+                                                                }
+                                                            }
+                                                            Err(e) => format!("Error al leer document.xml del DOCX: {}", e),
+                                                        }
+                                                    }
+                                                    Err(_) => "El archivo DOCX no contiene word/document.xml (formato inválido).".to_string(),
+                                                }
+                                            }
+                                            Err(e) => format!("Error al abrir DOCX como ZIP: {}", e),
+                                        }
+                                    }
+                                    Err(e) => format!("Error leyendo archivo DOCX: {}", e),
+                                }
+                            }
+                            // --- Archivos de texto normales ---
+                            else {
+                                match fs::read_to_string(&full_path) {
+                                    Ok(content) => {
+                                        if start_line_opt.is_some() || end_line_opt.is_some() {
+                                            let lines: Vec<&str> = content.lines().collect();
+                                            let total_lines = lines.len();
+                                            let start = start_line_opt.unwrap_or(1).max(1) as usize;
+                                            let end = end_line_opt.unwrap_or(total_lines as i64).max(1) as usize;
+                                            let start_idx = start.saturating_sub(1);
+                                            let end_idx = end.min(total_lines);
+                                            if start_idx >= total_lines || start_idx > end_idx {
+                                                format!("Error: El rango de líneas {}-{} es inválido para un archivo de {} líneas.", start, end, total_lines)
+                                            } else {
+                                                let chunk = lines[start_idx..end_idx].join("\n");
+                                                format!("// Líneas {}-{} de {} en {}\n{}", start_idx + 1, end_idx, total_lines, rel_path, chunk)
+                                            }
+                                        } else {
+                                            content
+                                        }
+                                    }
+                                    Err(e) => format!("Error leyendo archivo: {}", e),
+                                }
                             }
                         } else {
-                            "No hay ningÃƒÂºn proyecto activo seleccionado.".to_string()
+                            "No hay ningún proyecto activo seleccionado.".to_string()
                         }
                     }
-                    "write_file_with_commit" => {
                         'write_handler: {
                         let rel_path = args["path"].as_str().unwrap_or("");
                         let commit_msg = args["commit_message"].as_str().unwrap_or("Update by Agent");
