@@ -797,7 +797,7 @@ mod edge_case_tests {
 }
 
 // ============================================================================
-// Tests de Inyección de Fallos (Chaos Engineering)
+        let _user_says = "Ya sé programar en Rust";
 // ============================================================================
 
 #[cfg(test)]
