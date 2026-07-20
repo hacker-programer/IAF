@@ -602,25 +602,8 @@ pub async fn run_agent_loop(
             }
             
             if let Some(ref s_id) = session_id {
-                let chat_file = state.base_workspace.join(".config").join("chats").join(format!("{}.json", s_id));
-                if chat_file.exists() {
-                    if let Ok(content_json) = fs::read_to_string(&chat_file) {
-                        if let Ok(mut session) = serde_json::from_str::<crate::state::ChatSession>(&content_json) {
-                            let is_duplicate = session.messages.last().map(|m| m.content == content && m.role == "agent").unwrap_or(false);
-                            if !is_duplicate {
-                                session.messages.push(crate::state::ChatMessage {
-                                    role: "agent".to_string(),
-                                    content: content.to_string(),
-                                    timestamp: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs(),
-                                });
-                                let _ = fs::write(&chat_file, serde_json::to_string_pretty(&session).unwrap());
-                            }
-                        }
-                    }
-                }
+                save_agent_message_to_disk(&state, s_id, "agent", &content);
             }
-        }
-
         if let Some(tool_calls) = message_val["tool_calls"].as_array() {
             messages.push(message_val.clone());
             let mut tool_responses = Vec::new();
