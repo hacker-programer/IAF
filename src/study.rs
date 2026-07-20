@@ -128,9 +128,11 @@ pub struct StudyEngine {
 impl StudyEngine {
     pub fn new(data_dir: PathBuf) -> Self {
         let _ = fs::create_dir_all(data_dir.join("profiles"));
-impl StudyEngine {
-    pub fn new(data_dir: PathBuf) -> Self {
-        let _ = fs::create_dir_all(data_dir.join("profiles"));
+        let _ = fs::create_dir_all(data_dir.join("knowledge"));
+        let _ = fs::create_dir_all(data_dir.join("projects"));
+
+        // Cargar perfiles guardados desde disco
+        let profiles: HashMap<String, UserLearningProfile> = {
         let _ = fs::create_dir_all(data_dir.join("knowledge"));
         let _ = fs::create_dir_all(data_dir.join("projects"));
 
