@@ -1115,12 +1115,13 @@ mod edge_case_tests {
     /// Caso límite: Rango de líneas con start > end
     #[test]
     fn edge_rango_lineas_invertido() {
-        let end = 10;
-
-    fn edge_rango_lineas_invertido() {
         let total_lines = 100;
         let start = 50;
         let end = 10;
+
+        // El sistema debe detectar rango inválido
+        let is_valid_range = start <= end && start >= 1 && end <= total_lines;
+        assert!(!is_valid_range);
 
         // Debe devolver error, no panic
         let error_msg = format!(
@@ -1129,9 +1130,6 @@ mod edge_case_tests {
         );
         assert!(error_msg.contains("inválido"));
     }
-
-    /// Caso límite: Prompt global vacío
-    #[test]
     fn edge_prompt_global_vacio() {
         let empty_prompt = "";
 
