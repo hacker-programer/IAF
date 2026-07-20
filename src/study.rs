@@ -134,6 +134,8 @@ impl StudyEngine {
         // Cargar perfiles guardados desde disco
         let profiles: HashMap<String, UserLearningProfile> = {
             let profiles_dir = data_dir.join("profiles");
+            let mut map = HashMap::new();
+            if profiles_dir.exists() {
                 if let Ok(entries) = fs::read_dir(&profiles_dir) {
                     for entry in entries.filter_map(Result::ok) {
                         let path = entry.path();
@@ -199,6 +201,11 @@ impl StudyEngine {
             data_dir,
         }
     }
+
+    pub fn get_profile(&self, username: &str) -> Option<UserLearningProfile> {
+        self.profiles.lock().unwrap().get(username).cloned()
+    }
+
     pub fn get_or_create_profile(&self, username: &str) -> UserLearningProfile {
         let mut profiles = self.profiles.lock().unwrap();
         if let Some(p) = profiles.get(username) { return p.clone(); }
@@ -432,5 +439,54 @@ mod tests {
         engine.save_profile(&profile).unwrap();
         let e = engine.calculate_engagement("user");
         assert!(e > 0.8);
+    }
+
+    #[test]
+    fn test_profile_persistence() {
+        let tmp = std::env::temp_dir().join("iaf_test_study_persist");
+        let _ = std::fs::create_dir_all(&tmp);
+
+        // Crear un perfil y guardarlo
+        {
+            let engine = StudyEngine::new(tmp.clone());
+            let mut profile = engine.get_or_create_profile("persist_user");
+            profile.age = Some(25);
+            profile.favorite_games = vec!["Minecraft".to_string(), "Rust".to_string()];
+            profile.hobbies = vec!["Programación".to_string()];
+            profile.neurological_conditions = vec!["TDAH".to_string()];
+            engine.save_profile(&profile).unwrap();
+        }
+
+        // Recargar desde disco y verificar
+        {
+            let engine = StudyEngine::new(tmp.clone());
+            let loaded = engine.get_profile("persist_user");
+            assert!(loaded.is_some(), "El perfil debería persistir en disco");
+            let p = loaded.unwrap();
+            assert_eq!(p.age, Some(25));
+            assert_eq!(p.favorite_games, vec!["Minecraft".to_string(), "Rust".to_string()]);
+            assert_eq!(p.hobbies, vec!["Programación".to_string()]);
+            assert_eq!(p.neurological_conditions, vec!["TDAH".to_string()]);
+        }
+
+        // Limpiar
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    #[test]
+    fn test_build_study_system_prompt() {
+        let engine = test_engine();
+        let mut profile = engine.get_or_create_profile("student_prompt");
+        profile.age = Some(15);
+        profile.favorite_games = vec!["Fortnite".to_string(), "Roblox".to_string()];
+        profile.hobbies = vec!["Dibujo".to_string()];
+        engine.save_profile(&profile).unwrap();
+
+        let prompt = engine.build_study_system_prompt("student_prompt", "Eres un tutor.");
+        assert!(prompt.contains("PERFIL DEL ESTUDIANTE"));
+        assert!(prompt.contains("Fortnite"));
+        assert!(prompt.contains("Dibujo"));
+        assert!(prompt.contains("Edad: 15"));
+        assert!(prompt.contains("Eres un tutor."));
     }
 }
