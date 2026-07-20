@@ -1100,7 +1100,8 @@ async fn chat_endpoint(
             agent.plan_propuesto = None;
             agent.pregunta_usuario = None;
             agent.current_session_id = Some(session_id.clone());
-            agent.current_session_id = Some(session_id.clone());
+
+            let state_bg = state.clone();
 
             let state_bg = state.clone();
             let session_bg = session.clone();
