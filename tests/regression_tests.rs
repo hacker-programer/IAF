@@ -1035,9 +1035,8 @@ mod e2e_tests {
         let initial_title: String = chat_input["message"].as_str().unwrap()
             .chars().take(30).collect();
 
-        // BUG #2: El título es el mensaje truncado
-        assert_eq!(initial_title, "Analiza el código de citybo");
-
+        // BUG #2: El título es el mensaje truncado a 30 caracteres
+        assert_eq!(initial_title, "Analiza el código de citybound");
         // 3. El system prompt DEBE incluir el path del proyecto (BUG #3)
         let _project_path = "C:\\Users\\Fa\\Desktop\\IAF\\citybound";
         let system_prompt_has_path = false; // Actualmente false
