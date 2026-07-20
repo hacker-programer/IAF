@@ -597,19 +597,15 @@ mod regression_tests {
 // ============================================================================
 // Tests de Integración (requieren servidor corriendo)
 // ============================================================================
-
 #[cfg(test)]
 mod integration_tests {
     use reqwest::Client;
 
     static SERVER_URL: Lazy<String> = Lazy::new(|| {
+        std::env::var("TEST_SERVER_URL").unwrap_or_else(|_| "http://localhost:8080".to_string())
+    });
 
-    #[tokio::test]
-    async fn test_server_is_alive() {
-        let client = &*CLIENT;
-        let resp = client.get(format!("{}/api/agent/status", *SERVER_URL)).send().await;
-        match resp {
-            Ok(r) => assert!(r.status().is_success() || r.status().as_u16() == 401,
+    static CLIENT: Lazy<Client> = Lazy::new(Client::new);
                 "El servidor debe responder (incluso con 401 si no hay auth)"),
             Err(_) => { /* Servidor no disponible, ignorar */ }
         }
