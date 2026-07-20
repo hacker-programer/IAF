@@ -1295,6 +1295,11 @@ pub async fn run_agent_loop(
                                 if status.info_messages.len() > 100 {
                                     status.info_messages.remove(0);
                                 }
+                                // Agregar a info_messages para frontend (BUG-002)
+                                status.info_messages.push(mensaje.to_string());
+                                if status.info_messages.len() > 100 {
+                                    status.info_messages.remove(0);
+                                }
                                 status.steps.push(crate::state::AuditStep {
                                     step_type: "informativo".to_string(),
                                     title: "Notificación del Agente".to_string(),
@@ -1342,9 +1347,11 @@ pub async fn run_agent_loop(
                                     .duration_since(std::time::UNIX_EPOCH)
                                     .unwrap()
                                     .as_secs(),
-                            });
-                            if let Some(ref s_id) = session_id {
-                                save_chat_steps_to_disk(
+                        final_message = Some(final_msg);
+                        "Tarea finalizada correctamente.".to_string()
+                    }
+                    "image_fetch" => {
+                        let url = args["url"].as_str().unwrap_or("");
                                     &state,
                                     &Some(s_id.clone()),
                                     &status.steps,
