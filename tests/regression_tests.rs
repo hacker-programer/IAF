@@ -197,7 +197,7 @@ mod bug3_directorio_proyecto_no_inyectado {
     #[test]
     fn test_project_path_not_in_system_prompt() {
         // Simular la construcción del system prompt actual
-        let project_name = Some("citybound".to_string());
+        let _project_name = Some("citybound".to_string());
         let global_prompt = "Eres un asistente de desarrollo...";
         let local_prompt = Some("Project Specific Prompt: optimiza para Rust...");
 
