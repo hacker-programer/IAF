@@ -1130,8 +1130,9 @@ mod edge_case_tests {
         );
         assert!(error_msg.contains("inválido"));
     }
+    /// Caso límite: Prompt global vacío
+    #[test]
     fn edge_prompt_global_vacio() {
-        let empty_prompt = "";
 
         // El sistema debería usar el default si el prompt está vacío
         if empty_prompt.trim().is_empty() {
