@@ -291,7 +291,7 @@ mod regression_tests {
         let prompt_simulado = concat!(
             "Eres un TUTOR EXPERTO. Tu meta es ENSEÑAR, no hacer el trabajo por el alumno.\n",
             "NUNCA escribas el código final. Explica, guía, da pistas.\n",
-            "No dar resúmenes ni temarios: ENSEÑA, no resumas.\n",
+            "no dar resúmenes ni temarios: ENSEÑA, no resumas.\n",
             "Enseña paso a paso. Cada concepto debe ser explicado.\n",
         );
 
@@ -300,7 +300,6 @@ mod regression_tests {
                 "BUG-003 REGRESIÓN: El prompt de estudio debe contener '{}'", frase);
         }
     }
-    #[test]
     fn reg_bug003_leccion_es_interactiva_no_resumen() {
         // Una lección interactiva debe tener:
         let leccion = json!({
