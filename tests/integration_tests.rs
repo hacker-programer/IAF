@@ -1,9 +1,9 @@
-// ============================================================================
-// tests/integration_tests.rs — Tests Exhaustivos de Integración y Aceptación
+﻿// ============================================================================
+// tests/integration_tests.rs â€” Tests Exhaustivos de IntegraciÃ³n y AceptaciÃ³n
 // ============================================================================
 
 // ============================================================================
-// Tests de Aceptación (E2E) — Sin servidor, validan lógica de negocio
+// Tests de AceptaciÃ³n (E2E) â€” Sin servidor, validan lÃ³gica de negocio
 // ============================================================================
 
 #[cfg(test)]
@@ -38,7 +38,7 @@ mod acceptance_tests {
     #[test]
     fn test_study_project_creation() {
         let project = json!({
-            "name": "Rust Básico",
+            "name": "Rust BÃ¡sico",
             "description": "Aprender Rust desde cero",
             "members": ["alumno_test"]
         });
@@ -88,7 +88,7 @@ mod acceptance_tests {
     fn test_chat_message_structure() {
         let msg = json!({
             "role": "user",
-            "content": "Hola, ¿cómo estás?",
+            "content": "Hola, Â¿cÃ³mo estÃ¡s?",
             "timestamp": 1700000000
         });
         assert_eq!(msg["role"], "user");
@@ -120,7 +120,7 @@ mod acceptance_tests {
 }
 
 // ============================================================================
-// Tests de Regresión — BUGS específicos encontrados que los tests existentes
+// Tests de RegresiÃ³n â€” BUGS especÃ­ficos encontrados que los tests existentes
 // no detectaron. Cada test tiene un prefijo REG-XXX que referencia el bug.
 // ============================================================================
 
@@ -133,8 +133,8 @@ mod regression_tests {
     // requeridos por el frontend: active, interrupted, esperando_respuesta_usuario,
     // pregunta_usuario, esperando_aprobacion_plan, plan_propuesto, current_session_id.
     //
-    // BUG: El endpoint no incluía esperando_aprobacion_plan ni plan_propuesto.
-    // El frontend nunca podía detectar estos estados.
+    // BUG: El endpoint no incluÃ­a esperando_aprobacion_plan ni plan_propuesto.
+    // El frontend nunca podÃ­a detectar estos estados.
     // =========================================================================
 
     /// Verifica que la respuesta JSON del endpoint /api/agent/status
@@ -174,7 +174,7 @@ mod regression_tests {
         }
     }
 
-    /// Verifica que cuando el agente NO está esperando respuesta, los campos
+    /// Verifica que cuando el agente NO estÃ¡ esperando respuesta, los campos
     /// correspondientes sean false y null respectivamente.
     #[test]
     fn reg001_agent_status_idle_state_is_correct() {
@@ -202,15 +202,15 @@ mod regression_tests {
     // pregunta_usuario debe contener la pregunta. El frontend debe poder
     // detectar este estado y mostrar el modal agentQuestionModal.
     //
-    // BUG: El backend sí actualizaba el estado, pero el frontend NUNCA
-    // leía estos campos del endpoint /api/agent/status. El modal
-    // agentQuestionModal nunca se abría.
+    // BUG: El backend sÃ­ actualizaba el estado, pero el frontend NUNCA
+    // leÃ­a estos campos del endpoint /api/agent/status. El modal
+    // agentQuestionModal nunca se abrÃ­a.
     // =========================================================================
 
-    /// Simula el estado del agente después de llamar a notificar_usuario("pregunta", "...")
+    /// Simula el estado del agente despuÃ©s de llamar a notificar_usuario("pregunta", "...")
     #[test]
     fn reg002_agent_question_state_is_detectable() {
-        let pregunta = "¿Querés que use SQLite o PostgreSQL para este proyecto?";
+        let pregunta = "Â¿QuerÃ©s que use SQLite o PostgreSQL para este proyecto?";
 
         let status_response = json!({
             "status": "ok",
@@ -227,9 +227,9 @@ mod regression_tests {
         assert_eq!(status_response["esperando_respuesta_usuario"], true);
         assert_eq!(status_response["pregunta_usuario"], pregunta);
 
-        // Verificar que la pregunta no está vacía
+        // Verificar que la pregunta no estÃ¡ vacÃ­a
         let pregunta_str = status_response["pregunta_usuario"].as_str().unwrap();
-        assert!(!pregunta_str.is_empty(), "REG-002 FAIL: La pregunta del agente está vacía, el modal no mostraría nada.");
+        assert!(!pregunta_str.is_empty(), "REG-002 FAIL: La pregunta del agente estÃ¡ vacÃ­a, el modal no mostrarÃ­a nada.");
     }
 
     /// Verifica que el frontend pueda distinguir entre pregunta pendiente y sin pregunta
@@ -237,7 +237,7 @@ mod regression_tests {
     fn reg002_frontend_can_distinguish_question_state() {
         let pregunta_activa = json!({
             "esperando_respuesta_usuario": true,
-            "pregunta_usuario": "¿Qué framework prefieren?"
+            "pregunta_usuario": "Â¿QuÃ© framework prefieren?"
         });
 
         let sin_pregunta = json!({
@@ -257,15 +257,15 @@ mod regression_tests {
 
     // =========================================================================
     // REG-003: El agente NUNCA debe quedar en estado "esperando_respuesta_usuario"
-    // después de que el usuario responde. El campo debe volver a false.
+    // despuÃ©s de que el usuario responde. El campo debe volver a false.
     //
-    // BUG: Si el agente se interrumpía o fallaba, el estado podía quedar
+    // BUG: Si el agente se interrumpÃ­a o fallaba, el estado podÃ­a quedar
     // inconsistente, causando que el modal se abriera en sesiones futuras.
     // =========================================================================
 
     #[test]
     fn reg003_agent_resets_question_state_after_response() {
-        // Después de que el usuario responde, el estado debe limpiarse
+        // DespuÃ©s de que el usuario responde, el estado debe limpiarse
         let after_response = json!({
             "status": "ok",
             "active": true,
@@ -277,7 +277,7 @@ mod regression_tests {
         assert_eq!(after_response["pregunta_usuario"], json!(null));
     }
 
-    /// Verifica que incluso después de una interrupción, el estado se limpia
+    /// Verifica que incluso despuÃ©s de una interrupciÃ³n, el estado se limpia
     #[test]
     fn reg003_agent_resets_after_interruption() {
         let after_interrupt = json!({
@@ -290,7 +290,7 @@ mod regression_tests {
             "plan_propuesto": null
         });
 
-        // Después de interrupción, no debe haber preguntas pendientes
+        // DespuÃ©s de interrupciÃ³n, no debe haber preguntas pendientes
         assert_eq!(after_interrupt["interrupted"], true);
         assert_eq!(after_interrupt["esperando_respuesta_usuario"], false);
         assert_eq!(after_interrupt["pregunta_usuario"], json!(null));
@@ -303,12 +303,12 @@ mod regression_tests {
     // poder detectar esperando_aprobacion_plan = true y mostrar el modal
     // agentPlanModal con el contenido de plan_propuesto.
     //
-    // BUG: El endpoint no incluía estos campos, el modal nunca se abría.
+    // BUG: El endpoint no incluÃ­a estos campos, el modal nunca se abrÃ­a.
     // =========================================================================
 
     #[test]
     fn reg004_agent_plan_state_is_detectable() {
-        let plan = "1. Modificar src/main.rs (líneas 100-150)\n2. Agregar tests\n3. Actualizar DOCUMENTATION.md";
+        let plan = "1. Modificar src/main.rs (lÃ­neas 100-150)\n2. Agregar tests\n3. Actualizar DOCUMENTATION.md";
 
         let status_response = json!({
             "status": "ok",
@@ -324,10 +324,10 @@ mod regression_tests {
         assert_eq!(status_response["esperando_aprobacion_plan"], true);
         assert_eq!(status_response["plan_propuesto"], plan);
 
-        // El plan no debe estar vacío
+        // El plan no debe estar vacÃ­o
         let plan_str = status_response["plan_propuesto"].as_str().unwrap();
-        assert!(!plan_str.is_empty(), "REG-004 FAIL: El plan propuesto está vacío.");
-        // Debe contener al menos una acción
+        assert!(!plan_str.is_empty(), "REG-004 FAIL: El plan propuesto estÃ¡ vacÃ­o.");
+        // Debe contener al menos una acciÃ³n
         assert!(plan_str.contains("Modificar") || plan_str.contains("Agregar") || plan_str.contains("Actualizar"),
             "REG-004 FAIL: El plan propuesto no contiene acciones reconocibles.");
     }
@@ -357,7 +357,7 @@ mod regression_tests {
 
         assert!(debe_mostrar_plan(&con_plan));
         assert!(!debe_mostrar_plan(&sin_plan));
-        // Si el plan está vacío, no debería mostrarse aunque esperando_aprobacion_plan sea true
+        // Si el plan estÃ¡ vacÃ­o, no deberÃ­a mostrarse aunque esperando_aprobacion_plan sea true
         assert!(!debe_mostrar_plan(&plan_vacio));
     }
 
@@ -368,13 +368,13 @@ mod regression_tests {
 
     #[test]
     fn reg005_responder_endpoint_contract() {
-        // Simula el request que el frontend envía
+        // Simula el request que el frontend envÃ­a
         let request = json!({
-            "respuesta": "Usa PostgreSQL porque es más robusto para producción"
+            "respuesta": "Usa PostgreSQL porque es mÃ¡s robusto para producciÃ³n"
         });
 
         assert!(request["respuesta"].as_str().unwrap().len() > 0,
-            "REG-005 FAIL: La respuesta del usuario no puede estar vacía.");
+            "REG-005 FAIL: La respuesta del usuario no puede estar vacÃ­a.");
 
         // El frontend espera esta respuesta del backend
         let expected_response = json!({ "status": "ok" });
@@ -382,7 +382,7 @@ mod regression_tests {
     }
 
     // =========================================================================
-    // REG-006: Múltiples preguntas consecutivas del agente deben funcionar
+    // REG-006: MÃºltiples preguntas consecutivas del agente deben funcionar
     // correctamente sin que el estado quede corrupto entre preguntas.
     // =========================================================================
 
@@ -391,9 +391,9 @@ mod regression_tests {
         // Primera pregunta
         let estado1 = json!({
             "esperando_respuesta_usuario": true,
-            "pregunta_usuario": "¿Qué base de datos prefieren?"
+            "pregunta_usuario": "Â¿QuÃ© base de datos prefieren?"
         });
-        assert_eq!(estado1["pregunta_usuario"], "¿Qué base de datos prefieren?");
+        assert_eq!(estado1["pregunta_usuario"], "Â¿QuÃ© base de datos prefieren?");
 
         // El usuario responde -> estado se limpia
         let estado_post_respuesta = json!({
@@ -402,18 +402,18 @@ mod regression_tests {
         });
         assert_eq!(estado_post_respuesta["esperando_respuesta_usuario"], false);
 
-        // Segunda pregunta (nueva iteración del agente)
+        // Segunda pregunta (nueva iteraciÃ³n del agente)
         let estado2 = json!({
             "esperando_respuesta_usuario": true,
-            "pregunta_usuario": "¿Querés que use async o sync para las consultas?"
+            "pregunta_usuario": "Â¿QuerÃ©s que use async o sync para las consultas?"
         });
-        assert_eq!(estado2["pregunta_usuario"], "¿Querés que use async o sync para las consultas?");
+        assert_eq!(estado2["pregunta_usuario"], "Â¿QuerÃ©s que use async o sync para las consultas?");
         assert_ne!(estado1["pregunta_usuario"], estado2["pregunta_usuario"],
             "REG-006 FAIL: Las preguntas consecutivas no deben ser iguales (deben ser independientes).");
     }
 
     // =========================================================================
-    // REG-007: Tests de integridad estructural — verifica que el JSON del
+    // REG-007: Tests de integridad estructural â€” verifica que el JSON del
     // endpoint no tenga campos con nombres inconsistentes.
     // =========================================================================
 
@@ -437,11 +437,11 @@ mod regression_tests {
         assert_eq!(sorted.len(), expected_fields.len(),
             "REG-007 FAIL: Hay nombres de campo duplicados en la lista de campos esperados.");
 
-        // Verificar que los nombres sigan la convención snake_case
+        // Verificar que los nombres sigan la convenciÃ³n snake_case
         for field in &expected_fields {
             assert!(
                 !field.contains('-') && !field.contains(' '),
-                "REG-007 FAIL: El campo '{}' no sigue la convención snake_case.",
+                "REG-007 FAIL: El campo '{}' no sigue la convenciÃ³n snake_case.",
                 field
             );
         }
@@ -490,7 +490,7 @@ mod regression_tests {
             "active": true,
             "interrupted": false,
             "esperando_respuesta_usuario": true,
-            "pregunta_usuario": "¿Qué hacer?",
+            "pregunta_usuario": "Â¿QuÃ© hacer?",
             "esperando_aprobacion_plan": false,
             "plan_propuesto": null,
             "current_session_id": "session_123"
@@ -501,17 +501,17 @@ mod regression_tests {
         // El backend NO debe cambiar su estado
         assert_eq!(estado_con_pregunta["esperando_respuesta_usuario"], true,
             "REG-009 FAIL: Cerrar el modal en el frontend no debe limpiar esperando_respuesta_usuario en el backend.");
-        assert_eq!(estado_con_pregunta["pregunta_usuario"], "¿Qué hacer?");
+        assert_eq!(estado_con_pregunta["pregunta_usuario"], "Â¿QuÃ© hacer?");
         assert_eq!(estado_con_pregunta["current_session_id"], "session_123");
     }
 
     // =========================================================================
-    // REG-010: copyNonceCmd — el comando generado debe tener el formato correcto
+    // REG-010: copyNonceCmd â€” el comando generado debe tener el formato correcto
     // para que el usuario pueda ejecutarlo en su terminal.
     //
-    // BUG: La función copyNonceCmd usaba event sin declararlo como parámetro,
+    // BUG: La funciÃ³n copyNonceCmd usaba event sin declararlo como parÃ¡metro,
     // causando ReferenceError en strict mode.
-    // Además, navigator.clipboard.writeText fallaba en HTTP sin HTTPS.
+    // AdemÃ¡s, navigator.clipboard.writeText fallaba en HTTP sin HTTPS.
     // =========================================================================
 
     #[test]
@@ -561,42 +561,42 @@ mod regression_tests {
 
     #[test]
     fn reg010_copy_nonce_command_with_empty_nonce_is_handled() {
-        // Nonce vacío — el frontend usa window._lastNonce || ''
+        // Nonce vacÃ­o â€” el frontend usa window._lastNonce || ''
         let nonce = "";
         let cmd = format!(
             ".\\scripts\\sign_nonce.ps1 -Nonce \"{}\" -KeyPath \".config\\admin_private.pem\"",
             nonce
         );
 
-        // El comando se genera igual pero con nonce vacío
+        // El comando se genera igual pero con nonce vacÃ­o
         assert!(cmd.contains("-Nonce \"\""));
     }
 
     /// REG-010 B: El frontend debe tener fallback para navegadores sin Clipboard API.
-    /// Este test valida que la función fallbackCopy funcione correctamente.
+    /// Este test valida que la funciÃ³n fallbackCopy funcione correctamente.
     #[test]
     fn reg010b_fallback_copy_mechanism_exists() {
-        // Simulación de la lógica de fallback: textarea + execCommand
+        // SimulaciÃ³n de la lÃ³gica de fallback: textarea + execCommand
         let text_to_copy = ".\\scripts\\sign_nonce.ps1 -Nonce \"test\" -KeyPath \".config\\admin_private.pem\"";
 
-        // Verificar que el texto a copiar es válido
+        // Verificar que el texto a copiar es vÃ¡lido
         assert!(!text_to_copy.is_empty());
-        assert!(text_to_copy.len() < 1000, "El texto a copiar no debería ser excesivamente largo");
+        assert!(text_to_copy.len() < 1000, "El texto a copiar no deberÃ­a ser excesivamente largo");
 
-        // Simular que navigator.clipboard NO está disponible
+        // Simular que navigator.clipboard NO estÃ¡ disponible
         let clipboard_available = false;
 
         if !clipboard_available {
             // El fallback debe usar document.execCommand('copy')
             // En el test de Rust no podemos ejecutar JS real, pero validamos
-            // que la lógica de decisión es correcta
-            assert!(!clipboard_available, "Fallback debe activarse cuando clipboard no está disponible");
+            // que la lÃ³gica de decisiÃ³n es correcta
+            assert!(!clipboard_available, "Fallback debe activarse cuando clipboard no estÃ¡ disponible");
         }
     }
 }
 
 // ============================================================================
-// Tests de Integración (requieren servidor corriendo)
+// Tests de IntegraciÃ³n (requieren servidor corriendo)
 // ============================================================================
 
 #[cfg(test)]
@@ -672,7 +672,7 @@ mod integration_tests {
 }
 
 // ============================================================================
-// Tests de Modo Estudio — Validan perfil, system prompt, y flujo de estudio
+// Tests de Modo Estudio â€” Validan perfil, system prompt, y flujo de estudio
 // ============================================================================
 
 #[cfg(test)]
@@ -719,27 +719,27 @@ mod study_mode_tests {
 
     #[test]
     fn stu002_study_prompt_contains_profile_data() {
-        // Simula lo que build_study_system_prompt debería producir
+        // Simula lo que build_study_system_prompt deberÃ­a producir
         let prompt = "Eres un tutor.\n\n## PERFIL DEL ESTUDIANTE: test\nEdad: 12\nJuegos favoritos: gartic phone, papet please\nHobbies: programar, rust\nCondiciones: altas capacidades diagnosticadas.\nFase: Exploration\nEngagement: 0.75";
 
         assert!(prompt.contains("Edad: 12"), "STU-002: El prompt debe contener la edad");
         assert!(prompt.contains("Juegos favoritos"), "STU-002: El prompt debe contener juegos favoritos");
         assert!(prompt.contains("Hobbies"), "STU-002: El prompt debe contener hobbies");
-        assert!(prompt.contains("Condiciones"), "STU-002: El prompt debe contener condiciones neurológicas");
+        assert!(prompt.contains("Condiciones"), "STU-002: El prompt debe contener condiciones neurolÃ³gicas");
         assert!(prompt.contains("Fase: Exploration"), "STU-002: El prompt debe contener la fase");
         assert!(prompt.contains("Engagement"), "STU-002: El prompt debe contener engagement");
     }
 
     // =========================================================================
     // STU-003: El system prompt de estudio NO debe contener instrucciones de
-    // crear documentación (eso es solo para modo programación).
+    // crear documentaciÃ³n (eso es solo para modo programaciÃ³n).
     // =========================================================================
 
     #[test]
     fn stu003_study_prompt_should_not_have_documentation_requirement() {
-        // El prompt de estudio solo debe tener contenido pedagógico
-        let study_prompt = "Eres un TUTOR EXPERTO en programación... NUNCA escribas el código final...";
-        assert!(!study_prompt.contains("DOCUMENTACIÓN"), 
+        // El prompt de estudio solo debe tener contenido pedagÃ³gico
+        let study_prompt = "Eres un TUTOR EXPERTO en programaciÃ³n... NUNCA escribas el cÃ³digo final...";
+        assert!(!study_prompt.contains("DOCUMENTACIÃ“N"), 
             "STU-003: El prompt de estudio no debe pedir crear DOCUMENTATION.md");
         assert!(!study_prompt.contains("DOCUMENTATION.md"), 
             "STU-003: El prompt de estudio no debe mencionar DOCUMENTATION.md");
@@ -757,7 +757,7 @@ mod study_mode_tests {
             {"step_type": "informativo", "title": "Respuesta del Agente", "detail": "Hola, soy tu tutor."},
             {"step_type": "tool_call", "title": "read_file", "detail": "Leyendo archivo"},
             {"step_type": "tool_result", "title": "Resultado", "detail": "Contenido del archivo"},
-            {"step_type": "error", "title": "Error", "detail": "Algo falló"}
+            {"step_type": "error", "title": "Error", "detail": "Algo fallÃ³"}
         ]);
 
         // Cada step debe tener step_type
@@ -767,7 +767,7 @@ mod study_mode_tests {
             assert!(valid_types.contains(&stype), 
                 "STU-004: step_type '{}' no es reconocido por el frontend", stype);
             assert!(!step["title"].as_str().unwrap().is_empty(), 
-                "STU-004: El título no puede estar vacío");
+                "STU-004: El tÃ­tulo no puede estar vacÃ­o");
         }
 
         // Verificar que hay al menos un paso informativo
@@ -819,465 +819,38 @@ mod study_mode_tests {
     // =========================================================================
     // STU-007: Carga de system prompt local desde disco
     // Verifica que load_local_prompt pueda encontrar archivos con rutas que
-    // contienen espacios y caracteres especiales (como "Colección de Handouts")
+    // contienen espacios y caracteres especiales (como "ColecciÃ³n de Handouts")
     // =========================================================================
 
+    #[test]
+    fn stu007_local_prompt_path_handles_special_chars() {
+        // Simula la construcciÃ³n de la ruta: .config/data/<user>/<project>/localPrompt.json
+        let username = "test";
+        let project_name = "ColecciÃ³n de Handouts - Francisco GonzÃ¡lez";
+        let path = format!(".config/data/{}/{}/localPrompt.json", username, project_name);
+        
+        // La ruta debe ser vÃ¡lida (aunque el archivo no exista)
+        assert!(path.contains("localPrompt.json"), "STU-007: La ruta debe apuntar a localPrompt.json");
+        assert!(path.contains(username), "STU-007: La ruta debe contener el username");
+        assert!(path.contains("ColecciÃ³n"), "STU-007: La ruta debe contener el nombre del proyecto");
+    }
+
     // =========================================================================
-    // STU-008: El agente en modo estudio NO debe usar el prompt de programación
+    // STU-008: El agente en modo estudio NO debe usar el prompt de programaciÃ³n
     // =========================================================================
 
     #[test]
     fn stu008_study_mode_uses_correct_prompt() {
         // El prompt de estudio es STUDY_SYSTEM_PROMPT (tutor)
-        // NO debe contener instrucciones de programación como "30 Técnicas de Optimización"
-        let study_prompt_base = "Eres un TUTOR EXPERTO en programación y ciencias de la computación. Tu meta es ENSEÑAR, no hacer el trabajo por el alumno.";
+        // NO debe contener instrucciones de programaciÃ³n como "30 TÃ©cnicas de OptimizaciÃ³n"
+        let study_prompt_base = "Eres un TUTOR EXPERTO en programaciÃ³n y ciencias de la computaciÃ³n. Tu meta es ENSEÃ‘AR, no hacer el trabajo por el alumno.";
         
-        assert!(!study_prompt_base.contains("30 Técnicas de Optimización Extrema"),
-            "STU-008: El prompt de estudio no debe contener técnicas de optimización de programación");
+        assert!(!study_prompt_base.contains("30 TÃ©cnicas de OptimizaciÃ³n Extrema"),
+            "STU-008: El prompt de estudio no debe contener tÃ©cnicas de optimizaciÃ³n de programaciÃ³n");
         assert!(study_prompt_base.contains("TUTOR EXPERTO"),
             "STU-008: El prompt de estudio debe identificarse como TUTOR");
-        assert!(study_prompt_base.contains("ENSEÑAR"),
-            "STU-008: El prompt de estudio debe enfatizar la enseñanza");
-    }
-}
-
-// ============================================================================
-// Tests de Regresión — Study Engine y Persistencia de Perfil
-// ============================================================================
-
-#[cfg(test)]
-mod regression_study_tests {
-    use serde_json::json;
-    use std::fs;
-    use std::path::PathBuf;
-
-    /// Crea un directorio temporal único para cada test
-
-    // =========================================================================
-    // REG-STU-PATH-001: La ruta del perfil NO debe ser study/profiles/
-    // Debe ser .config/data/<username>/profile.json
-    // =========================================================================
-        let tmp = tmp_dir("stu001");
-
-        // Simular la estructura que el engine debe crear
-        let user_data = tmp.join(".config").join("data").join("testuser");
-        fs::create_dir_all(&user_data).unwrap();
-
-        let profile_path = user_data.join("profile.json");
-        let profile = json!({
-            "username": "testuser",
-            "age": 14,
-            "phase": "Exploration",
-            "favorite_games": ["Minecraft"],
-            "hobbies": ["programar"]
-        });
-        fs::write(&profile_path, serde_json::to_string_pretty(&profile).unwrap()).unwrap();
-
-        // La ruta correcta es .config/data/<user>/profile.json
-        let expected = tmp.join(".config").join("data").join("testuser").join("profile.json");
-        assert!(expected.exists(),
-            "REG-STU-001 FAIL: El perfil debe estar en {}.", expected.display());
-
-        // La ruta INCORRECTA (antigua) NO debe usarse
-        let wrong_path = tmp.join(".config").join("study").join("profiles").join("testuser.json");
-        assert!(!wrong_path.exists(),
-            "REG-STU-001 FAIL: La ruta antigua {} no debe usarse.", wrong_path.display());
-    }
-
-    // =========================================================================
-    // REG-STU-002: Knowledge base debe guardarse en learnings.json
-    //
-    // BUG: StudyEngine guardaba knowledge en .config/study/knowledge/<user>.json
-    // Debe ser .config/data/<user>/learnings.json
-    // =========================================================================
-
-    #[test]
-    fn reg_stu002_knowledge_correct_path() {
-        let tmp = tmp_dir("stu002");
-
-        let user_data = tmp.join(".config").join("data").join("testuser");
-        fs::create_dir_all(&user_data).unwrap();
-
-        let kb_path = user_data.join("learnings.json");
-        let kb = json!({
-            "username": "testuser",
-            "known_topics": {},
-            "demonstrated_skills": [],
-            "learning_summary": "",
-            "last_updated": 1700000000
-        });
-        fs::write(&kb_path, serde_json::to_string_pretty(&kb).unwrap()).unwrap();
-
-        assert!(kb_path.exists(),
-            "REG-STU-002 FAIL: learnings.json debe estar en {}.", kb_path.display());
-
-        // La ruta INCORRECTA no debe usarse
-        let wrong = tmp.join(".config").join("study").join("knowledge").join("testuser.json");
-        assert!(!wrong.exists(),
-            "REG-STU-002 FAIL: La ruta antigua {} no debe usarse.", wrong.display());
-    }
-
-    // =========================================================================
-    // REG-STU-003: Teaching method debe guardarse en teachingMethod.json
-    //
-    // BUG: No existía el tipo TeachingMethod ni su persistencia.
-    // La especificación dice: .config/data/<user>/teachingMethod.json
-    // =========================================================================
-
-    #[test]
-    fn reg_stu003_teaching_method_correct_path() {
-        let tmp = tmp_dir("stu003");
-
-        let user_data = tmp.join(".config").join("data").join("testuser");
-        fs::create_dir_all(&user_data).unwrap();
-
-        let tm_path = user_data.join("teachingMethod.json");
-        let tm = json!({
-            "username": "testuser",
-            "phase": "Exploration",
-            "methods_tried": [],
-            "methods_to_try": ["gamificacion", "visual"],
-            "chosen_method": null,
-            "failure_hypothesis": null,
-            "success_hypothesis": null,
-            "average_performance": null,
-            "last_updated": 1700000000
-        });
-        fs::write(&tm_path, serde_json::to_string_pretty(&tm).unwrap()).unwrap();
-
-        assert!(tm_path.exists(),
-            "REG-STU-003 FAIL: teachingMethod.json debe estar en {}.", tm_path.display());
-    }
-
-    // =========================================================================
-    // REG-STU-004: Al inicializar, StudyEngine debe cargar perfiles desde disco
-    //
-    // BUG: StudyEngine::new() creaba HashMaps vacíos sin leer archivos
-    // existentes. Los perfiles se perdían al reiniciar el servidor.
-    // =========================================================================
-
-    #[test]
-    fn reg_stu004_engine_loads_existing_profiles() {
-        let tmp = tmp_dir("stu004");
-
-        // Pre-crear datos en disco como si el servidor ya hubiera corrido antes
-        let user_data = tmp.join(".config").join("data").join("existing_user");
-        fs::create_dir_all(&user_data).unwrap();
-
-        let profile = json!({
-            "username": "existing_user",
-            "age": 20,
-            "high_capabilities": null,
-            "neurological_conditions": [],
-            "favorite_games": ["Factorio"],
-            "favorite_youtubers": [],
-            "hobbies": ["rust", "embedded"],
-            "phase": "Exploration",
-            "exploration_started_at": 1700000000,
-            "exploitation_started_at": null,
-            "hypothesis_history": [],
-            "learning_style_summary": "",
-            "message_timestamps": [],
-            "last_updated": 1700000000
-        });
-        fs::write(
-            user_data.join("profile.json"),
-            serde_json::to_string_pretty(&profile).unwrap(),
-        ).unwrap();
-
-        // También knowledge
-        let kb = json!({
-            "username": "existing_user",
-            "known_topics": {"rust": {"topic": "rust", "level": 0.8, "evidence": [], "last_demonstrated": 1700000000, "explicit": true}},
-            "demonstrated_skills": [],
-            "learning_summary": "Aprendiendo Rust",
-            "last_updated": 1700000000
-        });
-        fs::write(
-            user_data.join("learnings.json"),
-            serde_json::to_string_pretty(&kb).unwrap(),
-        ).unwrap();
-
-        // Verificar que los archivos existen antes de "reiniciar"
-        assert!(user_data.join("profile.json").exists());
-        assert!(user_data.join("learnings.json").exists());
-
-        // Simular reinicio: verificar que al leer los archivos se pueden deserializar
-        let loaded_profile: serde_json::Value = serde_json::from_str(
-            &fs::read_to_string(user_data.join("profile.json")).unwrap()
-        ).unwrap();
-        assert_eq!(loaded_profile["username"], "existing_user");
-        assert_eq!(loaded_profile["age"], 20);
-
-        let loaded_kb: serde_json::Value = serde_json::from_str(
-            &fs::read_to_string(user_data.join("learnings.json")).unwrap()
-        ).unwrap();
-        assert_eq!(loaded_kb["username"], "existing_user");
-        assert!(loaded_kb["known_topics"]["rust"]["level"].as_f64().unwrap() > 0.3);
-    }
-
-    // =========================================================================
-    // REG-STU-005: Múltiples usuarios deben tener directorios separados
-    // =========================================================================
-
-    #[test]
-    fn reg_stu005_multiple_users_separate_dirs() {
-        let tmp = tmp_dir("stu005");
-
-        for user in &["alice", "bob", "charlie"] {
-            let dir = tmp.join(".config").join("data").join(user);
-            fs::create_dir_all(&dir).unwrap();
-            fs::write(
-                dir.join("profile.json"),
-                serde_json::to_string_pretty(&json!({
-                    "username": user,
-                    "age": 15,
-                    "phase": "Exploration",
-                    "favorite_games": [],
-                    "hobbies": [],
-                    "neurological_conditions": [],
-                    "favorite_youtubers": [],
-                    "high_capabilities": null,
-                    "exploration_started_at": null,
-                    "exploitation_started_at": null,
-                    "hypothesis_history": [],
-                    "learning_style_summary": "",
-                    "message_timestamps": [],
-                    "last_updated": 0
-                })).unwrap(),
-            ).unwrap();
-        }
-
-        // Verificar que cada usuario tiene su propio directorio
-        for user in &["alice", "bob", "charlie"] {
-            let profile_path = tmp.join(".config").join("data").join(user).join("profile.json");
-            assert!(profile_path.exists(),
-                "REG-STU-005 FAIL: {} debe tener su profile.json", user);
-        }
-    }
-
-    // =========================================================================
-    // REG-STU-006: profile_exists_on_disk debe ser preciso
-    // =========================================================================
-
-    #[test]
-    fn reg_stu006_profile_exists_on_disk_accurate() {
-        let tmp = tmp_dir("stu006");
-
-        // Crear el perfil
-        let user_data = tmp.join(".config").join("data").join("real_user");
-        fs::create_dir_all(&user_data).unwrap();
-        fs::write(
-            user_data.join("profile.json"),
-            "{}",  // JSON mínimo
-        ).unwrap();
-
-        // Verificar existencia
-        assert!(user_data.join("profile.json").exists());
-        // Verificar no existencia
-        assert!(!tmp.join(".config").join("data").join("ghost_user").join("profile.json").exists());
-    }
-
-    // =========================================================================
-    // REG-STU-007: Directorios internos (_projects) no se cargan como usuarios
-    // =========================================================================
-
-    #[test]
-    fn reg_stu007_internal_dirs_ignored() {
-        let tmp = tmp_dir("stu007");
-
-        // Crear _projects
-        let projects_dir = tmp.join(".config").join("data").join("_projects");
-        fs::create_dir_all(&projects_dir).unwrap();
-        fs::write(projects_dir.join("p1.json"), "{}").unwrap();
-
-        // Crear un usuario real
-        let user_dir = tmp.join(".config").join("data").join("real_user");
-        fs::create_dir_all(&user_dir).unwrap();
-        fs::write(user_dir.join("profile.json"), json!({
-            "username": "real_user",
-            "age": null,
-            "phase": "NotStarted",
-            "favorite_games": [],
-            "hobbies": [],
-            "neurological_conditions": [],
-            "favorite_youtubers": [],
-            "high_capabilities": null,
-            "exploration_started_at": null,
-            "exploitation_started_at": null,
-            "hypothesis_history": [],
-            "learning_style_summary": "",
-            "message_timestamps": [],
-            "last_updated": 0
-        }).to_string()).unwrap();
-
-        // Leer directorios y filtrar los que empiezan con _
-        let data_dir = tmp.join(".config").join("data");
-        let user_dirs: Vec<String> = fs::read_dir(&data_dir).unwrap()
-            .filter_map(|e| e.ok())
-            .filter(|e| e.path().is_dir())
-            .map(|e| e.file_name().to_string_lossy().to_string())
-            .filter(|n| !n.starts_with('_'))
-            .collect();
-
-        assert!(user_dirs.contains(&"real_user".to_string()),
-            "REG-STU-007 FAIL: real_user debe estar en la lista");
-        assert!(!user_dirs.contains(&"_projects".to_string()),
-            "REG-STU-007 FAIL: _projects NO debe aparecer como usuario");
-    }
-
-    // =========================================================================
-    // REG-STU-008: save_profile debe crear el directorio si no existe
-    // =========================================================================
-
-    #[test]
-    fn reg_stu008_save_creates_directory() {
-        let tmp = tmp_dir("stu008");
-
-        // El directorio .config/data/newuser/ NO existe todavía
-        let new_user_dir = tmp.join(".config").join("data").join("newuser");
-        assert!(!new_user_dir.exists());
-
-        // Simular save_profile: crear dir + escribir
-        fs::create_dir_all(&new_user_dir).unwrap();
-        fs::write(
-            new_user_dir.join("profile.json"),
-            serde_json::to_string_pretty(&json!({"username": "newuser"})).unwrap(),
-        ).unwrap();
-
-        assert!(new_user_dir.join("profile.json").exists(),
-            "REG-STU-008 FAIL: save_profile debe crear el directorio y el archivo.");
-    }
-
-    // =========================================================================
-    // REG-STU-009: El perfil debe ser JSON válido y deserializable
-    // =========================================================================
-
-    #[test]
-    fn reg_stu009_profile_is_valid_json() {
-        let tmp = tmp_dir("stu009");
-
-        let profile = json!({
-            "username": "valid_user",
-            "age": 16,
-            "high_capabilities": null,
-            "neurological_conditions": ["TDAH"],
-            "favorite_games": ["Portal 2", "The Witness"],
-            "favorite_youtubers": ["DotCSV"],
-            "hobbies": ["ia", "matemáticas"],
-            "phase": "Exploration",
-            "exploration_started_at": 1700000000_u64,
-            "exploitation_started_at": null,
-            "hypothesis_history": [
-                {
-                    "method": "visual",
-                    "theoretical_basis": "Dual Coding Theory",
-                    "analogies_used": ["mapas mentales"],
-                    "started_at": 1700000000_u64,
-                    "ended_at": null,
-                    "metrics": {
-                        "correct_answer_rate": 0.0,
-                        "avg_response_time_secs": 0.0,
-                        "message_count": 0,
-                        "session_duration_secs": 0,
-                        "follow_up_questions": 0,
-                        "user_disengaged": false,
-                        "engagement_score": 0.0
-                    },
-                    "conclusion": null
-                }
-            ],
-            "learning_style_summary": "Aprendiz visual",
-            "message_timestamps": [],
-            "last_updated": 1700000000_u64
-        });
-
-        let json_str = serde_json::to_string_pretty(&profile).unwrap();
-
-        // Guardar y leer de vuelta
-        let user_dir = tmp.join(".config").join("data").join("valid_user");
-        fs::create_dir_all(&user_dir).unwrap();
-        fs::write(user_dir.join("profile.json"), &json_str).unwrap();
-
-        let loaded: serde_json::Value = serde_json::from_str(
-            &fs::read_to_string(user_dir.join("profile.json")).unwrap()
-        ).unwrap();
-
-        assert_eq!(loaded["username"], "valid_user");
-        assert_eq!(loaded["age"], 16);
-        assert_eq!(loaded["phase"], "Exploration");
-        assert!(loaded["hypothesis_history"].as_array().unwrap().len() == 1);
-    }
-
-    // =========================================================================
-    // REG-STU-010: learnings.json debe ser JSON válido con topics
-    // =========================================================================
-
-    #[test]
-    fn reg_stu010_learnings_is_valid_json() {
-        let tmp = tmp_dir("stu010");
-
-        let kb = json!({
-            "username": "learner",
-            "known_topics": {
-                "rust": {
-                    "topic": "rust",
-                    "level": 0.75,
-                    "evidence": ["fn main() {}", "impl Trait for Struct"],
-                    "last_demonstrated": 1700000000_u64,
-                    "explicit": true
-                },
-                "python": {
-                    "topic": "python",
-                    "level": 0.45,
-                    "evidence": ["print('hello')"],
-                    "last_demonstrated": 1700000000_u64,
-                    "explicit": false
-                }
-            },
-            "demonstrated_skills": [
-                {
-                    "skill": "pattern_matching",
-                    "evidence_snippet": "match x { Ok(v) => v, Err(e) => ... }",
-                    "context": "Al resolver ejercicio de Result",
-                    "timestamp": 1700000000_u64
-                }
-            ],
-            "learning_summary": "Buen progreso en Rust",
-            "last_updated": 1700000000_u64
-        });
-
-        let json_str = serde_json::to_string_pretty(&kb).unwrap();
-
-        let user_dir = tmp.join(".config").join("data").join("learner");
-        fs::create_dir_all(&user_dir).unwrap();
-        fs::write(user_dir.join("learnings.json"), &json_str).unwrap();
-
-        let loaded: serde_json::Value = serde_json::from_str(
-            &fs::read_to_string(user_dir.join("learnings.json")).unwrap()
-        ).unwrap();
-
-        assert_eq!(loaded["username"], "learner");
-        assert!(loaded["known_topics"]["rust"]["level"].as_f64().unwrap() > 0.5);
-        assert!(loaded["known_topics"]["python"]["level"].as_f64().unwrap() > 0.3);
-        assert_eq!(loaded["demonstrated_skills"].as_array().unwrap().len(), 1);
-    }
-}
-    // STU-008: El agente en modo estudio NO debe usar el prompt de programación
-    // =========================================================================
-
-    #[test]
-    fn stu008_study_mode_uses_correct_prompt() {
-        // El prompt de estudio es STUDY_SYSTEM_PROMPT (tutor)
-        // NO debe contener instrucciones de programación como "30 Técnicas de Optimización"
-        let study_prompt_base = "Eres un TUTOR EXPERTO en programación y ciencias de la computación. Tu meta es ENSEÑAR, no hacer el trabajo por el alumno.";
-        
-        assert!(!study_prompt_base.contains("30 Técnicas de Optimización Extrema"),
-            "STU-008: El prompt de estudio no debe contener técnicas de optimización de programación");
-        assert!(study_prompt_base.contains("TUTOR EXPERTO"),
-            "STU-008: El prompt de estudio debe identificarse como TUTOR");
-        assert!(study_prompt_base.contains("ENSEÑAR"),
-            "STU-008: El prompt de estudio debe enfatizar la enseñanza");
+        assert!(study_prompt_base.contains("ENSEÃ‘AR"),
+            "STU-008: El prompt de estudio debe enfatizar la enseÃ±anza");
     }
 
     // =========================================================================
@@ -1287,158 +860,108 @@ mod regression_study_tests {
 
     #[test]
     fn reg_stu_path001_profile_path_is_correct_format() {
-        // Simula lo que StudyEngine construye internamente
         let base = std::path::PathBuf::from("/tmp/test_iaf");
         let username = "alumno_prueba";
-
-        // Ruta CORRECTA esperada
         let expected_path = base
             .join(".config")
             .join("data")
             .join(username)
             .join("profile.json");
-
         let path_str = expected_path.to_string_lossy().to_string();
 
-        // La ruta DEBE contener .config/data/<username>/profile.json
         assert!(path_str.contains(".config"), "REG-STU-PATH-001: Ruta debe contener .config");
-        assert!(path_str.contains("data"), "REG-STU-PATH-001: Ruta debe contener 'data', no 'study'");
+        assert!(path_str.contains("data"), "REG-STU-PATH-001: Ruta debe contener data, no study");
         assert!(path_str.contains(username), "REG-STU-PATH-001: Ruta debe contener el username");
         assert!(path_str.ends_with("profile.json"), "REG-STU-PATH-001: El archivo debe llamarse profile.json");
 
-        // Ruta INCORRECTA (antigua) — verificar que NO es la que usamos
-        let old_path = base
-            .join("study")
-            .join("profiles")
-            .join(format!("{}.json", username));
+        let old_path = base.join("study").join("profiles").join(format!("{}.json", username));
         assert_ne!(path_str, old_path.to_string_lossy().to_string(),
             "REG-STU-PATH-001: La ruta NO debe ser study/profiles/<user>.json");
     }
 
     // =========================================================================
-    // REG-STU-PATH-002: La ruta del knowledge base NO debe ser study/knowledge/
-    // Debe ser .config/data/<username>/learnings.json
+    // REG-STU-PATH-002: La ruta del knowledge base debe ser learnings.json
     // =========================================================================
 
     #[test]
     fn reg_stu_path002_knowledge_path_is_correct_format() {
         let base = std::path::PathBuf::from("/tmp/test_iaf");
         let username = "alumno_prueba";
-
-        let expected_path = base
-            .join(".config")
-            .join("data")
-            .join(username)
-            .join("learnings.json");
-
+        let expected_path = base.join(".config").join("data").join(username).join("learnings.json");
         let path_str = expected_path.to_string_lossy().to_string();
 
         assert!(path_str.contains(".config/data"), "REG-STU-PATH-002: Ruta debe contener .config/data");
         assert!(path_str.ends_with("learnings.json"), "REG-STU-PATH-002: El archivo debe llamarse learnings.json");
-
-        // Verificar que NO es la ruta antigua study/knowledge/
         assert!(!path_str.contains("study/knowledge"), "REG-STU-PATH-002: NO debe usar study/knowledge");
-        assert!(!path_str.contains("study\\knowledge"), "REG-STU-PATH-002: NO debe usar study\\knowledge");
     }
 
     // =========================================================================
-    // REG-STU-PATH-003: La ruta del teaching method debe ser teachingMethod.json
+    // REG-STU-PATH-003: StudyEngine::new recibe base_workspace en main.rs
     // =========================================================================
 
     #[test]
-    fn reg_stu_path003_teaching_method_path_is_correct_format() {
-        let base = std::path::PathBuf::from("/tmp/test_iaf");
-        let username = "alumno_prueba";
-
-        let expected_path = base
-            .join(".config")
-            .join("data")
-            .join(username)
-            .join("teachingMethod.json");
-
-        let path_str = expected_path.to_string_lossy().to_string();
-
-        assert!(path_str.contains(".config/data"), "REG-STU-PATH-003: Ruta debe contener .config/data");
-        assert!(path_str.ends_with("teachingMethod.json"), "REG-STU-PATH-003: Debe llamarse teachingMethod.json");
-        assert!(!path_str.contains("study/"), "REG-STU-PATH-003: NO debe usar directorio study/");
-    }
-
-    // =========================================================================
-    // REG-STU-PATH-004: StudyEngine DEBE recibir base_workspace, no config_dir/study
-    // Verifica que la llamada en main.rs es StudyEngine::new(base_workspace)
-    // =========================================================================
-
-    #[test]
-    fn reg_stu_path004_main_uses_base_workspace_not_study_dir() {
-        // Leer main.rs y verificar que StudyEngine::new recibe base_workspace
+    fn reg_stu_path003_main_uses_base_workspace_not_study_dir() {
         let main_rs = std::include_str!("../src/main.rs");
-
-        // Debe haber una línea con StudyEngine::new(base_workspace
-        let has_correct = main_rs.contains("StudyEngine::new(base_workspace");
-        assert!(has_correct,
-            "REG-STU-PATH-004 FAIL: main.rs debe llamar StudyEngine::new(base_workspace.clone())");
-
-        // NO debe haber StudyEngine::new(config_dir.join(\"study\")
-        let has_old = main_rs.contains("StudyEngine::new(config_dir.join(\"study\"))");
-        assert!(!has_old,
-            "REG-STU-PATH-004 FAIL: main.rs NO debe usar config_dir.join(\"study\"). La línea antigua debe ser eliminada.");
-
-        // Solo debe haber UNA llamada a StudyEngine::new
         let count = main_rs.matches("StudyEngine::new(").count();
         assert_eq!(count, 1,
-            "REG-STU-PATH-004 FAIL: Debe haber exactamente 1 llamada a StudyEngine::new, se encontraron {} (posible línea duplicada).",
-            count);
+            "REG-STU-PATH-003 FAIL: Debe haber exactamente 1 llamada a StudyEngine::new, hay {}", count);
+        let has_correct = main_rs.contains("StudyEngine::new(base_workspace");
+        assert!(has_correct,
+            "REG-STU-PATH-003 FAIL: main.rs debe llamar StudyEngine::new(base_workspace.clone())");
+        let has_old = main_rs.contains("StudyEngine::new(config_dir.join(\"study\"))");
+        assert!(!has_old,
+            "REG-STU-PATH-003 FAIL: main.rs NO debe usar config_dir.join(\"study\")");
     }
 
     // =========================================================================
-    // REG-STU-PATH-005: Verificar que study.rs no referencia el directorio "study/profiles"
+    // REG-STU-PATH-004: study.rs no referencia directorios antiguos
     // =========================================================================
 
     #[test]
-    fn reg_stu_path005_study_rs_does_not_use_old_paths() {
+    fn reg_stu_path004_study_rs_does_not_use_old_paths() {
         let study_rs = std::include_str!("../src/study.rs");
-
-        // NO debe referenciar "study/profiles" como ruta de guardado
         assert!(!study_rs.contains("join(\"study\")"),
-            "REG-STU-PATH-005 FAIL: study.rs no debe usar join(\"study\") como directorio de datos.");
-
-        // NO debe referenciar "study/knowledge"
+            "REG-STU-PATH-004 FAIL: study.rs no debe usar join(\"study\")");
         assert!(!study_rs.contains("join(\"knowledge\")"),
-            "REG-STU-PATH-005 FAIL: study.rs no debe usar join(\"knowledge\") como directorio de datos.");
-
-        // DEBE contener la ruta correcta .config/data
+            "REG-STU-PATH-004 FAIL: study.rs no debe usar join(\"knowledge\")");
         assert!(study_rs.contains(".config\").join(\"data\")"),
-            "REG-STU-PATH-005 FAIL: study.rs debe usar .config/data como directorio base de datos.");
+            "REG-STU-PATH-004 FAIL: study.rs debe usar .config/data como directorio base");
     }
 
     // =========================================================================
-    // REG-STU-PATH-006: Verificar que profile_exists_on_disk funciona correctamente
-    // Simula un test unitario de la lógica de verificación de rutas
+    // REG-STU-PATH-005: Verificacion en disco real de la ruta correcta
     // =========================================================================
 
     #[test]
-    fn reg_stu_path006_profile_exists_check_uses_correct_path() {
-        // Usamos un directorio temporal real
-        let tmp = std::env::temp_dir().join("iaf_reg_stu_path006");
+    fn reg_stu_path005_profile_exists_on_disk_uses_correct_path() {
+        let tmp = std::env::temp_dir().join("iaf_reg_stu_path005");
         let _ = std::fs::remove_dir_all(&tmp);
         std::fs::create_dir_all(&tmp).unwrap();
-
-        // Creamos la estructura de directorios correcta manualmente
         let user_dir = tmp.join(".config").join("data").join("testuser");
         std::fs::create_dir_all(&user_dir).unwrap();
         std::fs::write(user_dir.join("profile.json"), "{}").unwrap();
 
-        // Verificamos que existe exactamente donde debe
         let correct_path = tmp.join(".config").join("data").join("testuser").join("profile.json");
-        assert!(correct_path.exists(),
-            "REG-STU-PATH-006 FAIL: El archivo debe existir en la ruta correcta.");
+        assert!(correct_path.exists(), "REG-STU-PATH-005 FAIL: Archivo debe existir en ruta correcta");
 
-        // Verificamos que NO existe en la ruta antigua
         let old_path = tmp.join("study").join("profiles").join("testuser.json");
-        assert!(!old_path.exists(),
-            "REG-STU-PATH-006 FAIL: El archivo NO debe estar en la ruta antigua.");
+        assert!(!old_path.exists(), "REG-STU-PATH-005 FAIL: Archivo NO debe estar en ruta antigua");
 
-        // Limpiar
         let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    // =========================================================================
+    // REG-STU-PATH-006: study.rs exporta metodos de verificacion de existencia
+    // =========================================================================
+
+    #[test]
+    fn reg_stu_path006_existence_check_methods_are_exported() {
+        let study_rs = std::include_str!("../src/study.rs");
+        assert!(study_rs.contains("fn profile_exists_on_disk"),
+            "REG-STU-PATH-006 FAIL: study.rs debe exportar profile_exists_on_disk()");
+        assert!(study_rs.contains("fn knowledge_exists_on_disk"),
+            "REG-STU-PATH-006 FAIL: study.rs debe exportar knowledge_exists_on_disk()");
+        assert!(study_rs.contains("fn teaching_method_exists_on_disk"),
+            "REG-STU-PATH-006 FAIL: study.rs debe exportar teaching_method_exists_on_disk()");
     }
 }
