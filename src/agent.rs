@@ -1739,7 +1739,7 @@ fn find_chat_file_by_session_id(base_workspace: &Path, session_id: &str) -> Opti
                         let sub_path = sub_entry.path();
                         if sub_path.is_file() {
                             if let Some(fname) = sub_path.file_stem().and_then(|s| s.to_str()) {
-                                if fname.contains(session_id) and sub_path.extension().and_then(|e| e.to_str()) == Some("json") {
+                                if fname.contains(session_id) && sub_path.extension().and_then(|e| e.to_str()) == Some("json") {
                                     return Some(sub_path);
                                 }
                             }
