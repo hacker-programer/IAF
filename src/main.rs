@@ -1,4 +1,4 @@
-﻿#![allow(dead_code, unused_imports, unused_variables, unused_mut, unused_assignments, unused_must_use)]
+#![allow(dead_code, unused_imports, unused_variables, unused_mut, unused_assignments, unused_must_use)]
 use axum::{
     extract::{State, Json, Path as AxumPath},
     response::IntoResponse,
@@ -1531,6 +1531,8 @@ async fn get_agent_status(State(state): State<AppState>) -> impl IntoResponse {
         "status": "ok",
         "active": status.running,
         "running": status.running,
+        "finished": status.finished,
+        "final_message": status.final_message,
         "interrupted": status.interrupted,
         "esperando_respuesta_usuario": status.esperando_respuesta_usuario,
         "pregunta_usuario": status.pregunta_usuario,
