@@ -595,18 +595,14 @@ mod regression_tests {
 }
 
 // ============================================================================
-// Tests de IntegraciÃ³n (requieren servidor corriendo)
+// Tests de Integración (requieren servidor corriendo)
 // ============================================================================
+
 #[cfg(test)]
-mod integration_tests {
 mod integration_tests {
     use reqwest::Client;
 
     static SERVER_URL: Lazy<String> = Lazy::new(|| {
-        std::env::var("TEST_SERVER_URL").unwrap_or_else(|_| "http://localhost:8080".to_string())
-    });
-
-    static CLIENT: Lazy<Client> = Lazy::new(Client::new);
 
     #[tokio::test]
     async fn test_server_is_alive() {
