@@ -828,10 +828,14 @@ async function sendMessageToAgent(text, mode) {
 
 function addMessage(role, text) {
     const div = document.createElement('div');
+function addMessage(role, text) {
+    const div = document.createElement('div');
     div.className = `message ${role}-msg`;
     div.innerHTML = `<strong>${role === 'user' ? 'Tú' : 'Agente'}:</strong> ${text.replace(/\n/g, '<br>')}`;
     document.getElementById('chatArea').appendChild(div);
     document.getElementById('chatArea').scrollTop = document.getElementById('chatArea').scrollHeight;
+}
+
 // ---- Agent Monitoring (Console) ----
 // BUG-002 FIX: Reestructurado para que los mensajes informativos se consuman
 // SIEMPRE, incluso cuando el agente ya terminó. La lógica anterior solo
@@ -870,7 +874,6 @@ async function startAgentMonitoring() {
         if (statusRes.finished && statusRes.final_message) {
             showInfoToast('✓ ' + statusRes.final_message);
             // Limpiar el intervalo después de mostrar el mensaje final
-            // pero dar tiempo para que se muestren los info_messages pendientes
             setTimeout(() => {
                 if (agentMonitorInterval) {
                     clearInterval(agentMonitorInterval);
@@ -923,10 +926,18 @@ async function startAgentMonitoring() {
         }
     }, 1500);
 }
+
+function renderConsoleSteps(steps) {
+    const area = document.getElementById('consoleOutput');
+    if (!area) return;
+    area.innerHTML = steps.map(function(s) {
+        return `<div class="console-step">
+            <div class="console-step-title">[${s.step_type || ''}] ${s.title || ''}</div>
             <div class="console-step-detail">${s.detail || ''}</div>
         </div>`;
     }).join('');
     area.scrollTop = area.scrollHeight;
+}
 }
 
 
