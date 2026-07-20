@@ -1523,13 +1523,12 @@ async fn captcha_solve(
 async fn get_projects(State(state): State<AppState>) -> impl IntoResponse {
     let projs = state.projects.lock().unwrap().clone();
     Json(projs)
-}
-
 async fn get_agent_status(State(state): State<AppState>) -> impl IntoResponse {
     let status = state.active_agent.lock().unwrap().clone();
     Json(json!({
         "status": "ok",
         "active": status.running,
+        "running": status.running,
         "interrupted": status.interrupted,
         "esperando_respuesta_usuario": status.esperando_respuesta_usuario,
         "pregunta_usuario": status.pregunta_usuario,
