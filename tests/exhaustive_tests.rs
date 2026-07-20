@@ -1106,16 +1106,10 @@ mod edge_case_tests {
             // Modos con espacios o mayúsculas deberían normalizarse
             let normalized_valid = normalized == "study" || normalized == "programming";
             if normalized_valid {
-                || mode.trim().to_lowercase() == "programming";
-            if normalized_valid {
                 // El sistema debería normalizar
                 assert!(normalized == "study" || normalized == "programming");
             }
         }
-    }
-
-    /// Caso límite: Rango de líneas con start > end
-    #[test]
     fn edge_rango_lineas_invertido() {
         let total_lines = 100;
         let start = 50;
