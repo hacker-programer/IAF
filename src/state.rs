@@ -138,6 +138,10 @@ pub struct AuditStep {
 pub struct ActiveAgentStatus {
     pub running: bool,
     pub interrupted: bool,
+    /// Indica que el agente ha finalizado su tarea (llamó a finalizar_tarea)
+    pub finished: bool,
+    /// Mensaje de resumen final cuando el agente termina
+    pub final_message: Option<String>,
     pub esperando_respuesta_usuario: bool,
     pub pregunta_usuario: Option<String>,
     pub respuesta_usuario: Option<String>,
