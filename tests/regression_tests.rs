@@ -1145,10 +1145,9 @@ mod e2e_tests {
                 }
             ],
             "esperando_respuesta_usuario": false,
-            "esperando_respuesta_usuario": false,
             "pregunta_usuario": null,
             "respuesta_usuario": null
-        // Frontend: verificar pending_notification
+        });
         let notif = agent_status["pending_notification"].as_str();
         assert!(notif.is_some());
         assert_eq!(notif.unwrap(), "Analizando archivo main.rs...");
