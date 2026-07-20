@@ -1095,7 +1095,6 @@ async fn chat_endpoint(
             agent.current_session_id = Some(session_id.clone());
 
             let state_bg = state.clone();
-            let state_bg = state.clone();
             let session_bg = session.clone();
             let sid_bg = session_id.clone();
             let uname_bg = username.clone();
@@ -1115,8 +1114,6 @@ async fn chat_endpoint(
                     &uname_bg,
                     &mode_bg,
                 ).await;
-                ).await;
-
                 let save_p_bg = get_chat_path(&state_bg, &uname_bg, is_admin_bg, &session_bg.title, &sid_bg);
                 let mut updated = if let Ok(c) = fs::read_to_string(&save_p_bg) {
                     serde_json::from_str::<ChatSession>(&c).unwrap_or_else(|_| session_bg.clone())

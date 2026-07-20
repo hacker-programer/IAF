@@ -12,25 +12,6 @@ use base64::{engine::general_purpose, Engine as _};
 use uuid::Uuid;
 const DEEPSEEK_API_URL: &str = "https://api.deepseek.com/v1/chat/completions";
 
-// Constante para el prompt de modo estudio (BUG FIX: antes no se usaba en agent.rs)
-const STUDY_SYSTEM_PROMPT: &str = include_str!("../prompts/study_system_prompt.txt");
-
-// Requisito de documentación (extraído del código original para reutilización)
-const DOCUMENTATION_REQUIREMENT: &str = "\n\nOBLIGACIÓN CRÍTICA DE INICIO - CREAR DOCUMENTACIÓN:\n\
- Tu primera e inmediata acción en esta sesión DEBE ser verificar si existe el archivo `DOCUMENTATION.md` en la raíz de tu proyecto actual.\n\
- - SI NO EXISTE: Debes crearlo INMEDIATAMENTE como tu primer paso técnico usando la herramienta `write_file_with_commit` antes de hacer cualquier otra modificación o análisis profundo de código.\n\
- - SI YA EXISTE: Debes leerlo obligatoriamente para orientarte en la arquitectura y actualizarlo si realizas algún cambio estructural.\n\
- \n\
- REQUISITOS DE DOCUMENTACIÓN EXHAUSTIVA:\n\
- Este archivo `DOCUMENTATION.md` NO puede ser un resumen superficial. Debe ser un mapa técnico detallado y exhaustivo de todo el proyecto, conteniendo:\n\
- 1. Lista completa de archivos fuente clave del repositorio.\n\
- 2. Nombre exacto de todas las estructuras (structs, enums, classes) y funciones principales de cada archivo, detallando su funcionamiento interno específico y dependencias.\n\
- 3. Rangos de líneas exactos o aproximados donde se define cada componente importante.\n\
- \n\
- NOTA DE BÚSQUEDA DE CÓDIGO:\n\
- La herramienta `search_code` realiza búsquedas de texto local de coincidencia exacta por términos y palabras clave (ya no utiliza embeddings de VoyageAI). Por ende, el archivo `DOCUMENTATION.md` que crees debe ser rico en términos descriptivos clave (como 'MunicipalFinance', 'tax_system.rs', 'GameWorld', etc.) para que puedas usar `search_code` en el futuro y encontrar la ubicación exacta de cualquier componente en un instante sin necesidad de leer archivos grandes enteros.";
-
-const CONTEXT_NOTE: &str = "\n\nNOTA DE CONTEXTO: Para optimizar la memoria y la eficiencia, el sistema puede resumir los mensajes más antiguos del chat en una sola entrada con el encabezado `--- RESUMEN CONTEXTO ANTERIOR (Auto-comprimido por el sistema) ---`. Si encuentras este mensaje, debes interpretarlo como la continuación histórica y fidedigna de los acontecimientos y decisiones tomadas en el proyecto hasta ese momento.";
 pub async fn run_agent_loop(
     session_messages: Vec<crate::state::ChatMessage>,
     project_name: Option<String>,
@@ -39,47 +20,99 @@ pub async fn run_agent_loop(
     voyage_key: &str,
     openrouter_key: &str,
     session_id: Option<String>,
-    username: &str,
-    mode: &str,
 ) -> Result<String, Box<dyn Error + Send + Sync>> {
-    // Construir el system prompt según el modo (BUG FIX: modo estudio vs programación)
-    let system_prompt = if mode == "study" {
-        // Modo estudio: usar STUDY_SYSTEM_PROMPT como base e inyectar perfil del estudiante
-        let base_prompt = {
-            // Intentar cargar prompt local del proyecto de estudio, si existe
-            if let Some(ref proj_name) = project_name {
-                state.load_local_prompt(username, proj_name)
-                    .unwrap_or_else(|| STUDY_SYSTEM_PROMPT.to_string())
-            } else {
-                STUDY_SYSTEM_PROMPT.to_string()
-            }
-        };
-        // Inyectar perfil del estudiante y base de conocimiento
-        let enriched = state.study_engine.build_study_system_prompt(username, &base_prompt);
-        // Agregar instrucciones de documentación y contexto
-        format!("{}{}", enriched, DOCUMENTATION_REQUIREMENT)
-    } else {
-        // Modo programación: cargar global y local por usuario desde disco
-        let global_prompt = state.load_global_prompt(username);
-        let local_prompt = project_name.as_ref()
-            .and_then(|name| state.load_local_prompt(username, name));
-        let mut prompt = if let Some(local) = local_prompt {
-            format!("{}\n\nProject Specific Prompt:\n{}", global_prompt, local)
-        } else {
-            global_prompt
-        };
-        prompt.push_str(DOCUMENTATION_REQUIREMENT);
-        prompt.push_str(CONTEXT_NOTE);
-        prompt
+    let global_prompt = {
+        let prompts = state.prompts.lock().unwrap();
+        prompts.global_current.clone()
     };
+
+    let local_prompt = project_name.as_ref().and_then(|name| {
+        let prompts = state.prompts.lock().unwrap();
+        prompts.projects.get(name).cloned()
+    });
+
+    let mut system_prompt = if let Some(local) = local_prompt {
+        format!("{}\n\nProject Specific Prompt:\n{}", global_prompt, local)
+    } else {
+        global_prompt
+    };
+    system_prompt.push_str(
+        "\n\nOBLIGACIÃƒâ€œN CRÃƒÂTICA DE INICIO - CREAR DOCUMENTACIÃƒâ€œN:\n\
+         Tu primera e inmediata acciÃƒÂ³n en esta sesiÃƒÂ³n DEBE ser verificar si existe el archivo `DOCUMENTATION.md` en la raÃƒÂ­z de tu proyecto actual.\n\
+         - SI NO EXISTE: Debes crearlo INMEDIATAMENTE como tu primer paso tÃƒÂ©cnico usando la herramienta `write_file_with_commit` antes de hacer cualquier otra modificaciÃƒÂ³n o anÃƒÂ¡lisis profundo de cÃƒÂ³digo.\n\
+         - SI YA EXISTE: Debes leerlo obligatoriamente para orientarte en la arquitectura y actualizarlo si realizas algÃƒÂºn cambio estructural.\n\
+         \n\
+         REQUISITOS DE DOCUMENTACIÃƒâ€œN EXHAUSTIVA:\n\
+         Este archivo `DOCUMENTATION.md` NO puede ser un resumen superficial. Debe ser un mapa tÃƒÂ©cnico detallado y exhaustivo de todo el proyecto, conteniendo:\n\
+         1. Lista completa de archivos fuente clave del repositorio.\n\
+         2. Nombre exacto de todas las estructuras (structs, enums, classes) y funciones principales de cada archivo, detallando su funcionamiento interno especÃƒÂ­fico y dependencias.\n\
+         3. Rangos de lÃƒÂ­neas exactos o aproximados donde se define cada componente importante.\n\
+         \n\
+         NOTA DE BÃƒÅ¡SQUEDA DE CÃƒâ€œDIGO:\n\
+         La herramienta `search_code` realiza bÃƒÂºsquedas de texto local de coincidencia exacta por tÃƒÂ©rminos y palabras clave (ya no utiliza embeddings de VoyageAI). Por ende, el archivo `DOCUMENTATION.md` que crees debe ser rico en tÃƒÂ©rminos descriptivos clave (como 'MunicipalFinance', 'tax_system.rs', 'GameWorld', etc.) para que puedas usar `search_code` en el futuro y encontrar la ubicaciÃƒÂ³n exacta de cualquier componente en un instante sin necesidad de leer archivos grandes enteros."
+    );
+    system_prompt.push_str(
+        "\n\nNOTA DE CONTEXTO: Para optimizar la memoria y la eficiencia, el sistema puede resumir los mensajes mÃƒÂ¡s antiguos del chat en una sola entrada con el encabezado `--- RESUMEN CONTEXTO ANTERIOR (Auto-comprimido por el sistema) ---`. Si encuentras este mensaje, debes interpretarlo como la continuaciÃƒÂ³n histÃƒÂ³rica y fidedigna de los acontecimientos y decisiones tomadas en el proyecto hasta ese momento."
+    );
+
     let mut messages = vec![
         json!({ "role": "system", "content": system_prompt }),
     ];
 
-    // Cargar todo el historial del chat excepto el último mensaje (que es el nuevo prompt del usuario)
+    // Cargar todo el historial del chat excepto el ÃƒÂºltimo mensaje (que es el nuevo prompt del usuario)
     let len = session_messages.len();
     if len > 0 {
         for m in &session_messages[..len - 1] {
+            let role = if m.role == "agent" { "assistant" } else { "user" };
+            messages.push(json!({ "role": role, "content": m.content }));
+        }
+
+        // Inyectar memoria de ejecuciÃƒÂ³n reciente (pasos de auditorÃƒÂ­a de herramientas) si existen
+        let steps = {
+            let status = state.active_agent.lock().unwrap();
+            status.steps.clone()
+        };
+
+        if !steps.is_empty() {
+            let mut steps_text = String::new();
+            // Tomar todos los pasos de auditorÃƒÂ­a desde el principio para evitar amnesia
+            let start_idx = 0;
+            for (i, step) in steps.iter().enumerate() {
+                // Truncar de forma segura a 20000 caracteres sin romper UTF-8
+                let detail_short = if step.detail.chars().count() > 20000 {
+                    let truncated: String = step.detail.chars().take(20000).collect();
+                    format!("{}... [Truncado en memoria]", truncated)
+                } else {
+                    step.detail.clone()
+                };
+                steps_text.push_str(&format!(
+                    "Paso #{}: Tipo={}, TÃƒÂ­tulo={}\nDetalle: {}\n\n",
+                    start_idx + i + 1, step.step_type, step.title, detail_short
+                ));
+            }
+
+            if !steps_text.is_empty() {
+                let context_msg = json!({
+                    "role": "system",
+                    "content": format!(
+                        "--- MEMORIA DE EJECUCIÃƒâ€œN RECIENTE (ACCIONES ANTES DE SER INTERRUMPIDO) ---\n\
+                         El agente estaba trabajando en esta sesiÃƒÂ³n y fue interrumpido por el nuevo mensaje del usuario que leerÃƒÂ¡s a continuaciÃƒÂ³n. \
+                         AquÃƒÂ­ tienes el registro tÃƒÂ©cnico de las ÃƒÂºltimas acciones y herramientas ejecutadas antes del nuevo mensaje. \
+                         AnalÃƒÂ­zalo para saber quÃƒÂ© archivos modificaste, quÃƒÂ© errores obtuviste y quÃƒÂ© descubriste para no perder el progreso:\n\n{}",
+                        steps_text
+                    )
+                });
+                messages.push(context_msg);
+            }
+        }
+
+        // Cargar el ÃƒÂºltimo mensaje del usuario (el prompt activo)
+        let last_msg = &session_messages[len - 1];
+        let role = if last_msg.role == "agent" { "assistant" } else { "user" };
+        messages.push(json!({ "role": role, "content": last_msg.content }));
+    } else {
+        // Por si acaso el historial estuviese vacÃƒÂ­o (no deberÃƒÂ­a ocurrir)
+        for m in session_messages {
             let role = if m.role == "agent" { "assistant" } else { "user" };
             messages.push(json!({ "role": role, "content": m.content }));
         }
