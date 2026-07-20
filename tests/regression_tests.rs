@@ -168,19 +168,13 @@ mod bug2_titulo_chat_truncado {
     #[test]
     fn test_title_sanitization_for_filename() {
         let title = "Análisis de bugs: Citybound (refactor)";
-        let sanitized: String = title.chars()
-            .map(|c| if c.is_alphanumeric() || c == '-' || c == '_' || c == ' ' { c } else { '_' })
-            .collect::<String>()
-            .trim()
-            .replace(" ", "_")
-            .chars()
-            .take(40)
-            .collect();
+        let sanitized = sanitize_filename(title);
 
-        assert_eq!(sanitized, "Análisis_de_bugs__Citybound__refactor_");
-        // El sanitizado funciona, pero el título original es mejor para mostrar en UI
+        // sanitize_filename usa is_ascii_alphanumeric: caracteres no-ASCII → _
+        assert!(sanitized.chars().all(|c| c.is_ascii()));
+        // á → _, : → _, paréntesis → _
+        assert_eq!(sanitized, "An_lisis_de_bugs__Citybound__refactor_");
     }
-}
 
 // ============================================================================
 // BUG #3: agente no conoce el directorio del proyecto seleccionado
