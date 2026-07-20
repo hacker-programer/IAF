@@ -649,7 +649,7 @@ mod integration_tests {
     async fn test_chat_endpoint_accepts_mode() {
         let client = &*CLIENT;
         let resp = client
-            .post(format!("{}/api/chat", SERVER_URL))
+            .post(format!("{}/api/chat", *SERVER_URL))
             .json(&serde_json::json!({
                 "message": "Test message",
                 "mode": "study",
