@@ -335,8 +335,7 @@ mod bug4_no_pdf_docx_reader {
 // memoria (state.prompts) pueden no estar sincronizados con disco.
 
 #[cfg(test)]
-
-    /// Test: Simula la carga del system prompt local desde disco
+mod bug5_system_prompt_local_no_cargado {
 
     /// Test: Simula la carga del system prompt local desde disco
     #[test]
@@ -384,15 +383,6 @@ mod bug4_no_pdf_docx_reader {
         assert!(system_prompt.contains("Trabaja en Rust nativo con ECS"));
     }
 }
-
-// ============================================================================
-// BUG #6: agente no ve el perfil del usuario
-// ============================================================================
-// El perfil del usuario (UserLearningProfile) se carga en StudyEngine pero
-// NUNCA se inyecta en el system prompt del agente. El agente no sabe la edad,
-// intereses, estilo de aprendizaje, ni condiciones neurológicas del usuario.
-
-#[cfg(test)]
 mod bug6_perfil_usuario_no_inyectado {
     use super::*;
 
