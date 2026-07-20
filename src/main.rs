@@ -1901,6 +1901,63 @@ async fn legacy_prompts_refine(
 // MAIN ÔÇö Doble Puerto
 // ============================================================================
 
+
+// ============================================================================
+// Endpoint de Reporte de Fallos (Usuarios)
+// ============================================================================
+
+#[derive(Deserialize)]
+struct ReportarFalloRequest {
+    informe: String,
+    severidad: Option<String>,
+}
+
+async fn reportar_fallo_usuario(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(payload): Json<ReportarFalloRequest>,
+) -> impl IntoResponse {
+    let _username = match require_auth(&state, &headers).await {
+        Ok(u) => u,
+        Err(e) => return (e.0, Json(json!({ "status": "error", "message": e.1 }))).into_response(),
+    };
+
+    if payload.informe.trim().is_empty() {
+        return (StatusCode::BAD_REQUEST, Json(json!({
+            "status": "error",
+            "message": "El campo 'informe' es obligatorio y no puede estar vacio."
+        }))).into_response();
+    }
+
+    let severidad = payload.severidad.unwrap_or_else(|| "media".to_string());
+    let severidad_validada = match severidad.as_str() {
+        "baja" | "media" | "alta" | "critica" => severidad,
+        _ => "media".to_string(),
+    };
+
+    let report_path = state.base_workspace.join(".config").join("fallos_reportados.json");
+    let mut fallos: Vec<serde_json::Value> = if report_path.exists() {
+        serde_json::from_str(&fs::read_to_string(&report_path).unwrap_or_default()).unwrap_or_default()
+    } else {
+        Vec::new()
+    };
+
+    fallos.push(json!({
+        "timestamp": std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs(),
+        "severidad": severidad_validada,
+        "informe": payload.informe,
+        "reportado_por": _username,
+    }));
+
+    let _ = fs::create_dir_all(report_path.parent().unwrap());
+    let _ = fs::write(&report_path, serde_json::to_string_pretty(&fallos).unwrap_or_default());
+
+    Json(json!({
+        "status": "ok",
+        "message": format!("Fallo reportado con severidad \"{}\". Los ingenieros lo revisaran.", severidad_validada)
+    })).into_response()
+}
+
 fn build_app(state: AppState) -> Router {
     let cors = CorsLayer::permissive();
 
@@ -1964,6 +2021,8 @@ fn build_app(state: AppState) -> Router {
         .route("/api/client/heartbeat", post(client_heartbeat))
         .route("/api/client/poll", post(client_poll))
         .route("/api/client/response", post(client_response))
+        // Reporte de fallos por usuarios
+        .route("/api/reportar-fallo", post(reportar_fallo_usuario))
         .layer(cors)
         .nest_service("/", ServeDir::new("public"))
         .with_state(state)
@@ -2022,7 +2081,7 @@ async fn main() {
         challenge_store: ChallengeStore::new(300),
         session_store: SessionStore::new(),
         study_engine: StudyEngine::new(config_dir.join("study")),
-        sync_store: SyncStore::new(&config_dir),
+        study_engine: StudyEngine::new(base_workspace.clone()),
         connected_clients: Arc::new(Mutex::new(HashMap::new())),
         client_pending_requests: Arc::new(Mutex::new(HashMap::new())),
         client_responses: Arc::new(Mutex::new(HashMap::new())),
