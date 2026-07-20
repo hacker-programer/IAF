@@ -1095,10 +1095,12 @@ async fn chat_endpoint(
             agent.current_session_id = Some(session_id.clone());
 
             let state_bg = state.clone();
+            let state_bg = state.clone();
             let session_bg = session.clone();
             let sid_bg = session_id.clone();
             let uname_bg = username.clone();
             let is_admin_bg = is_admin;
+            let mode_bg = payload.mode.clone().unwrap_or_else(|| "programming".to_string());
             let dk = deepseek_key().to_string();
             let vk = std::env::var("VOYAGE_API_KEY").unwrap_or_default();
             let ok = std::env::var("OPENROUTER_API_KEY").unwrap_or_default();
@@ -1110,6 +1112,9 @@ async fn chat_endpoint(
                     state_bg.clone(),
                     &dk, &vk, &ok,
                     Some(sid_bg.clone()),
+                    &uname_bg,
+                    &mode_bg,
+                ).await;
                 ).await;
 
                 let save_p_bg = get_chat_path(&state_bg, &uname_bg, is_admin_bg, &session_bg.title, &sid_bg);
