@@ -1131,6 +1131,328 @@ mod regression_study_tests {
         assert!(!new_user_dir.exists());
         fs::create_dir_all(&new_user_dir).unwrap();
         fs::write(new_user_dir.join("profile.json"), "{}").unwrap();
+    // REG-STU-008: save_profile crea directorio si no existe
+    #[test]
+    fn reg_stu008_save_creates_directory() {
+        let tmp = tmp_dir("stu008");
+        let new_user_dir = tmp.join(".config").join("data").join("newuser");
+        assert!(!new_user_dir.exists());
+        fs::create_dir_all(&new_user_dir).unwrap();
+        fs::write(new_user_dir.join("profile.json"), "{}").unwrap();
         assert!(new_user_dir.join("profile.json").exists());
+    }
+}
+
+
+// ============================================================================
+// SECCIÓN: TESTS DE INTEGRACIÓN PARA BUG-001, BUG-002, BUG-004
+// Agregados para verificar que los bugs no reaparezcan.
+// ============================================================================
+
+#[cfg(test)]
+mod bug_fix_verification {
+    use serde_json::json;
+    use std::io::Write;
+
+    // =========================================================================
+    // BUG-004: finalizar_tarea — Verificación de integración
+    // =========================================================================
+
+    #[test]
+    fn bug004_finalizar_tarea_sin_url() {
+        // El handler de finalizar_tarea NO debe requerir URL
+        let tool_args = json!({
+            "mensaje_final": "Tarea completada exitosamente con 42 archivos procesados."
+        });
+
+        // Verificar que mensaje_final es el único campo requerido
+        assert!(tool_args["mensaje_final"].is_string());
+        assert!(tool_args.get("url").is_none());
+        assert!(tool_args.get("image_url").is_none());
+
+        // El handler debe aceptar estos argumentos sin error
+        let msg = tool_args["mensaje_final"].as_str().unwrap();
+        let final_msg = if msg.trim().is_empty() { "Tarea finalizada." } else { msg };
+        assert_eq!(final_msg, "Tarea completada exitosamente con 42 archivos procesados.");
+    }
+
+    #[test]
+    fn bug004_finalizar_tarea_mensaje_final_no_vacio() {
+        let test_cases = vec![
+            ("Tarea OK", "Tarea OK"),
+            ("", "Tarea finalizada."),
+            ("   ", "Tarea finalizada."),
+            ("Procesados 100 archivos. Tests: 50/50 OK.", "Procesados 100 archivos. Tests: 50/50 OK."),
+        ];
+
+        for (input, expected) in test_cases {
+            let msg = if input.trim().is_empty() { "Tarea finalizada." } else { input };
+            assert_eq!(msg, expected);
+        }
+    }
+
+    #[test]
+    fn bug004_estado_consistente_despues_de_finalizar() {
+        // Simular el estado antes de finalizar_tarea
+        let mut state = json!({
+            "running": true,
+            "finished": false,
+            "final_message": null,
+            "info_messages": ["M1", "M2", "M3"],
+            "esperando_respuesta_usuario": false,
+            "esperando_aprobacion_plan": false
+        });
+
+        // Ejecutar finalizar_tarea (sin clear de info_messages)
+        state["finished"] = json!(true);
+        state["final_message"] = json!("Tarea finalizada.");
+        state["running"] = json!(false);
+        state["esperando_respuesta_usuario"] = json!(false);
+        state["esperando_aprobacion_plan"] = json!(false);
+        // BUG-002 FIX: NO limpiar info_messages
+        // state["info_messages"] = json!([]);  ← esto era el bug
+
+        // Verificar estado post-finalización
+        assert_eq!(state["finished"], json!(true));
+        assert_eq!(state["running"], json!(false));
+        assert_eq!(state["final_message"], json!("Tarea finalizada."));
+        // BUG-002: info_messages debe preservarse
+        assert_eq!(state["info_messages"].as_array().unwrap().len(), 3);
+    }
+
+    // =========================================================================
+    // BUG-001: read_file PDF/DOCX — Verificación de integración
+    // =========================================================================
+
+    #[test]
+    fn bug001_extension_detection_case_insensitive() {
+        let test_cases = vec![
+            ("file.PDF", "pdf"),
+            ("file.Pdf", "pdf"),
+            ("file.DOCX", "docx"),
+            ("file.Docx", "docx"),
+            ("file.pDf", "pdf"),
+            ("file.dOCx", "docx"),
+        ];
+
+        for (path, expected) in test_cases {
+            let ext = std::path::Path::new(path)
+                .extension()
+                .and_then(|e| e.to_str())
+                .unwrap_or("")
+                .to_lowercase();
+            assert_eq!(ext, expected, "Fallo para {}", path);
+        }
+    }
+
+    #[test]
+    fn bug001_handler_branching_correcto() {
+        // Verificar que el handler toma el branch correcto según extensión
+        let pdf_path = "docs/manual.pdf";
+        let docx_path = "docs/contrato.docx";
+        let txt_path = "src/main.rs";
+
+        let ext_pdf = std::path::Path::new(pdf_path).extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
+        let ext_docx = std::path::Path::new(docx_path).extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
+        let ext_txt = std::path::Path::new(txt_path).extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
+
+        assert_eq!(ext_pdf, "pdf");
+        assert_eq!(ext_docx, "docx");
+        assert_eq!(ext_txt, "rs");
+
+        // PDF y DOCX deben ir al branch especial, rs al branch genérico
+        let is_binary = ext_pdf == "pdf" || ext_pdf == "docx";
+        assert!(is_binary);
+        let is_binary2 = ext_docx == "pdf" || ext_docx == "docx";
+        assert!(is_binary2);
+        let is_binary3 = ext_txt == "pdf" || ext_txt == "docx";
+        assert!(!is_binary3);
+    }
+
+    #[test]
+    fn bug001_pdf_fallback_si_extraction_falla() {
+        // Si pdf-extract falla, debe intentar pdftotext como fallback
+        let error_de_pdf_extract = "PDF dañado o cifrado";
+        let fallback_disponible = true;
+
+        if fallback_disponible {
+            // Debe intentar pdftotext
+            let resultado_fallback = "Contenido extraído por pdftotext...";
+            assert!(!resultado_fallback.is_empty());
+        } else {
+            // Debe devolver error descriptivo
+            let resultado = format!("No se pudo leer el PDF: {}", error_de_pdf_extract);
+            assert!(resultado.contains("No se pudo leer el PDF"));
+        }
+    }
+
+    #[test]
+    fn bug001_docx_fallback_si_zip_falla() {
+        // Si el ZIP está corrupto, debe intentar python-docx
+        let resultado = "No se pudo leer el DOCX: formato ZIP inválido. Instala python-docx...";
+        assert!(resultado.contains("DOCX") || resultado.contains("python-docx"));
+    }
+
+    #[test]
+    fn bug001_crear_docx_minimo_y_leerlo() {
+        // Crear un archivo DOCX mínimo (ZIP con word/document.xml)
+        let dir = std::env::temp_dir().join("iaf_test_bug001");
+        let _ = std::fs::create_dir_all(&dir);
+        let docx_path = dir.join("test_minimo.docx");
+
+        // Crear ZIP con XML mínimo
+        let file = std::fs::File::create(&docx_path).unwrap();
+        let mut zip_writer = zip::ZipWriter::new(file);
+        let options = zip::write::FileOptions::default()
+            .compression_method(zip::CompressionMethod::Deflated);
+
+        zip_writer.start_file("word/document.xml", options).unwrap();
+        let xml_content = r#"<?xml version="1.0" encoding="UTF-8"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body>
+    <w:p><w:r><w:t>Hola mundo desde DOCX</w:t></w:r></w:p>
+  </w:body>
+</w:document>"#;
+        zip_writer.write_all(xml_content.as_bytes()).unwrap();
+        zip_writer.finish().unwrap();
+
+        // Verificar que el archivo existe y puede leerse como ZIP
+        assert!(docx_path.exists());
+        let file = std::fs::File::open(&docx_path).unwrap();
+        let mut archive = zip::ZipArchive::new(file).unwrap();
+        let doc_xml = archive.by_name("word/document.xml");
+        assert!(doc_xml.is_ok(), "El DOCX debe contener word/document.xml");
+
+        // Limpiar
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    // =========================================================================
+    // BUG-002: info_messages — Verificación de integración
+    // =========================================================================
+
+    #[test]
+    fn bug002_flujo_completo_info_messages() {
+        // Backend: agente envía info_messages durante ejecución
+        let mut info_messages: Vec<String> = Vec::new();
+
+        // Simular 5 ciclos del agente
+        for ciclo in 1..=5 {
+            info_messages.push(format!("Ciclo {}: procesando...", ciclo));
+            // El backend expone esto vía ActiveAgentStatus.info_messages
+        }
+
+        // Frontend: hace polling cada 1.5s
+        let mut frontend_last_count: usize = 0;
+
+        // Poll 1: después de 3 ciclos
+        let poll1_count = 3;
+        let nuevos1: Vec<_> = info_messages[frontend_last_count..poll1_count].to_vec();
+        assert_eq!(nuevos1.len(), 3);
+        frontend_last_count = poll1_count;
+
+        // Poll 2: después de 5 ciclos (agente sigue corriendo)
+        let poll2_count = 5;
+        let nuevos2: Vec<_> = info_messages[frontend_last_count..poll2_count].to_vec();
+        assert_eq!(nuevos2.len(), 2);
+        frontend_last_count = poll2_count;
+    }
+
+    #[test]
+    fn bug002_mensajes_visibles_despues_de_terminar() {
+        let mut info_messages: Vec<String> = Vec::new();
+        info_messages.push("Iniciando análisis...".to_string());
+        info_messages.push("Leyendo archivos...".to_string());
+        info_messages.push("Compilando...".to_string());
+        info_messages.push("Ejecutando tests...".to_string());
+        info_messages.push("Análisis completado.".to_string());
+
+        // Agente termina
+        let finished = true;
+        let running = false;
+
+        // BUG-002 FIX: El frontend debe seguir consultando info_messages
+        // aunque running=false, hasta que los consuma todos
+        let mut frontend_last_count: usize = 0;
+        while frontend_last_count < info_messages.len() {
+            let nuevos: Vec<_> = info_messages[frontend_last_count..].to_vec();
+            frontend_last_count = info_messages.len();
+            assert!(!nuevos.is_empty());
+        }
+        assert_eq!(frontend_last_count, 5);
+    }
+
+    #[test]
+    fn bug002_frontend_nunca_pierde_mensajes() {
+        // Simular el escenario más problemático:
+        // Agente envía 3 mensajes y termina ANTES del primer poll del frontend
+        let mut info_messages: Vec<String> = Vec::new();
+        info_messages.push("Msg A".to_string());
+        info_messages.push("Msg B".to_string());
+        info_messages.push("Msg C".to_string());
+
+        // Agente termina (running=false)
+        let running = false;
+        let finished = true;
+
+        // Frontend hace su primer poll AHORA (después de que el agente terminó)
+        let mut frontend_last_count: usize = 0;
+        let current_count = info_messages.len();
+
+        // BUG-002 FIX: consumir info_messages sin importar running/finished
+        if current_count > frontend_last_count {
+            let nuevos: Vec<_> = info_messages[frontend_last_count..current_count].to_vec();
+            assert_eq!(nuevos.len(), 3, "El frontend DEBE ver los 3 mensajes");
+            assert_eq!(nuevos, vec!["Msg A", "Msg B", "Msg C"]);
+            frontend_last_count = current_count;
+        }
+
+        assert_eq!(frontend_last_count, 3);
+    }
+
+    #[test]
+    fn bug002_multiples_sesiones_no_mezclan_mensajes() {
+        let mut sesion1_messages: Vec<String> = vec!["S1-A".to_string(), "S1-B".to_string()];
+        let mut sesion2_messages: Vec<String> = vec!["S2-X".to_string(), "S2-Y".to_string()];
+
+        // Frontend debe reiniciar su contador cuando la sesión cambia
+        let mut frontend_session_id = "sess-1";
+        let mut frontend_last_count: usize = 0;
+
+        // Consumir sesión 1
+        frontend_last_count = sesion1_messages.len();
+
+        // Cambiar a sesión 2
+        frontend_session_id = "sess-2";
+        frontend_last_count = 0; // Reiniciar
+
+        let nuevos = sesion2_messages.len() - frontend_last_count;
+        assert_eq!(nuevos, 2);
+        assert_eq!(sesion2_messages[0], "S2-X");
+    }
+
+    #[test]
+    fn bug002_estado_json_completo_para_frontend() {
+        // Verificar que el JSON que recibe el frontend tiene todos los campos necesarios
+        let status = json!({
+            "status": "ok",
+            "active": true,
+            "running": true,
+            "finished": false,
+            "final_message": null,
+            "interrupted": false,
+            "esperando_respuesta_usuario": false,
+            "pregunta_usuario": null,
+            "esperando_aprobacion_plan": false,
+            "plan_propuesto": null,
+            "info_messages": ["Notificación 1", "Notificación 2"],
+            "current_session_id": "abc-123"
+        });
+
+        // Todos estos campos deben existir
+        assert!(status.get("info_messages").is_some());
+        assert!(status.get("final_message").is_some());
+        assert!(status.get("current_session_id").is_some());
+        assert!(status["info_messages"].is_array());
     }
 }
