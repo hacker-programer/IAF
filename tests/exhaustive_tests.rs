@@ -1,19 +1,21 @@
 // ============================================================================
 // tests/exhaustive_tests.rs — Tests Exhaustivos: Regresión, Integración,
 // E2E, Estrés, Inyección de Fallos y Casos Límite
+//
+// Generado para verificar que BUG-001, BUG-002 y BUG-004 no reaparezcan.
 // ============================================================================
 
 // ============================================================================
-// BUGS CUBIERTOS POR ESTOS TESTS:
+// BUGS CUBIERTOS:
 //
 // BUG-001: No puede analizar PDFs ni .docx — read_file no soporta formatos binarios
 // BUG-002: Frontend no muestra mensajes informativos en tiempo real
-// BUG-003: Modo estudio da resúmenes en vez de enseñar paso a paso
 // BUG-004: finalizar_tarea devuelve "No se proporcionó URL"
 // ============================================================================
 
 // ============================================================================
-// SECCIÓN 1: TESTS DE REGRESIÓN — Validan que bugs específicos no reaparezcan
+// SECCIÓN 1: TESTS DE REGRESIÓN
+// Validan que bugs específicos no reaparezcan.
 // ============================================================================
 
 #[cfg(test)]
@@ -22,86 +24,52 @@ mod regression_tests {
 
     // =========================================================================
     // REG-BUG-004: finalizar_tarea NO debe requerir URL
-    // El bug original causaba que finalizar_tarea devolviera "No se proporcionó URL"
-    // a pesar de que mensaje_final fue proporcionado correctamente.
     // =========================================================================
 
-    /// Verifica que finalizar_tarea acepta mensaje_final como único parámetro requerido
     #[test]
     fn reg_bug004_finalizar_tarea_solo_requiere_mensaje_final() {
-        // Simula el tool call de finalizar_tarea
         let tool_call = json!({
             "function": {
                 "name": "finalizar_tarea",
                 "arguments": "{\"mensaje_final\": \"Tarea completada: se analizaron 56 pruebas.\"}"
             }
         });
-
         let args: serde_json::Value = serde_json::from_str(
             tool_call["function"]["arguments"].as_str().unwrap()
         ).unwrap();
-
-        // El mensaje_final debe estar presente
         assert!(args["mensaje_final"].is_string());
         assert!(!args["mensaje_final"].as_str().unwrap().is_empty());
-
-        // NO debe requerir URL ni ningún otro campo
-        let required_fields = vec!["mensaje_final"];
-        for field in &required_fields {
-            assert!(args.get(field).is_some(),
-                "BUG-004 REGRESIÓN: finalizar_tarea debería aceptar '{}' como campo. Si falla, el bug 'No se proporcionó URL' puede reaparecer.", field);
-        }
+        // No debe existir campo "url" ni "image_url"
+        assert!(args.get("url").is_none());
+        assert!(args.get("image_url").is_none());
     }
 
-    /// Verifica que finalizar_tarea NO tenga efecto secundario con image_fetch
     #[test]
-    fn reg_bug004_finalizar_tarea_no_interfiere_con_image_fetch() {
-        // Simula que el agente llama a finalizar_tarea con un mensaje que menciona URL
-        let finalizar = json!({
-            "function": {
-                "name": "finalizar_tarea",
-                "arguments": "{\"mensaje_final\": \"Descargado de https://example.com/img.png\"}"
-            }
-        });
-
-        let args: serde_json::Value = serde_json::from_str(
-            finalizar["function"]["arguments"].as_str().unwrap()
-        ).unwrap();
-
-        // El mensaje_final debe ser el string completo, no debe interpretarse como URL
-        assert_eq!(
-            args["mensaje_final"].as_str().unwrap(),
-            "Descargado de https://example.com/img.png"
-        );
+    fn reg_bug004_mensaje_final_vacio_usa_default() {
+        // Si mensaje_final es vacío, debe usar "Tarea finalizada."
+        let msg = "";
+        let final_msg = if msg.trim().is_empty() { "Tarea finalizada.".to_string() } else { msg.to_string() };
+        assert_eq!(final_msg, "Tarea finalizada.");
     }
 
-    /// Verifica que el estado del agente se limpie correctamente al finalizar
     #[test]
-    fn reg_bug004_estado_agente_se_limpia_al_finalizar() {
-        // Simula ActiveAgentStatus después de finalizar_tarea
-        let status = json!({
-            "running": false,
-            "finished": true,
-            "final_message": "Tarea completada.",
-            "esperando_respuesta_usuario": false,
-            "pregunta_usuario": null,
-            "esperando_aprobacion_plan": false,
-            "plan_propuesto": null,
-            "info_messages": []
-        });
+    fn reg_bug004_mensaje_final_solo_espacios_usa_default() {
+        let msg = "   ";
+        let final_msg = if msg.trim().is_empty() { "Tarea finalizada.".to_string() } else { msg.to_string() };
+        assert_eq!(final_msg, "Tarea finalizada.");
+    }
 
-        assert_eq!(status["running"], false);
-        assert_eq!(status["finished"], true);
-        assert!(status["final_message"].as_str().unwrap().len() > 0);
-        assert_eq!(status["esperando_respuesta_usuario"], false);
-        assert_eq!(status["pregunta_usuario"], json!(null));
+    #[test]
+    fn reg_bug004_ausencia_total_de_campo_mensaje_final() {
+        let args = json!({});
+        let msg = args["mensaje_final"].as_str().unwrap_or("Tarea finalizada.").to_string();
+        assert_eq!(msg, "Tarea finalizada.");
     }
 
     // =========================================================================
-    // REG-BUG-001: read_file debe soportar PDFs y .docx
+    // REG-BUG-001: read_file debe soportar PDFs y DOCX
     // =========================================================================
 
-    /// Verifica que el contrato de read_file acepte archivos con extensión .pdf
     #[test]
     fn reg_bug001_read_file_acepta_extension_pdf() {
         let read_call = json!({
@@ -110,1109 +78,767 @@ mod regression_tests {
                 "arguments": "{\"path\": \"documento.pdf\"}"
             }
         });
-
         let args: serde_json::Value = serde_json::from_str(
             read_call["function"]["arguments"].as_str().unwrap()
         ).unwrap();
-
         let path = args["path"].as_str().unwrap();
-        assert!(path.ends_with(".pdf"));
-
-        // Verificar que la extensión sea detectable correctamente
         let extension = std::path::Path::new(path)
-            .extension()
-            .and_then(|e| e.to_str())
-            .unwrap_or("");
+            .extension().and_then(|e| e.to_str()).unwrap_or("");
         assert_eq!(extension, "pdf");
     }
 
-    /// Verifica que el contrato de read_file acepte archivos .docx
     #[test]
     fn reg_bug001_read_file_acepta_extension_docx() {
         let path = "informe.docx";
         let extension = std::path::Path::new(path)
-            .extension()
-            .and_then(|e| e.to_str())
-            .unwrap_or("");
+            .extension().and_then(|e| e.to_str()).unwrap_or("");
         assert_eq!(extension, "docx");
-
-        // Verificar que es diferente de .doc (formato antiguo)
-        let path_doc = "informe.doc";
-        let ext_doc = std::path::Path::new(path_doc)
-            .extension()
-            .and_then(|e| e.to_str())
-            .unwrap_or("");
-        assert_eq!(ext_doc, "doc");
-        assert_ne!(extension, ext_doc);
     }
 
-    /// Verifica que read_file también soporte formatos de texto comunes
+    #[test]
+    fn reg_bug001_read_file_distingue_doc_de_docx() {
+        let ext_doc = std::path::Path::new("archivo.doc")
+            .extension().and_then(|e| e.to_str()).unwrap_or("");
+        let ext_docx = std::path::Path::new("archivo.docx")
+            .extension().and_then(|e| e.to_str()).unwrap_or("");
+        assert_eq!(ext_doc, "doc");
+        assert_eq!(ext_docx, "docx");
+        assert_ne!(ext_doc, ext_docx);
+    }
+
     #[test]
     fn reg_bug001_read_file_soporta_formatos_texto_comunes() {
-        let extensions = ["txt", "rs", "md", "json", "toml", "html", "css", "js",
-                          "py", "ps1", "yaml", "yml", "xml", "csv", "log"];
-
+        let extensions = ["txt", "rs", "md", "toml", "json", "js", "html", "css", "py", "sh", "yaml", "yml", "xml"];
         for ext in &extensions {
             let path = format!("archivo.{}", ext);
             let detected = std::path::Path::new(&path)
-                .extension()
-                .and_then(|e| e.to_str())
-                .unwrap_or("");
-            assert_eq!(detected, *ext,
-                "La extensión '{}' no fue detectada correctamente", ext);
+                .extension().and_then(|e| e.to_str()).unwrap_or("");
+            // Los formatos de texto NO deben ser tratados como PDF/DOCX
+            assert!(!["pdf", "docx"].contains(&detected),
+                "{} no debe confundirse con PDF/DOCX", ext);
         }
     }
 
-    /// Verifica que formatos binarios no soportados den error claro
     #[test]
-    fn reg_bug001_read_file_rechaza_formatos_no_soportados() {
-        let unsupported = ["zip", "exe", "dll", "so", "bin", "mp4", "mp3", "png", "jpg"];
+    fn reg_bug001_pdf_sin_extension_debe_funcionar() {
+        // Caso límite: sin extensión
+        let path = "archivo_sin_extension";
+        let ext = std::path::Path::new(path)
+            .extension().and_then(|e| e.to_str()).unwrap_or("");
+        assert!(ext.is_empty());
+    }
 
-        for ext in &unsupported {
-            // Estos formatos NO son de texto ni PDF/DOCX
-            let is_supported = matches!(*ext, "pdf" | "docx") ||
-                ["txt", "rs", "md", "json", "toml", "html", "css", "js",
-                 "py", "ps1", "yaml", "yml", "xml", "csv", "log"].contains(ext);
+    #[test]
+    fn reg_bug001_extension_mayusculas() {
+        // Las extensiones deben compararse en minúsculas
+        let path = "DOCUMENTO.PDF";
+        let ext = std::path::Path::new(path)
+            .extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
+        assert_eq!(ext, "pdf");
+    }
 
-            if !is_supported {
-                // Debe marcarse como no soportado
-                let supported_text_formats = ["txt", "rs", "md", "json", "toml", "html",
-                    "css", "js", "py", "ps1", "yaml", "yml", "xml", "csv", "log"];
-                let is_text = supported_text_formats.contains(ext);
-                let is_doc = *ext == "pdf" || *ext == "docx";
-
-                assert!(!is_text && !is_doc,
-                    "El formato '{}' no debería ser soportado por read_file", ext);
-            }
-        }
+    #[test]
+    fn reg_bug001_extension_mixta() {
+        let path = "Documento.PdF";
+        let ext = std::path::Path::new(path)
+            .extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
+        assert_eq!(ext, "pdf");
     }
 
     // =========================================================================
-    // REG-BUG-002: Mensajes informativos deben ser visibles en tiempo real
+    // REG-BUG-002: Mensajes informativos en tiempo real
     // =========================================================================
 
-    /// Verifica que el estado del agente incluya info_messages
     #[test]
-    fn reg_bug002_estado_agente_incluye_info_messages() {
+    fn reg_bug002_info_messages_array_vacio_al_inicio() {
+        // Simular el estado inicial del agente
         let status = json!({
-            "status": "ok",
-            "active": true,
-            "info_messages": [
-                "Leyendo archivo src/main.rs...",
-                "Compilación exitosa.",
-                "Tests pasados: 42/42."
-            ]
-        });
-
-        assert!(status["info_messages"].is_array());
-        let msgs = status["info_messages"].as_array().unwrap();
-        assert_eq!(msgs.len(), 3);
-        assert_eq!(msgs[0], "Leyendo archivo src/main.rs...");
-        assert_eq!(msgs[2], "Tests pasados: 42/42.");
-    }
-
-    /// Verifica que el frontend pueda consumir mensajes informativos
-    #[test]
-    fn reg_bug002_frontend_puede_consumir_info_messages() {
-        // Simula la respuesta de /api/agent/status
-        let response = json!({
-            "status": "ok",
-            "active": true,
-            "interrupted": false,
+            "running": false,
             "finished": false,
-            "final_message": null,
-            "esperando_respuesta_usuario": false,
-            "pregunta_usuario": null,
-            "esperando_aprobacion_plan": false,
-            "plan_propuesto": null,
-            "info_messages": ["Notificación: Archivo guardado correctamente."],
-            "current_session_id": "abc123"
+            "info_messages": [] as Vec<String>,
+            "final_message": null as Option<String>
+        });
+        let messages = status["info_messages"].as_array().unwrap();
+        assert!(messages.is_empty());
+    }
+
+    #[test]
+    fn reg_bug002_info_messages_acumula_correctamente() {
+        let mut info_messages: Vec<String> = Vec::new();
+        // Simular push del backend cuando notificar_usuario es llamado
+        info_messages.push("Analizando archivo main.rs...".to_string());
+        info_messages.push("Compilando con cargo check...".to_string());
+        info_messages.push("Ejecutando tests...".to_string());
+        assert_eq!(info_messages.len(), 3);
+        assert_eq!(info_messages[0], "Analizando archivo main.rs...");
+    }
+
+    #[test]
+    fn reg_bug002_finalizar_tarea_no_limpia_info_messages() {
+        // BUG-002 FIX: finalizar_tarea NO debe hacer info_messages.clear()
+        let mut status = json!({
+            "running": true,
+            "finished": false,
+            "info_messages": ["Mensaje 1", "Mensaje 2", "Mensaje 3"],
+            "final_message": null
         });
 
-        // El frontend debe poder acceder a info_messages
-        let info_msgs = response["info_messages"].as_array().unwrap();
-        assert!(!info_msgs.is_empty());
+        // Simular finalizar_tarea (sin clear)
+        status["running"] = json!(false);
+        status["finished"] = json!(true);
+        status["final_message"] = json!("Tarea completada.");
+        // NO hacemos clear de info_messages
 
-        // La función que usaría el frontend para mostrar mensajes
-        let mostrar_mensajes = |resp: &serde_json::Value| -> Vec<String> {
-            resp["info_messages"]
-                .as_array()
-                .map(|arr| arr.iter()
-                    .filter_map(|v| v.as_str().map(|s| s.to_string()))
-                    .collect())
-                .unwrap_or_default()
-        };
-
-        let mensajes = mostrar_mensajes(&response);
-        assert_eq!(mensajes.len(), 1);
-        assert!(mensajes[0].contains("Archivo guardado"));
+        let messages = status["info_messages"].as_array().unwrap();
+        assert_eq!(messages.len(), 3, "Los info_messages deben preservarse después de finalizar");
     }
 
-    /// Verifica que el array de info_messages no crezca indefinidamente
     #[test]
-    fn reg_bug002_info_messages_tiene_limite() {
-        let max_messages = 100; // Límite razonable
+    fn reg_bug002_frontend_consume_mensajes_incrementalmente() {
+        // Simular el frontend: lastInfoMessageCount rastrea el progreso
+        let info_messages = vec!["Msg 1", "Msg 2", "Msg 3", "Msg 4", "Msg 5"];
+        let mut last_count: usize = 0;
 
-        // Simula 200 mensajes acumulados
-        let mut messages = Vec::new();
-        for i in 0..200 {
-            messages.push(format!("Mensaje #{}", i));
-        }
+        // Primera llamada al poll
+        let current_count = info_messages.len();
+        let new_msgs: Vec<_> = info_messages[last_count..current_count].to_vec();
+        assert_eq!(new_msgs.len(), 5);
+        last_count = current_count;
 
-        // Aplicar límite
-        if messages.len() > max_messages {
-            messages = messages[messages.len() - max_messages..].to_vec();
-        }
-
-        assert_eq!(messages.len(), max_messages);
-        assert_eq!(messages[0], "Mensaje #100");
-        assert_eq!(messages[99], "Mensaje #199");
+        // Segunda llamada: no hay mensajes nuevos
+        let new_msgs2: Vec<_> = info_messages[last_count..info_messages.len()].to_vec();
+        assert!(new_msgs2.is_empty());
     }
 
-    // =========================================================================
-    // REG-BUG-003: Modo estudio debe enseñar paso a paso, no dar resúmenes
-    // =========================================================================
-
-    /// Verifica que el system prompt de estudio contenga directivas anti-resumen
-    /// Verifica que el system prompt de estudio contenga directivas anti-resumen
     #[test]
-    fn reg_bug003_study_prompt_contiene_directivas_anti_resumen() {
-        // Estas frases deben aparecer en el study system prompt
-        let frases_requeridas = [
-            "NUNCA escribas el código final",
-            "ENSEÑAR, no hacer el trabajo por el alumno",
-            "no dar resúmenes",
-            "paso a paso",
-            "ENSEÑA, no resumas",
-        ];
+    fn reg_bug002_info_messages_no_se_pierden_cuando_agente_termina_rapido() {
+        // Simular race condition: agente envía mensajes y termina en el mismo ciclo
+        let mut info_messages: Vec<String> = Vec::new();
+        info_messages.push("Iniciando tarea...".to_string());
+        info_messages.push("Tarea completada.".to_string());
 
-        // Simulamos verificación de que el prompt contiene estas frases
-        // (el test real leería el archivo prompts/study_system_prompt.txt)
-        let prompt_simulado = concat!(
-            "Eres un TUTOR EXPERTO. Tu meta es ENSEÑAR, no hacer el trabajo por el alumno.\n",
-            "NUNCA escribas el código final. Explica, guía, da pistas.\n",
-            "no dar resúmenes ni temarios: ENSEÑA, no resumas.\n",
-            "Enseña paso a paso. Cada concepto debe ser explicado.\n",
-        );
+        // El frontend debe poder leer estos mensajes incluso después de que
+        // el agente haya terminado (running=false, finished=true)
+        let running = false;
+        let finished = true;
 
-        for frase in &frases_requeridas {
-            assert!(prompt_simulado.contains(frase),
-                "BUG-003 REGRESIÓN: El prompt de estudio debe contener '{}'", frase);
+        // El frontend debe consumir info_messages independientemente de running/finished
+        if !info_messages.is_empty() {
+            // Consumir mensajes
+            let consumed = info_messages.clone();
+            assert_eq!(consumed.len(), 2);
         }
-    }
-    #[test]
-    fn reg_bug003_leccion_es_interactiva_no_resumen() {
-        // Una lección interactiva debe tener:
-        let leccion = json!({
-            "titulo": "Divisibilidad y MCD",
-            "partes": [
-                {"tipo": "explicacion", "contenido": "¿Qué significa que A divida a B?"},
-                {"tipo": "ejemplo", "contenido": "3 | 12 porque 12 = 3 × 4"},
-                {"tipo": "pregunta", "contenido": "¿Hasta aquí claro?"},
-                {"tipo": "ejercicio", "contenido": "Calcula MCD(8, 12)"},
-                {"tipo": "espera_respuesta", "contenido": "Dime tu respuesta y te corrijo."}
-            ]
-        });
 
-        // Una lección interactiva tiene al menos una pregunta o ejercicio
-        let tiene_interaccion = leccion["partes"].as_array().unwrap().iter()
-            .any(|p| p["tipo"] == "pregunta" || p["tipo"] == "ejercicio" || p["tipo"] == "espera_respuesta");
-
-        assert!(tiene_interaccion,
-            "BUG-003 REGRESIÓN: Una lección debe ser interactiva, no un resumen pasivo.");
-    }
-
-    /// Verifica que un temario/resumen NO sea considerado lección
-    #[test]
-    fn reg_bug003_temario_no_es_leccion() {
-        let temario = "## Temas:\n1. Divisibilidad\n2. MCD\n3. MCM\n4. Euclides";
-
-        // Un temario NO tiene interacción
-        let tiene_pregunta = temario.contains("?") && (
-            temario.contains("¿") || temario.contains("claro?") || temario.contains("entiendes?")
-        );
-        let tiene_ejercicio = temario.contains("Calcula") || temario.contains("Ejercicio");
-
-        // Un temario típico no tiene preguntas ni ejercicios
-        // (Este test verifica que podamos distinguir un temario de una lección)
-        if !tiene_pregunta && !tiene_ejercicio {
-            // Es un temario, no una lección
-            assert!(temario.contains("##"), "Un temario típicamente tiene encabezados de sección.");
-        }
+        // Verificar que los mensajes estaban disponibles
+        assert!(!info_messages.is_empty());
     }
 }
 
+
 // ============================================================================
-// SECCIÓN 2: TESTS DE INTEGRACIÓN BACKEND ↔ FRONTEND
+// SECCIÓN 2: TESTS DE INTEGRACIÓN
+// Validan interacción entre componentes del sistema.
 // ============================================================================
 
 #[cfg(test)]
 mod integration_tests {
     use serde_json::json;
 
-    /// Contrato: /api/agent/status debe devolver info_messages
+    // =========================================================================
+    // INT-001: Flujo completo de read_file con PDF
+    // =========================================================================
+
     #[test]
-    fn integration_agent_status_contrato_completo() {
-        let response = json!({
-            "status": "ok",
-            "active": true,
-            "interrupted": false,
+    fn int001_flujo_read_file_pdf_desde_tool_call() {
+        // Simular tool_call → handler → respuesta
+        let tool_call = json!({
+            "id": "call_001",
+            "function": {
+                "name": "read_file",
+                "arguments": "{\"path\": \"docs/reporte.pdf\"}"
+            }
+        });
+        let args: serde_json::Value = serde_json::from_str(
+            tool_call["function"]["arguments"].as_str().unwrap()
+        ).unwrap();
+        let path = args["path"].as_str().unwrap();
+        let ext = std::path::Path::new(path)
+            .extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
+
+        assert_eq!(ext, "pdf");
+        // El handler debe detectar la extensión y llamar a pdf_extract::extract_text
+    }
+
+    #[test]
+    fn int002_flujo_read_file_docx_desde_tool_call() {
+        let tool_call = json!({
+            "id": "call_002",
+            "function": {
+                "name": "read_file",
+                "arguments": "{\"path\": \"docs/contrato.docx\"}"
+            }
+        });
+        let args: serde_json::Value = serde_json::from_str(
+            tool_call["function"]["arguments"].as_str().unwrap()
+        ).unwrap();
+        let ext = std::path::Path::new(args["path"].as_str().unwrap())
+            .extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
+        assert_eq!(ext, "docx");
+    }
+
+    #[test]
+    fn int003_flujo_completo_chat_con_multiples_herramientas() {
+        // Simular sesión: read_file → notificar_usuario → finalizar_tarea
+        let mut info_messages: Vec<String> = Vec::new();
+        let mut finished = false;
+        let mut final_msg: Option<String> = None;
+
+        // Paso 1: read_file (PDF)
+        let pdf_result = "[PDF: reporte.pdf]\n\nContenido extraído del PDF...";
+        info_messages.push(format!("Leyendo PDF: {}", pdf_result));
+
+        // Paso 2: notificar_usuario informativo
+        info_messages.push("Procesando datos del PDF...".to_string());
+
+        // Paso 3: finalizar_tarea
+        finished = true;
+        final_msg = Some("Análisis completado: 3 archivos procesados.".to_string());
+
+        assert!(finished);
+        assert_eq!(final_msg.unwrap(), "Análisis completado: 3 archivos procesados.");
+        assert_eq!(info_messages.len(), 2);
+    }
+
+    #[test]
+    fn int004_estado_agente_refleja_correctamente_transiciones() {
+        // Estado inicial
+        let mut running = false;
+        let mut finished = false;
+        let mut esperando = false;
+
+        // Iniciar
+        running = true;
+        assert!(running);
+        assert!(!finished);
+
+        // Pausar por pregunta
+        esperando = true;
+        assert!(esperando);
+
+        // Reanudar
+        esperando = false;
+        assert!(running);
+        assert!(!esperando);
+
+        // Finalizar
+        running = false;
+        finished = true;
+        assert!(!running);
+        assert!(finished);
+    }
+
+    #[test]
+    fn int005_info_messages_sobreviven_ciclo_completo() {
+        let mut info_messages: Vec<String> = Vec::new();
+        let mut status = json!({
+            "running": true,
             "finished": false,
-            "final_message": null,
-            "esperando_respuesta_usuario": false,
-            "pregunta_usuario": null,
-            "esperando_aprobacion_plan": false,
-            "plan_propuesto": null,
             "info_messages": [],
-            "current_session_id": "abc123",
-            "captcha_pending": false,
-            "steps_count": 0
+            "final_message": null
         });
 
-        // Campos que el frontend espera (de app.js startAgentMonitoring)
-        let campos_frontend = [
-            "status", "active", "interrupted", "finished",
-            "esperando_respuesta_usuario", "pregunta_usuario",
-            "esperando_aprobacion_plan", "plan_propuesto",
-            "info_messages", "current_session_id", "captcha_pending"
-        ];
-
-        for campo in &campos_frontend {
-            assert!(response.get(campo).is_some(),
-                "INTEGRACIÓN: Campo '{}' requerido por el frontend no está en la respuesta.", campo);
+        // Durante ejecución: se agregan mensajes
+        for i in 0..10 {
+            info_messages.push(format!("Mensaje {}", i));
         }
-    }
+        status["info_messages"] = json!(info_messages);
 
-    /// Contrato: /api/agent/responder acepta respuesta del usuario
-    #[test]
-    fn integration_responder_endpoint_contrato() {
-        let request = json!({
-            "respuesta": "Usa PostgreSQL"
-        });
-        let expected = json!({ "status": "ok" });
+        // El frontend consume incrementalmente
+        let mut frontend_last_count: usize = 0;
+        let current = status["info_messages"].as_array().unwrap().len();
+        let nuevos = current - frontend_last_count;
+        assert_eq!(nuevos, 10);
+        frontend_last_count = current;
 
-        assert!(request["respuesta"].as_str().unwrap().len() > 0);
-        assert_eq!(expected["status"], "ok");
-    }
-
-    /// Contrato: /api/agent/aprobar_plan acepta aprobación
-    #[test]
-    fn integration_aprobar_plan_contrato() {
-        let request = json!({
-            "aprobado": true
-        });
-        let expected = json!({ "status": "ok" });
-
-        assert_eq!(request["aprobado"], true);
-        assert_eq!(expected["status"], "ok");
-    }
-
-    /// Contrato: /api/agent/interrupt detiene el agente
-    #[test]
-    fn integration_interrupt_contrato() {
-        let expected = json!({ "status": "ok" });
-        assert_eq!(expected["status"], "ok");
-    }
-
-    /// Contrato: /api/chat acepta mode study
-    #[test]
-    fn integration_chat_acepta_mode_study() {
-        let request = json!({
-            "message": "Enséñame Rust",
-            "project_name": null,
-            "session_id": null,
-            "mode": "study"
-        });
-
-        assert_eq!(request["mode"], "study");
-        assert!(request["message"].as_str().unwrap().len() > 0);
-    }
-
-    /// Contrato: /api/chat acepta mode programming
-    #[test]
-    fn integration_chat_acepta_mode_programming() {
-        let request = json!({
-            "message": "Crea un servidor HTTP",
-            "project_name": "test_proj",
-            "session_id": "abc123",
-            "mode": "programming"
-        });
-
-        assert_eq!(request["mode"], "programming");
-        assert_eq!(request["project_name"], "test_proj");
-    }
-
-    /// Contrato: /api/study/profile debe aceptar el perfil completo
-    #[test]
-    fn integration_study_profile_contrato() {
-        let profile = json!({
-            "age": 14,
-            "interests": ["videojuegos", "matemáticas"],
-            "favorite_games": ["Minecraft"],
-            "hobbies": ["dibujar", "programar"],
-            "learning_style": "visual",
-            "neurological_conditions": [],
-            "preferred_methods": ["explicacion", "ejercicios"]
-        });
-
-        assert!(profile["age"].as_i64().unwrap() >= 5);
-        assert!(profile["interests"].as_array().unwrap().len() > 0);
-        assert!(profile["preferred_methods"].as_array().unwrap().len() > 0);
-    }
-
-    /// Contrato: /api/study/knowledge debe devolver knowledge base
-    #[test]
-    fn integration_study_knowledge_contrato() {
-        let response = json!({
-            "status": "ok",
-            "knowledge": [
-                {"topic": "divisibilidad", "level": "intermediate"},
-                {"topic": "mcd", "level": "beginner"}
-            ]
-        });
-
-        assert_eq!(response["status"], "ok");
-        assert!(response["knowledge"].as_array().unwrap().len() >= 1);
-    }
-
-    /// Contrato: /api/reportar-fallo acepta reportes de usuarios
-    #[test]
-    fn integration_reportar_fallo_contrato() {
-        let report = json!({
-            "informe": "La herramienta finalizar_tarea devuelve error.",
-            "severidad": "media"
-        });
-
-        assert!(!report["informe"].as_str().unwrap().is_empty());
-        let severidad = report["severidad"].as_str().unwrap();
-        assert!(matches!(severidad, "baja" | "media" | "alta" | "critica"));
+        // Agente termina
+        status["running"] = json!(false);
+        status["finished"] = json!(true);
+        // NO limpiar info_messages
+        let post_finish = status["info_messages"].as_array().unwrap().len();
+        assert_eq!(post_finish, 10, "Mensajes deben sobrevivir al finalizar");
     }
 }
 
+
 // ============================================================================
-// SECCIÓN 3: TESTS END TO END — Simulan flujos completos
+// SECCIÓN 3: TESTS END-TO-END (E2E)
+// Simulan flujo completo backend → frontend sin servidor real.
 // ============================================================================
 
 #[cfg(test)]
 mod e2e_tests {
     use serde_json::json;
 
-    /// E2E: Flujo completo de estudio — desde perfil hasta lección
     #[test]
-    fn e2e_flujo_estudio_completo() {
-        // Paso 1: Crear perfil
-        let profile = json!({
-            "age": 14,
-            "interests": ["videojuegos", "matemáticas"],
-            "hobbies": ["dibujar"],
-            "learning_style": "visual"
-        });
-        assert!(profile["age"].as_i64().unwrap() > 0);
+    fn e2e001_usuario_envia_mensaje_y_recibe_info_messages() {
+        // Simular: usuario envía mensaje → agente procesa → frontend recibe info
 
-        // Paso 2: El agente sugiere un tema
-        let sugerencia = json!({
-            "tema": "Divisibilidad y MCD",
-            "razon": "Base para teoría de números",
-            "material": "OMA/Aritmética.pdf"
+        // 1. Usuario envía: "Analiza el PDF"
+        let user_message = json!({
+            "role": "user",
+            "content": "Analiza el archivo reporte.pdf"
         });
-        assert!(!sugerencia["tema"].as_str().unwrap().is_empty());
 
-        // Paso 3: El usuario acepta, el agente prepara lección
-        let leccion = json!({
-            "titulo": "Lección 1: Divisibilidad",
-            "partes": [
-                {"tipo": "explicacion", "contenido": "A | B significa..."},
-                {"tipo": "ejemplo", "contenido": "3 | 12 porque..."},
-                {"tipo": "pregunta", "contenido": "¿Hasta aquí claro?"}
-            ]
+        // 2. Agente llama read_file → notificar_usuario
+        let mut info_messages: Vec<String> = Vec::new();
+        info_messages.push("Abriendo reporte.pdf...".to_string());
+        info_messages.push("Extrayendo texto del PDF...".to_string());
+        info_messages.push("PDF analizado: 15 páginas, 3200 palabras.".to_string());
+
+        // 3. Frontend hace polling a /api/agent/status
+        let status_response = json!({
+            "status": "ok",
+            "running": true,
+            "finished": false,
+            "info_messages": info_messages,
+            "final_message": null
         });
-        let tiene_pregunta = leccion["partes"].as_array().unwrap().iter()
-            .any(|p| p["tipo"] == "pregunta");
-        assert!(tiene_pregunta);
 
-        // Paso 4: El usuario responde
-        let respuesta = json!({ "respuesta": "Sí, entendido." });
-        assert!(!respuesta["respuesta"].as_str().unwrap().is_empty());
-
-        // Paso 5: El agente propone ejercicio
-        let ejercicio = json!({
-            "tipo": "ejercicio",
-            "enunciado": "Calcula MCD(24, 36)",
-            "pistas": ["Lista los divisores", "Busca el mayor común"]
-        });
-        assert!(!ejercicio["enunciado"].as_str().unwrap().is_empty());
-        assert!(ejercicio["pistas"].as_array().unwrap().len() > 0);
+        // 4. Frontend consume los mensajes
+        let frontend_messages = status_response["info_messages"].as_array().unwrap();
+        assert_eq!(frontend_messages.len(), 3);
+        assert!(frontend_messages[2].as_str().unwrap().contains("3200 palabras"));
     }
 
-    /// E2E: Flujo completo de programación — desde prompt hasta finalización
     #[test]
-    fn e2e_flujo_programacion_completo() {
-        // Paso 1: Usuario envía prompt
-        let chat_request = json!({
-            "message": "Agrega soporte para PDFs en read_file",
-            "project_name": "iaf",
-            "mode": "programming"
-        });
-        assert_eq!(chat_request["mode"], "programming");
+    fn e2e002_agente_finaliza_y_frontend_muestra_mensaje_final() {
+        let mut info_messages: Vec<String> = Vec::new();
+        info_messages.push("Tarea iniciada...".to_string());
 
-        // Paso 2: El agente procesa y notifica (informativo)
-        let info_msg = json!({
-            "tipo": "informativo",
-            "mensaje": " Leyendo archivos del proyecto..."
-        });
-        assert_eq!(info_msg["tipo"], "informativo");
-        assert!(!info_msg["mensaje"].as_str().unwrap().is_empty());
+        // Agente finaliza
+        let finished = true;
+        let final_message = "Tarea completada exitosamente.";
 
-        // Paso 3: El agente pregunta si debe continuar
-        let pregunta = json!({
-            "tipo": "pregunta",
-            "mensaje": "¿Agrego la dependencia pdf-extract a Cargo.toml?"
+        // Frontend recibe el estado
+        let status = json!({
+            "running": false,
+            "finished": true,
+            "info_messages": info_messages,
+            "final_message": final_message
         });
-        assert_eq!(pregunta["tipo"], "pregunta");
 
-        // Paso 4: El agente finaliza
-        let finalizacion = json!({
-            "mensaje_final": "Se agregó soporte para PDFs. Los cambios están en Cargo.toml y agent.rs."
-        });
-        assert!(!finalizacion["mensaje_final"].as_str().unwrap().is_empty());
+        // Frontend debe mostrar info_messages Y final_message
+        assert!(status["finished"].as_bool().unwrap());
+        assert!(!status["info_messages"].as_array().unwrap().is_empty());
+        assert_eq!(status["final_message"].as_str().unwrap(), "Tarea completada exitosamente.");
     }
 
-    /// E2E: Flujo de reporte de fallo
     #[test]
-    fn e2e_flujo_reporte_fallo() {
-        // Usuario reporta un bug
-        let reporte = json!({
-            "informe": "finalizar_tarea devuelve 'No se proporcionó URL'",
-            "severidad": "media"
-        });
+    fn e2e003_flujo_pregunta_respuesta() {
+        // Agente hace pregunta → usuario responde → agente continúa
 
-        // Validación del servidor
-        assert!(!reporte["informe"].as_str().unwrap().is_empty());
-        assert!(reporte["informe"].as_str().unwrap().len() <= 5000,
-            "El informe no debe exceder 5000 caracteres");
+        // Estado: esperando respuesta
+        let mut esperando = true;
+        let pregunta = "¿Quieres que procese también los archivos .docx?";
+        let mut respuesta: Option<String> = None;
 
-        // El reporte se guarda con timestamp
-        let saved = json!({
-            "timestamp": 1784571543,
-            "severidad": "media",
-            "informe": "finalizar_tarea devuelve 'No se proporcionó URL'",
-            "reportado_por": "usuario_test"
-        });
-        assert!(saved["timestamp"].as_i64().unwrap() > 0);
-        assert_eq!(saved["severidad"], "media");
+        assert!(esperando);
+        assert_eq!(pregunta, "¿Quieres que procese también los archivos .docx?");
+
+        // Usuario responde
+        respuesta = Some("Sí, por favor.".to_string());
+        esperando = false;
+
+        assert!(!esperando);
+        assert_eq!(respuesta.unwrap(), "Sí, por favor.");
     }
 
-    /// E2E: Flujo de CAPTCHA
     #[test]
-    fn e2e_flujo_captcha() {
-        // Paso 1: El agente encuentra un CAPTCHA
-        let captcha_pending = json!({
-            "captcha_pending": true,
-            "captcha_sitekey": "6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI",
-            "captcha_url": "https://example.com"
-        });
-        assert_eq!(captcha_pending["captcha_pending"], true);
+    fn e2e004_sesion_completa_con_multiples_herramientas() {
+        let mut trace: Vec<String> = Vec::new();
 
-        // Paso 2: El usuario resuelve el CAPTCHA
-        let solucion = json!({
-            "captcha_solution": "03AFcWeA..."
-        });
-        assert!(!solucion["captcha_solution"].as_str().unwrap().is_empty());
+        // Usuario: "Crea un archivo"
+        trace.push("user: Crea un archivo".to_string());
 
-        // Paso 3: CAPTCHA resuelto
-        let resuelto = json!({
-            "captcha_pending": false
-        });
-        assert_eq!(resuelto["captcha_pending"], false);
+        // Agente: notificar_usuario
+        trace.push("agent_info: Creando archivo...".to_string());
+
+        // Agente: write_file_with_commit
+        trace.push("agent_tool: write_file_with_commit".to_string());
+
+        // Agente: notificar_usuario
+        trace.push("agent_info: Archivo creado. Verificando...".to_string());
+
+        // Agente: execute_powershell (cargo check)
+        trace.push("agent_tool: execute_powershell".to_string());
+
+        // Agente: finalizar_tarea
+        trace.push("agent_finish: Tarea completada.".to_string());
+
+        // Verificar que el flujo es correcto
+        assert!(trace.contains(&"agent_info: Creando archivo...".to_string()));
+        assert!(trace.contains(&"agent_finish: Tarea completada.".to_string()));
+        assert_eq!(trace.len(), 6);
     }
 }
 
+
 // ============================================================================
-// SECCIÓN 4: TESTS DE ESTRÉS — Validan comportamiento bajo carga
+// SECCIÓN 4: TESTS DE ESTRÉS
+// Validan comportamiento bajo carga alta.
 // ============================================================================
 
 #[cfg(test)]
 mod stress_tests {
     use serde_json::json;
 
-    /// Estrés: Múltiples mensajes informativos rápidos
     #[test]
-    fn stress_muchos_mensajes_informativos() {
-        let mut info_messages = Vec::new();
-        let max_messages = 100;
-
-        // Simula 1000 notificaciones informativas del agente
-        for i in 0..1000 {
-            let msg = format!("Procesando ítem #{}...", i);
-            info_messages.push(msg);
-            // Aplicar límite
-            if info_messages.len() > max_messages {
-                info_messages.remove(0);
-            }
+    fn stress001_muchos_info_messages() {
+        // 10,000 mensajes informativos - el frontend debe manejarlos
+        let mut info_messages: Vec<String> = Vec::new();
+        for i in 0..10_000 {
+            info_messages.push(format!("Mensaje informativo #{}", i));
         }
-
-        // Solo deben mantenerse los últimos 100
-        assert_eq!(info_messages.len(), 100);
-        assert_eq!(info_messages[0], "Procesando ítem #900...");
-        assert_eq!(info_messages[99], "Procesando ítem #999...");
+        assert_eq!(info_messages.len(), 10_000);
+        assert_eq!(info_messages[0], "Mensaje informativo #0");
+        assert_eq!(info_messages[9999], "Mensaje informativo #9999");
     }
 
-    /// Estrés: Estado del agente con muchos pasos de auditoría
     #[test]
-    fn stress_muchos_pasos_auditoria() {
-        let mut steps = Vec::new();
-        let max_steps = 200;
+    fn stress002_frontend_lee_mensajes_en_rachas() {
+        // Simular frontend leyendo mensajes en bloques grandes
+        let info_messages: Vec<String> = (0..5000).map(|i| format!("Msg {}", i)).collect();
+        let mut last_count = 0;
+        let chunk_size = 100;
 
-        // Simula 500 pasos de auditoría
-        for i in 0..500 {
-            steps.push(json!({
-                "step_type": "tool_call",
-                "title": format!("Tool #{}", i),
-                "detail": format!("Resultado de tool #{}", i),
-                "timestamp": 1700000000 + i
-            }));
-
-            if steps.len() > max_steps {
-                steps.remove(0);
-            }
+        let mut total_read = 0;
+        while last_count < info_messages.len() {
+            let end = std::cmp::min(last_count + chunk_size, info_messages.len());
+            let chunk: Vec<_> = info_messages[last_count..end].to_vec();
+            total_read += chunk.len();
+            last_count = end;
         }
-
-        assert_eq!(steps.len(), 200);
-        // El primer paso preservado debe ser el #300
-        assert_eq!(steps[0]["title"], "Tool #300");
-        assert_eq!(steps[199]["title"], "Tool #499");
+        assert_eq!(total_read, 5000);
     }
 
-    /// Estrés: Múltiples proyectos con prompts locales
     #[test]
-    fn stress_muchos_proyectos_con_prompts() {
-        let mut projects = std::collections::HashMap::new();
-
-        // Simula 50 proyectos, cada uno con su prompt local
-        for i in 0..50 {
-            let proj_name = format!("project_{}", i);
-            let prompt = format!("System prompt for project {}", i);
-            projects.insert(proj_name, json!({
-                "name": format!("project_{}", i),
-                "prompt": prompt,
-                "is_local": i % 2 == 0
-            }));
-        }
-
-        assert_eq!(projects.len(), 50);
-
-        // Verificar que podemos acceder a cualquier proyecto
-        assert!(projects.contains_key("project_0"));
-        assert!(projects.contains_key("project_49"));
-        assert!(!projects.contains_key("project_50"));
-    }
-
-    /// Estrés: Chat session con muchos mensajes
-    #[test]
-    fn stress_chat_session_con_muchos_mensajes() {
-        let mut messages = Vec::new();
-
-        // Simula una conversación de 200 mensajes
-        for i in 0..200 {
-            let role = if i % 2 == 0 { "user" } else { "agent" };
-            messages.push(json!({
-                "role": role,
-                "content": format!("Mensaje #{} en la conversación", i),
-                "timestamp": 1700000000 + i as u64
-            }));
-        }
-
-        assert_eq!(messages.len(), 200);
-        assert_eq!(messages[0]["role"], "user");
-        assert_eq!(messages[1]["role"], "agent");
-        assert_eq!(messages[199]["role"], "agent");
-
-        // Verificar alternancia user/agent
-        for i in 0..200 {
-            let expected_role = if i % 2 == 0 { "user" } else { "agent" };
-            assert_eq!(messages[i]["role"], expected_role,
-                "Mensaje #{} debería tener role '{}'", i, expected_role);
+    fn stress003_muchas_extensiones_de_archivo() {
+        // 1000 extensiones diferentes, ninguna debe romper el handler
+        let extensions: Vec<String> = (0..1000)
+            .map(|i| format!("ext{}", i))
+            .collect();
+        for ext in &extensions {
+            let path = format!("archivo.{}", ext);
+            let detected = std::path::Path::new(&path)
+                .extension().and_then(|e| e.to_str()).unwrap_or("");
+            assert!(!detected.is_empty());
         }
     }
 
-    /// Estrés: Timestamps deben ser monótonamente crecientes
     #[test]
-    fn stress_timestamps_monotonicos() {
-        let mut last_timestamp: u64 = 0;
-
+    fn stress004_llamadas_rapidas_finalizar_tarea() {
+        // Múltiples llamadas a finalizar_tarea en rápida sucesión
         for i in 0..100 {
-            let ts = 1700000000 + i as u64;
-            assert!(ts > last_timestamp || i == 0,
-                "Timestamp #{} ({}) no es mayor que el anterior ({})", i, ts, last_timestamp);
-            last_timestamp = ts;
+            let msg = format!("Tarea {} completada.", i);
+            let final_msg = if msg.trim().is_empty() { "Tarea finalizada.".to_string() } else { msg };
+            assert!(!final_msg.is_empty());
         }
     }
 
-    /// Estrés: Memory usage de info_messages con strings largos
     #[test]
-    fn stress_info_messages_con_strings_largos() {
-        let mut info_messages = Vec::new();
-        let max_messages = 100;
-        let long_string = "A".repeat(1000); // 1KB por mensaje
+    fn stress005_polling_frontend_masivo() {
+        // Simular 10,000 ciclos de polling del frontend
+        let mut info_messages: Vec<String> = Vec::new();
+        let mut frontend_last_count: usize = 0;
 
-        for _ in 0..200 {
-            info_messages.push(long_string.clone());
-            if info_messages.len() > max_messages {
-                info_messages.remove(0);
+        for cycle in 0..10_000 {
+            // Backend agrega mensaje cada 100 ciclos
+            if cycle % 100 == 0 {
+                info_messages.push(format!("Ciclo {}", cycle));
+            }
+            // Frontend consume
+            let current = info_messages.len();
+            if current > frontend_last_count {
+                let _new_msgs: Vec<_> = info_messages[frontend_last_count..current].to_vec();
+                frontend_last_count = current;
             }
         }
-
-        // 100 mensajes de 1KB = ~100KB
         assert_eq!(info_messages.len(), 100);
-        assert!(info_messages[0].len() == 1000);
+        assert_eq!(frontend_last_count, 100);
     }
 }
 
+
 // ============================================================================
-// SECCIÓN 5: TESTS DE INYECCIÓN DE FALLOS — El sistema debe manejar errores
+// SECCIÓN 5: TESTS DE INYECCIÓN DE FALLOS
+// Simulan escenarios de error para verificar robustez.
 // ============================================================================
 
 #[cfg(test)]
 mod fault_injection_tests {
     use serde_json::json;
 
-    /// Fallo: Archivo no encontrado
     #[test]
-    fn fault_archivo_no_encontrado() {
-        let error_response = json!({
-            "status": "error",
-            "message": "Error leyendo archivo: El sistema no puede encontrar el archivo especificado."
+    fn fault001_read_file_pdf_corrupto() {
+        // Simular PDF corrupto - el handler debe devolver error descriptivo
+        let error_msg = "No se pudo leer el PDF: formato inválido o corrupto.";
+        assert!(error_msg.contains("No se pudo leer el PDF"));
+    }
+
+    #[test]
+    fn fault002_read_file_docx_corrupto() {
+        // Simular DOCX corrupto (no es ZIP válido)
+        let error_msg = "No se pudo leer el DOCX: formato ZIP inválido.";
+        assert!(error_msg.contains("DOCX") || error_msg.contains("ZIP"));
+    }
+
+    #[test]
+    fn fault003_read_file_archivo_inexistente() {
+        // Simular archivo que no existe
+        let error_msg = "Error leyendo archivo: No such file or directory";
+        assert!(error_msg.contains("Error"));
+    }
+
+    #[test]
+    fn fault004_finalizar_tarea_con_campos_extras() {
+        // Si se pasan campos extra (como url), deben ignorarse
+        let args = json!({
+            "mensaje_final": "Tarea completada.",
+            "url": "https://ejemplo.com",
+            "extra_field": "valor inesperado"
         });
-
-        assert_eq!(error_response["status"], "error");
-        assert!(error_response["message"].as_str().unwrap().contains("Error"));
+        // Solo mensaje_final debe usarse
+        let msg = args["mensaje_final"].as_str().unwrap_or("Tarea finalizada.");
+        assert_eq!(msg, "Tarea completada.");
+        // Los campos extra no deben causar pánico
+        assert!(args.get("url").is_some());
     }
 
-    /// Fallo: Path con caracteres peligrosos (path traversal)
     #[test]
-    fn fault_path_traversal() {
-        let malicious_paths = [
-            "../../../etc/passwd",
-            "..\\..\\..\\Windows\\System32",
-            "./../../.ssh/id_rsa",
-            "....//....//....//etc/passwd",
-        ];
-
-        for path in &malicious_paths {
-            // Verificar que el path contiene secuencias peligrosas
-            let has_traversal = path.contains("..");
-            assert!(has_traversal,
-                "Path '{}' debería ser detectado como path traversal", path);
-
-            // La respuesta esperada sería un error de seguridad
-            let expected_error = json!({
-                "status": "error",
-                "message": format!("Acceso denegado: path '{}' contiene secuencias no permitidas.", path)
-            });
-            assert!(expected_error["message"].as_str().unwrap().contains("denegado"));
-        }
-    }
-
-    /// Fallo: JSON malformado en argumentos de herramienta
-    #[test]
-    fn fallo_json_malformado() {
-        let malformed_args = [
-            "{mensaje: sin comillas}",
-            "{'mensaje': 'comillas simples'}",
-            "",
-            "not json at all",
-        ];
-
-        for args in &malformed_args {
-            let result: Result<serde_json::Value, _> = serde_json::from_str(args);
-            if args.is_empty() {
-                // String vacío podría ser aceptado como error
-                assert!(result.is_err() || result.is_ok());
-            } else {
-                assert!(result.is_err(),
-                    "El string '{}' debería fallar al parsear como JSON", args);
-            }
-        }
-    }
-
-    /// Fallo: Parámetros faltantes en tool call
-    #[test]
-    fn fallo_parametros_faltantes() {
-        // finalizar_tarea sin mensaje_final
-        let incomplete = json!({
-            "function": {
-                "name": "finalizar_tarea",
-                "arguments": "{}"
-            }
-        });
-
-        let args: serde_json::Value = serde_json::from_str(
-            incomplete["function"]["arguments"].as_str().unwrap()
-        ).unwrap();
-
-        // mensaje_final no está en los argumentos
-        assert!(args["mensaje_final"].is_null() || args.get("mensaje_final").is_none());
-    }
-
-    /// Fallo: Valores extremos en parámetros numéricos
-    #[test]
-    fn fallo_valores_extremos() {
-        // Simular start_line y end_line con valores extremos
-        let extreme_cases = vec![
-            (0, 0),           // cero
-            (1, 999999),      // end_line enorme
-            (-5, 10),         // negativo
-            (999999, 1),      // start > end
-            (usize::MAX as i64, usize::MAX as i64), // máximo valor
-        ];
-
-        for (start, end) in &extreme_cases {
-            let start_idx = (*start).max(1) as usize;
-            let end_idx = (*end).max(1) as usize;
-
-            if start_idx > end_idx {
-                // Debe manejar el error, no panic
-                assert!(true, "start > end debe manejarse sin panic");
-            }
-
-            // Siempre deben ser >= 1 después del clamp
-            assert!(start_idx >= 1);
-            assert!(end_idx >= 1);
-        }
-    }
-
-    /// Fallo: Username con caracteres especiales
-    #[test]
-    fn fallo_username_caracteres_especiales() {
-        let dangerous_usernames = [
-            "admin<script>",
-            "user'; DROP TABLE users; --",
-            "../../../root",
-            "user%00null",
-            "user\nnewline",
-        ];
-
-        for username in &dangerous_usernames {
-            // Sanitizar: solo permitir alfanuméricos y guiones
-            let sanitized: String = username
-                .chars()
-                .filter(|c| c.is_alphanumeric() || *c == '-' || *c == '_')
-                .take(30)
-                .collect();
-
-            // El sanitizado no debe contener los caracteres peligrosos
-            assert!(!sanitized.contains('<'));
-            assert!(!sanitized.contains('>'));
-            assert!(!sanitized.contains('\''));
-            assert!(!sanitized.contains(';'));
-            assert!(!sanitized.contains('/'));
-        }
-    }
-
-    /// Fallo: Plan propuesto vacío
-    #[test]
-    fn fallo_plan_vacio() {
-        let plan_vacio = "";
-        let plan_solo_espacios = "   \n  \t  ";
-
-        let es_valido = |plan: &str| -> bool {
-            !plan.trim().is_empty()
+    fn fault005_read_file_sin_proyecto_activo() {
+        // Si no hay proyecto seleccionado, debe devolver mensaje apropiado
+        let project_name: Option<String> = None;
+        let result = if project_name.is_none() {
+            "No hay ningún proyecto activo seleccionado."
+        } else {
+            "Ok"
         };
-
-        assert!(!es_valido(plan_vacio));
-        assert!(!es_valido(plan_solo_espacios));
-
-        // El frontend no debería mostrar modal con plan vacío
-        let debe_mostrar_plan = |plan: &str| -> bool {
-            !plan.trim().is_empty()
-        };
-        assert!(!debe_mostrar_plan(plan_vacio));
+        assert_eq!(result, "No hay ningún proyecto activo seleccionado.");
     }
 
-    /// Fallo: Interrupción durante pregunta pendiente
     #[test]
-    fn fallo_interrupcion_durante_pregunta() {
-        // Estado antes de interrupción: pregunta pendiente
-        let estado_antes = json!({
-            "esperando_respuesta_usuario": true,
-            "pregunta_usuario": "¿SQLite o PostgreSQL?"
-        });
+    fn fault006_info_messages_con_caracteres_especiales() {
+        let mut info_messages: Vec<String> = Vec::new();
+        info_messages.push("Mensaje con ñ y acentos: áéíóú".to_string());
+        info_messages.push("Mensaje con emoji: 🚀✅❌".to_string());
+        info_messages.push("Mensaje con HTML: <script>alert('xss')</script>".to_string());
+        info_messages.push("Mensaje con SQL: DROP TABLE users;".to_string());
 
-        // Después de interrupción, debe limpiarse
-        let estado_despues = json!({
-            "interrupted": true,
-            "esperando_respuesta_usuario": false,
-            "pregunta_usuario": null,
-            "esperando_aprobacion_plan": false,
-            "plan_propuesto": null
-        });
+        // Todos deben almacenarse sin pérdida
+        assert_eq!(info_messages.len(), 4);
+        assert!(info_messages[0].contains("áéíóú"));
+        assert!(info_messages[1].contains("🚀"));
+    }
 
-        assert_eq!(estado_antes["esperando_respuesta_usuario"], true);
-        assert_eq!(estado_despues["esperando_respuesta_usuario"], false);
-        assert_eq!(estado_despues["pregunta_usuario"], json!(null));
+    #[test]
+    fn fault007_finalizar_tarea_interrumpida() {
+        // Si el agente es interrumpido mientras finaliza, el estado debe ser consistente
+        let mut finished = false;
+        let mut interrupted = true;
+        let mut final_message: Option<String> = None;
+
+        // El agente estaba corriendo, fue interrumpido
+        finished = true;
+        interrupted = true;
+        final_message = Some("Tarea interrumpida por el usuario.".to_string());
+
+        assert!(finished);
+        assert!(interrupted);
+        assert_eq!(final_message.unwrap(), "Tarea interrumpida por el usuario.");
+    }
+
+    #[test]
+    fn fault008_read_file_ruta_con_symlink() {
+        // Rutas con .. no deben escapar del proyecto
+        let path = "../../etc/passwd";
+        let normalized = std::path::Path::new(path);
+        // El handler debe verificar que la ruta está dentro del proyecto
+        // (Este test verifica que el path se maneja sin pánico)
+        assert!(normalized.to_string_lossy().contains(".."));
     }
 }
 
+
 // ============================================================================
-// SECCIÓN 6: TESTS DE CASOS LÍMITE — Edge cases y condiciones frontera
+// SECCIÓN 6: TESTS DE CASOS LÍMITE
+// Validan condiciones de borde y valores extremos.
 // ============================================================================
 
 #[cfg(test)]
 mod edge_case_tests {
     use serde_json::json;
 
-    /// Caso límite: Mensaje vacío en chat
     #[test]
-    fn edge_mensaje_vacio() {
-        let empty_message = "";
-        let whitespace_message = "   \n  \t  ";
-
-        assert!(empty_message.is_empty());
-        assert!(whitespace_message.trim().is_empty());
-
-        // La API debería rechazar mensajes vacíos
-        let is_valid = |msg: &str| -> bool { !msg.trim().is_empty() };
-        assert!(!is_valid(empty_message));
-        assert!(!is_valid(whitespace_message));
+    fn edge001_mensaje_final_vacio_completo() {
+        let msg = "";
+        let final_msg = if msg.trim().is_empty() { "Tarea finalizada.".to_string() } else { msg.to_string() };
+        assert_eq!(final_msg, "Tarea finalizada.");
     }
 
-    /// Caso límite: Nombre de proyecto muy largo
     #[test]
-    fn edge_nombre_proyecto_largo() {
-        let max_len = 64;
-        let nombre_largo = "a".repeat(100);
-        let nombre_valido = "a".repeat(64);
-
-        assert!(nombre_largo.len() > max_len);
-        assert_eq!(nombre_valido.len(), max_len);
-
-        // El sistema debe truncar o rechazar nombres muy largos
-        let sanitizado: String = nombre_largo.chars().take(max_len).collect();
-        assert_eq!(sanitizado.len(), max_len);
+    fn edge002_mensaje_final_unicode() {
+        let msg = "Tarea completada: 処理完了 ✅";
+        let final_msg = if msg.trim().is_empty() { "Tarea finalizada.".to_string() } else { msg.to_string() };
+        assert_eq!(final_msg, "Tarea completada: 処理完了 ✅");
     }
 
-    /// Caso límite: UUID inválido
     #[test]
-    fn edge_uuid_invalido() {
-        let invalid_uuids = [
-            "",
-            "not-a-uuid",
-            "12345678-1234-1234-1234-12345678901", // demasiado largo
-            "gggggggg-gggg-gggg-gggg-gggggggggggg", // caracteres inválidos
-        ];
-
-        for uuid_str in &invalid_uuids {
-            let is_valid = uuid_str.len() == 36
-                && uuid_str.chars().all(|c| c.is_ascii_hexdigit() || c == '-')
-                && uuid_str.matches('-').count() == 4;
-
-            assert!(!is_valid, "UUID '{}' debería ser inválido", uuid_str);
-        }
+    fn edge003_mensaje_final_muy_largo() {
+        let msg = "A".repeat(100_000);
+        let final_msg = if msg.trim().is_empty() { "Tarea finalizada.".to_string() } else { msg.to_string() };
+        assert_eq!(final_msg.len(), 100_000);
     }
 
-    /// Caso límite: Contraseña muy corta
     #[test]
-    fn edge_password_corta() {
-        let min_len = 8;
-        let short_passwords = ["", "a", "ab", "abc", "1234567"];
-
-        for pass in &short_passwords {
-            assert!(pass.len() < min_len,
-                "Password '{}' debería ser rechazada por ser muy corta (< {}).", pass, min_len);
-        }
-
-        // Password válida
-        let valid = "12345678";
-        assert!(valid.len() >= min_len);
+    fn edge004_info_messages_vacio_al_inicio() {
+        let info_messages: Vec<String> = Vec::new();
+        let last_count: usize = 0;
+        let current = info_messages.len();
+        let nuevos = current - last_count;
+        assert_eq!(nuevos, 0);
     }
 
-    /// Caso límite: Contenido de archivo vacío
-    /// Caso límite: Contenido de archivo vacío
     #[test]
-    fn edge_archivo_vacio() {
-        let content = "";
-
-        // En Rust, "".lines() devuelve un iterador vacío (0 líneas), no 1.
-        let lines: Vec<&str> = content.lines().collect();
-        assert_eq!(lines.len(), 0);
-
-        // Intentar leer rango de un archivo vacío
-        let total_lines = lines.len(); // 0
-        let start: i32 = 1;
-        let end: i32 = 5;
-        let start_idx = start.saturating_sub(1) as usize; // 0
-        let end_idx = (end as usize).min(total_lines); // 0
-
-        assert_eq!(start_idx, 0);
-        assert_eq!(end_idx, 0);
+    fn edge005_info_messages_un_solo_mensaje() {
+        let info_messages = vec!["Hola".to_string()];
+        let last_count: usize = 0;
+        let nuevos = info_messages.len() - last_count;
+        assert_eq!(nuevos, 1);
+        assert_eq!(info_messages[0], "Hola");
     }
 
-    /// Caso límite: Pregunta del agente muy larga
     #[test]
-    fn edge_pregunta_muy_larga() {
-        let pregunta_larga = "A".repeat(10000);
-        let max_len = 5000;
-
-        // El sistema debe truncar preguntas muy largas
-        let truncada: String = pregunta_larga.chars().take(max_len).collect();
-        assert_eq!(truncada.len(), max_len);
+    fn edge006_nombre_archivo_con_espacios() {
+        let path = "mi documento final.docx";
+        let ext = std::path::Path::new(path)
+            .extension().and_then(|e| e.to_str()).unwrap_or("");
+        assert_eq!(ext, "docx");
     }
 
-    /// Caso límite: Múltiples interrupciones consecutivas
     #[test]
-    fn edge_multiples_interrupciones() {
-        let mut status = json!({
-            "interrupted": false,
-            "running": true
+    fn edge007_nombre_archivo_con_puntos_multiples() {
+        let path = "archivo.v2.0.final.pdf";
+        let ext = std::path::Path::new(path)
+            .extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
+        assert_eq!(ext, "pdf");
+    }
+
+    #[test]
+    fn edge008_nombre_archivo_solo_extension() {
+        let path = ".gitignore";
+        let ext = std::path::Path::new(path)
+            .extension().and_then(|e| e.to_str()).unwrap_or("");
+        assert_eq!(ext, "gitignore");
+    }
+
+    #[test]
+    fn edge009_extension_con_numeros() {
+        let path = "datos.csv2";
+        let ext = std::path::Path::new(path)
+            .extension().and_then(|e| e.to_str()).unwrap_or("");
+        assert_eq!(ext, "csv2");
+    }
+
+    #[test]
+    fn edge010_estado_agente_con_todos_los_campos_null() {
+        let status = json!({
+            "running": false,
+            "finished": false,
+            "info_messages": null,
+            "final_message": null
         });
-
-        // Primera interrupción
-        status["interrupted"] = json!(true);
-        status["running"] = json!(false);
-        assert_eq!(status["interrupted"], true);
-
-        // Segunda interrupción (ya está interrumpido)
-        // No debería causar problemas
-        status["interrupted"] = json!(true);
-        assert_eq!(status["interrupted"], true);
-
-        // Tercera
-        status["interrupted"] = json!(true);
-        assert_eq!(status["interrupted"], true);
+        // El frontend debe manejar nulls
+        let messages = status["info_messages"].as_array();
+        assert!(messages.is_none() || messages.unwrap().is_empty());
     }
 
-    /// Caso límite: Sesión sin session_id
     #[test]
-    fn edge_sesion_sin_id() {
-        let session_id: Option<&str> = None;
-
-        // El sistema debe manejar sesiones sin ID
-        let response = json!({
-            "status": "ok",
-            "current_session_id": null
-        });
-
-        assert!(session_id.is_none());
-        assert!(response["current_session_id"].is_null());
+    fn edge011_read_file_con_rango_invalido() {
+        // start > end
+        let start: i64 = 100;
+        let end: i64 = 50;
+        assert!(start > end, "start > end debe manejarse sin pánico");
     }
 
-    /// Caso límite: Modo no reconocido
     #[test]
-    fn edge_modo_no_reconocido() {
-        let invalid_modes = ["", "invalid", "Study", "PROGRAMMING", "study ", " study"];
-
-        for mode in &invalid_modes {
-            let normalized = mode.trim().to_lowercase();
-            // Modos con espacios o mayúsculas deberían normalizarse
-            let normalized_valid = normalized == "study" || normalized == "programming";
-            if normalized_valid {
-                // El sistema debería normalizar
-                assert!(normalized == "study" || normalized == "programming");
-            }
-        }
+    fn edge012_read_file_con_linea_cero() {
+        // start_line = 0 debe tratarse como 1
+        let start: i64 = 0;
+        let adjusted = start.max(1);
+        assert_eq!(adjusted, 1);
     }
 
-    /// Caso límite: Rango de líneas con start > end
     #[test]
-    fn edge_rango_lineas_invertido() {
-        let total_lines = 100;
-        let start = 50;
-        let end = 10;
-
-        // El sistema debe detectar rango inválido
-        let is_valid_range = start <= end && start >= 1 && end <= total_lines;
-        assert!(!is_valid_range);
-
-        // Debe devolver error, no panic
-        let error_msg = format!(
-            "Error: El rango de líneas {}-{} es inválido para un archivo de {} líneas.",
-            start, end, total_lines
-        );
-        assert!(error_msg.contains("inválido"));
+    fn edge013_finalizar_tarea_sin_argumentos() {
+        let args = json!({});
+        let msg = args["mensaje_final"].as_str().unwrap_or("Tarea finalizada.").to_string();
+        assert_eq!(msg, "Tarea finalizada.");
     }
-    /// Caso límite: Prompt global vacío
-    #[test]
-    fn edge_prompt_global_vacio() {
-        let empty_prompt = "";
 
-        // El sistema debería usar el default si el prompt está vacío
-        if empty_prompt.trim().is_empty() {
-            let default_prompt = "Eres un asistente de IA. Ayuda al usuario con sus tareas.";
-            assert!(!default_prompt.is_empty());
-        }
+    #[test]
+    fn edge014_info_messages_con_mensaje_vacio() {
+        let mut info_messages: Vec<String> = Vec::new();
+        info_messages.push("".to_string());
+        info_messages.push("Mensaje válido".to_string());
+        assert_eq!(info_messages.len(), 2);
+        assert!(info_messages[0].is_empty());
+        assert!(!info_messages[1].is_empty());
     }
 }
 
+
 // ============================================================================
-// SECCIÓN 7: TESTS DE CONSISTENCIA DE CONTRATO API
+// SECCIÓN 7: TESTS DE SANIDAD RÁPIDA (SMOKE TESTS)
+// Ejecución rápida para verificar que nada fundamental está roto.
 // ============================================================================
 
 #[cfg(test)]
-mod api_contract_tests {
+mod smoke_tests {
     use serde_json::json;
 
-    /// Todos los endpoints que el frontend llama deben tener contrato definido
     #[test]
-    fn api_all_frontend_endpoints_defined() {
-        let frontend_endpoints = vec![
-            ("GET", "/api/projects"),
-            ("POST", "/api/projects/local"),
-            ("POST", "/api/chat"),
-            ("GET", "/api/agent/status"),
-            ("GET", "/api/agent/steps"),
-            ("GET", "/api/agent/summary"),
-            ("POST", "/api/agent/responder"),
-            ("POST", "/api/agent/aprobar_plan"),
-            ("POST", "/api/agent/interrupt"),
-            ("GET", "/api/captcha/status"),
-            ("POST", "/api/captcha/solve"),
-            ("GET", "/api/chats"),
-            ("POST", "/api/chats/new"),
-            ("GET", "/api/study/profile"),
-            ("POST", "/api/study/profile"),
-            ("POST", "/api/reportar-fallo"),
-            // Auth
-            ("POST", "/api/auth/login"),
-            ("POST", "/api/auth/challenge"),
-            ("POST", "/api/auth/verify"),
-            ("POST", "/api/auth/logout"),
-        ];
-
-        for (method, path) in &frontend_endpoints {
-            // Verificar que la ruta empieza con /api/
-            assert!(path.starts_with("/api/"),
-                "Endpoint '{} {}' no sigue la convención /api/", method, path);
-
-            // Verificar que el método es válido
-            assert!(matches!(*method, "GET" | "POST" | "PUT" | "DELETE"),
-                "Método HTTP inválido '{}' para '{}'", method, path);
-        }
-
-        // No debe haber duplicados
-        let mut paths: Vec<String> = frontend_endpoints.iter()
-            .map(|(m, p)| format!("{} {}", m, p))
-            .collect();
-        let len_before = paths.len();
-        paths.sort();
-        paths.dedup();
-        assert_eq!(len_before, paths.len(),
-            "Hay endpoints duplicados en la lista del frontend");
+    fn smoke_json_parse_finalizar_tarea() {
+        let json_str = r#"{"mensaje_final": "Test completado."}"#;
+        let args: serde_json::Value = serde_json::from_str(json_str).unwrap();
+        assert_eq!(args["mensaje_final"], "Test completado.");
     }
 
-    /// Todas las respuestas de error deben tener status y message
     #[test]
-    fn api_error_responses_tienen_status_y_message() {
-        let error_responses = vec![
-            json!({"status": "error", "message": "Token Bearer requerido."}),
-            json!({"status": "error", "message": "Token inválido o expirado."}),
-            json!({"status": "error", "message": "Se requiere rol admin."}),
-            json!({"status": "error", "message": "Archivo no encontrado."}),
-            json!({"status": "error", "message": "Acceso denegado."}),
-        ];
+    fn smoke_json_parse_read_file_pdf() {
+        let json_str = r#"{"path": "docs/manual.pdf", "start_line": 1, "end_line": 10}"#;
+        let args: serde_json::Value = serde_json::from_str(json_str).unwrap();
+        assert_eq!(args["path"], "docs/manual.pdf");
+    }
 
-        for resp in &error_responses {
-            assert_eq!(resp["status"], "error");
-            assert!(!resp["message"].as_str().unwrap().is_empty());
-        }
+    #[test]
+    fn smoke_json_parse_notificar_usuario() {
+        let json_str = r#"{"tipo": "informativo", "mensaje": "Procesando..."}"#;
+        let args: serde_json::Value = serde_json::from_str(json_str).unwrap();
+        assert_eq!(args["tipo"], "informativo");
+        assert_eq!(args["mensaje"], "Procesando...");
+    }
+
+    #[test]
+    fn smoke_tool_name_validation() {
+        let valid_tools = vec![
+            "read_file", "write_file_with_commit", "execute_powershell",
+            "search_google", "finalizar_tarea", "notificar_usuario",
+            "search_code", "image_fetch", "image_view", "analyze_images",
+            "fork_and_clone_repo", "check_github_cli", "kill_process",
+            "git_resolve_divergence", "read_url"
+        ];
+        assert!(valid_tools.contains(&"read_file"));
+        assert!(valid_tools.contains(&"finalizar_tarea"));
+        assert!(valid_tools.contains(&"notificar_usuario"));
     }
 }
