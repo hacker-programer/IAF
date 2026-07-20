@@ -612,17 +612,9 @@ mod integration_tests {
     async fn test_server_is_alive() {
         let client = &*CLIENT;
         let resp = client.get(format!("{}/api/agent/status", *SERVER_URL)).send().await;
-        match resp {
-            Ok(r) => assert!(r.status().is_success() || r.status().as_u16() == 401,
-                "El servidor debe responder (incluso con 401 si no hay auth)"),
-            Err(_) => { /* Servidor no disponible, ignorar */ }
-        }
-    }
 
     #[tokio::test]
     async fn test_agent_status_endpoint_returns_all_fields() {
-    async fn test_agent_status_endpoint_returns_all_fields() {
-        let client = &*CLIENT;
         let resp = client
             .get(format!("{}/api/agent/status", *SERVER_URL))
             .send()
