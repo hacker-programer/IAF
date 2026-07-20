@@ -1126,6 +1126,12 @@ async fn chat_endpoint(
                     serde_json::from_str::<ChatSession>(&c).unwrap_or_else(|_| session_bg.clone())
                 } else { session_bg.clone() };
 
+                // Guardar el mensaje final antes de que result sea movido
+                let final_msg = match &result {
+                    Ok(resp) => Some(resp.clone()),
+                    Err(e) => Some(format!("Error: {}", e)),
+                };
+
                 match result {
                     Ok(resp) => {
                         updated.messages.push(ChatMessage {
@@ -1150,7 +1156,7 @@ async fn chat_endpoint(
 
                 let mut ag = state_bg.active_agent.lock().unwrap();
                 ag.running = false;
-                if !ag.finished { ag.finished = true; ag.final_message = match &result { Ok(resp) => Some(resp.clone()), Err(e) => Some(format!("Error: {}", e)), }; }
+                if !ag.finished { ag.finished = true; ag.final_message = final_msg; }
             });
         }
     }

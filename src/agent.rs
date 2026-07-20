@@ -20,6 +20,8 @@ pub async fn run_agent_loop(
     voyage_key: &str,
     openrouter_key: &str,
     session_id: Option<String>,
+    username: &str,
+    mode: &str,
 ) -> Result<String, Box<dyn Error + Send + Sync>> {
     let global_prompt = {
         let prompts = state.prompts.lock().unwrap();
@@ -609,7 +611,7 @@ pub async fn run_agent_loop(
         if let Some(tool_calls) = message_val["tool_calls"].as_array() {
             messages.push(message_val.clone());
             let mut tool_responses = Vec::new();
-            let mut final_message = None;
+            let mut final_message: Option<String> = None;
 
             for tool_call in tool_calls {
                 // Verificar seÃƒÂ±al de interrupciÃƒÂ³n antes de cada herramienta
@@ -1651,7 +1653,18 @@ pub async fn run_agent_loop(
             for tr in tool_responses {
                 messages.push(tr);
             }
-            if let Some(msg) = final_message {                // Asegurar que el estado refleje la finalizacion                {                    let mut status = state.active_agent.lock().unwrap();                    status.finished = true;                    status.final_message = Some(msg.clone());                    status.running = false;                }                state.process_registry.kill_all();                return Ok(msg);            }        } else {
+            if let Some(msg) = final_message {
+                // Asegurar que el estado refleje la finalizacion
+                {
+                    let mut status = state.active_agent.lock().unwrap();
+                    status.finished = true;
+                    status.final_message = Some(msg.clone());
+                    status.running = false;
+                }
+                state.process_registry.kill_all();
+                return Ok(msg);
+            }
+        } else {
             messages.push(message_val.clone());
             messages.push(json!({
                 "role": "user",
@@ -1687,7 +1700,7 @@ fn find_chat_file_by_session_id(base_workspace: &Path, session_id: &str) -> Opti
                         let sub_path = sub_entry.path();
                         if sub_path.is_file() {
                             if let Some(fname) = sub_path.file_stem().and_then(|s| s.to_str()) {
-                                if fname.contains(session_id) and sub_path.extension().and_then(|e| e.to_str()) == Some("json") {
+                                if fname.contains(session_id) && sub_path.extension().and_then(|e| e.to_str()) == Some("json") {
                                     return Some(sub_path);
                                 }
                             }
@@ -1696,7 +1709,7 @@ fn find_chat_file_by_session_id(base_workspace: &Path, session_id: &str) -> Opti
                 }
             } else if path.is_file() {
                 if let Some(fname) = path.file_stem().and_then(|s| s.to_str()) {
-                    if fname.contains(session_id) and path.extension().and_then(|e| e.to_str()) == Some("json") {
+                    if fname.contains(session_id) && path.extension().and_then(|e| e.to_str()) == Some("json") {
                         return Some(path);
                     }
                 }
