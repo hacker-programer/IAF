@@ -1103,9 +1103,9 @@ mod edge_case_tests {
 
         for mode in &invalid_modes {
             let normalized = mode.trim().to_lowercase();
-            let is_valid = normalized == "study" || normalized == "programming";
             // Modos con espacios o mayúsculas deberían normalizarse
-            let normalized_valid = mode.trim().to_lowercase() == "study"
+            let normalized_valid = normalized == "study" || normalized == "programming";
+            if normalized_valid {
                 || mode.trim().to_lowercase() == "programming";
             if normalized_valid {
                 // El sistema debería normalizar
