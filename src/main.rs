@@ -1178,10 +1178,12 @@ async fn chat_endpoint(
     })).into_response()
 }
 
-async fn get_chats(
+}
+
 async fn get_chats(
     State(state): State<AppState>,
     headers: HeaderMap,
+) -> impl IntoResponse {
 ) -> impl IntoResponse {
     let username = match require_auth(&state, &headers).await {
         Ok(u) => u,
