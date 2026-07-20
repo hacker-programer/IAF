@@ -1285,14 +1285,19 @@ pub async fn run_agent_loop(
                                     }
                                 }
                             };
-                            format!("Respuesta del usuario: {}", respuesta)
                         } else {
                             // tipo informativo
                             {
                                 let mut status = state.active_agent.lock().unwrap();
+                                // Agregar a info_messages para que el frontend lo muestre (BUG-002 fix)
+                                status.info_messages.push(mensaje.to_string());
+                                // Limitar info_messages a 100 para evitar crecimiento ilimitado
+                                if status.info_messages.len() > 100 {
+                                    status.info_messages.remove(0);
+                                }
                                 status.steps.push(crate::state::AuditStep {
                                     step_type: "informativo".to_string(),
-                                    title: "NotificaciÃƒÂ³n del Agente".to_string(),
+                                    title: "Notificación del Agente".to_string(),
                                     detail: mensaje.to_string(),
                                     timestamp: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs(),
                                 });
@@ -1300,9 +1305,8 @@ pub async fn run_agent_loop(
                                     save_chat_steps_to_disk(&state, &Some(s_id.clone()), &status.steps);
                                 }
                             }
-                            format!("NotificaciÃƒÂ³n enviada con ÃƒÂ©xito: {}", mensaje)
+                            format!("Notificación enviada con éxito: {}", mensaje)
                         }
-                    }
                     "finalizar_tarea" => {                        // Limpiar todos los procesos hijo registrados antes de finalizar                        state.process_registry.kill_all();                        let msg = args["mensaje_final"].as_str().unwrap_or("Tarea finalizada.").to_string();                        // Notificar finalizacion en el estado del agente para que el frontend lo detecte                        {                            let mut status = state.active_agent.lock().unwrap();                            status.finished = true;                            status.final_message = Some(msg.clone());                            status.running = false;                            status.steps.push(crate::state::AuditStep {                                step_type: "thinking".to_string(),                                title: "Tarea Finalizada".to_string(),                                detail: format!("El agente ha finalizado la tarea: {}", msg),                                timestamp: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs(),                            });                            if let Some(ref s_id) = session_id {                                save_chat_steps_to_disk(&state, &Some(s_id.clone()), &status.steps);                            }                        }                        final_message = Some(msg);                        "Tarea finalizada correctamente.".to_string()                    }                    "image_fetch" => {
                         let url = args["url"].as_str().unwrap_or("");
                         if url.is_empty() {
