@@ -605,11 +605,8 @@ mod integration_tests {
     static SERVER_URL: Lazy<String> = Lazy::new(|| {
         std::env::var("TEST_SERVER_URL").unwrap_or_else(|_| "http://localhost:8080".to_string())
     });
-
     static CLIENT: Lazy<Client> = Lazy::new(Client::new);
 
-    #[tokio::test]
-    async fn test_server_is_alive() {
     #[tokio::test]
     async fn test_server_is_alive() {
         let client = &*CLIENT;
@@ -623,7 +620,11 @@ mod integration_tests {
 
     #[tokio::test]
     async fn test_agent_status_endpoint_returns_all_fields() {
-        match resp {
+        let client = &*CLIENT;
+        let resp = client
+            .get(format!("{}/api/agent/status", *SERVER_URL))
+            .send()
+            .await;
             Ok(r) => {
                 let body: serde_json::Value = r.json().await.unwrap_or_default();
                 // Si no hay auth, el servidor puede devolver error, pero si hay respuesta,
