@@ -2080,7 +2080,6 @@ async fn main() {
         user_store: UserStore::load(&config_dir),
         challenge_store: ChallengeStore::new(300),
         session_store: SessionStore::new(),
-        study_engine: StudyEngine::new(config_dir.join("study")),
         study_engine: StudyEngine::new(base_workspace.clone()),
         connected_clients: Arc::new(Mutex::new(HashMap::new())),
         client_pending_requests: Arc::new(Mutex::new(HashMap::new())),
