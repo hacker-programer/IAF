@@ -1303,35 +1303,52 @@ pub async fn run_agent_loop(
                                 });
                                 if let Some(ref s_id) = session_id {
                                     save_chat_steps_to_disk(&state, &Some(s_id.clone()), &status.steps);
-                                }
-                            }
-                            format!("Notificación enviada con éxito: {}", mensaje)
-                        }
-                    "finalizar_tarea" => {                        // Limpiar todos los procesos hijo registrados antes de finalizar                        state.process_registry.kill_all();                        let msg = args["mensaje_final"].as_str().unwrap_or("Tarea finalizada.").to_string();                        // Notificar finalizacion en el estado del agente para que el frontend lo detecte                        {                            let mut status = state.active_agent.lock().unwrap();                            status.finished = true;                            status.final_message = Some(msg.clone());                            status.running = false;                            status.steps.push(crate::state::AuditStep {                                step_type: "thinking".to_string(),                                title: "Tarea Finalizada".to_string(),                                detail: format!("El agente ha finalizado la tarea: {}", msg),                                timestamp: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs(),                            });                            if let Some(ref s_id) = session_id {                                save_chat_steps_to_disk(&state, &Some(s_id.clone()), &status.steps);                            }                        }                        final_message = Some(msg);                        "Tarea finalizada correctamente.".to_string()                    }                    "image_fetch" => {
-                        let url = args["url"].as_str().unwrap_or("");
-                        if url.is_empty() {
-                            json!({"error": "No se proporcionÃƒÂ³ URL"}).to_string()
+                    "finalizar_tarea" => {
+                        // Limpiar todos los procesos hijo registrados antes de finalizar
+                        state.process_registry.kill_all();
+
+                        let msg = args["mensaje_final"]
+                            .as_str()
+                            .unwrap_or("Tarea finalizada.")
+                            .to_string();
+
+                        // Validar que el mensaje no esté vacío
+                        let final_msg = if msg.trim().is_empty() {
+                            "Tarea finalizada.".to_string()
                         } else {
-                            let fetch_client = reqwest::Client::builder()
-                                .user_agent("Mozilla/5.0")
-                                .timeout(std::time::Duration::from_secs(30))
-                                .build();
-                            match fetch_client {
-                                Ok(c) => {
-                                    match c.get(url).send().await {
-                                        Ok(resp) => {
-                                            match resp.bytes().await {
-                                                Ok(bytes) => {
-                                                    let id = Uuid::new_v4().to_string();
-                                                    // Determinar nombre del archivo desde la URL
-                                                    let filename = reqwest::Url::parse(url)
-                                                        .ok()
-                                                        .and_then(|u| u.path_segments()
-                                                            .and_then(|s| s.last().map(|s| s.to_string())))
-                                                        .unwrap_or_else(|| "image.bin".to_string());
-                                                    let safe_name = format!("{}_{}", &id[..8], filename);
-                                                    let assets_dir = if let Some(ref proj_name) = project_name {
-                                                        let proj_path = get_project_path(&state, proj_name);
+                            msg
+                        };
+
+                        // Actualizar estado del agente para que el frontend lo detecte
+                        {
+                            let mut status = state.active_agent.lock().unwrap();
+                            status.finished = true;
+                            status.final_message = Some(final_msg.clone());
+                            status.running = false;
+                            status.esperando_respuesta_usuario = false;
+                            status.esperando_aprobacion_plan = false;
+                            // Limpiar info_messages al finalizar (BUG-004 fix)
+                            status.info_messages.clear();
+                            status.steps.push(crate::state::AuditStep {
+                                step_type: "thinking".to_string(),
+                                title: "Tarea Finalizada".to_string(),
+                                detail: format!("El agente ha finalizado la tarea: {}", final_msg),
+                                timestamp: std::time::SystemTime::now()
+                                    .duration_since(std::time::UNIX_EPOCH)
+                                    .unwrap()
+                                    .as_secs(),
+                            });
+                            if let Some(ref s_id) = session_id {
+                                save_chat_steps_to_disk(
+                                    &state,
+                                    &Some(s_id.clone()),
+                                    &status.steps,
+                                );
+                            }
+                        }
+                        final_message = Some(final_msg);
+                        "Tarea finalizada correctamente.".to_string()
+                    }
                                                         Path::new(&proj_path).join("src").join("assets").join("images")
                                                     } else {
                                                         state.base_workspace.join("assets").join("images")
