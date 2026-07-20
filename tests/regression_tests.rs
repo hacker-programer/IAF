@@ -639,8 +639,8 @@ mod integration_regression_tests {
     #[test]
     fn test_full_study_session_flow() {
         // 1. El usuario tiene perfil pero no KB del tema
-        let username = "alumno_test";
-        let has_profile = true;
+        let _username = "alumno_test";
+        let _has_profile = true;
         let has_knowledge_of_rust = false;
 
         // 2. El agente DEBE preguntar sobre conocimiento previo de Rust
