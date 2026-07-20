@@ -89,7 +89,53 @@
 - `GET /api/agent/summary` — NUEVO endpoint para resumen textual del progreso
 
 ### BUG #12: Las preguntas del agente no se muestran al usuario (modal agentQuestionModal nunca se abre)
-- **Síntoma**: El agente llama a `notificar_usuario` con tipo `pregunta`, el backend correctamente establece `esperando_respuesta_usuario=true` y guarda `pregunta_usuario`, pero el frontend nunca abre el modal.
+### BUG #14 (BUG-004): finalizar_tarea devuelve "No se proporcionó URL"
+- **Síntoma**: La herramienta `finalizar_tarea` devuelve error "No se proporcionó URL" a pesar de que el parámetro `mensaje_final` fue proporcionado correctamente.
+- **Causa**: El código de `finalizar_tarea` en `agent.rs` estaba todo en una sola línea (ilegible), sin validación de mensaje vacío, y no limpiaba `info_messages` ni `esperando_respuesta_usuario`/`esperando_aprobacion_plan` al finalizar. El error "No se proporcionó URL" en realidad provenía de la herramienta `image_fetch` (línea adyacente), pero el agente lo malinterpretaba. El código ilegible contribuyó a que este bug pasara desapercibido.
+- **Fix**: Se refactorizó `finalizar_tarea` en múltiples líneas con validación de mensaje vacío, limpieza de flags (`esperando_respuesta_usuario`, `esperando_aprobacion_plan`, `info_messages`), y mejor logging.
+- **Tests de regresión**: `tests/exhaustive_tests.rs` — tests `reg_bug004_*` que validan: mensaje_final sin URL, no interferencia con image_fetch, limpieza de estado al finalizar.
+
+### BUG #15 (BUG-001): No puede analizar PDFs ni .docx
+- **Síntoma**: La herramienta `read_file` solo soporta archivos de texto plano. Si el usuario intenta leer un PDF o DOCX, falla o devuelve contenido binario ilegible.
+- **Causa**: `read_file` en `agent.rs` usaba exclusivamente `fs::read_to_string()`, que solo funciona con UTF-8. No había detección de extensiones ni manejo de formatos binarios.
+- **Fix**: Se agregó detección de extensión (`.pdf`, `.docx`) en `read_file`. Para PDFs: se usa `pdf-extract` para extraer texto. Para DOCX: se abre el ZIP interno y se extrae texto de `word/document.xml` usando la función `extract_text_from_docx_xml()`. Se agregaron dependencias `pdf-extract = "0.7"` y `zip = "1.1"` a Cargo.toml.
+- **Tests de regresión**: `tests/exhaustive_tests.rs` — tests `reg_bug001_*` que validan: aceptación de extensiones .pdf y .docx, rechazo de formatos no soportados, soporte para formatos de texto comunes.
+
+### BUG #16 (BUG-002): El frontend no muestra los mensajes informativos en tiempo real
+- **Síntoma**: Cuando el agente llama a `notificar_usuario` con tipo "informativo", el mensaje se guarda en pasos de auditoría pero el frontend nunca lo muestra al usuario.
+- **Causa**: El endpoint `/api/agent/status` no incluía `info_messages`. El `ActiveAgentStatus` no tenía el campo. El frontend `startAgentMonitoring()` solo monitoreaba preguntas, planes y CAPTCHA, pero no mensajes informativos.
+- **Fix**: 
+  1. Se agregó `info_messages: Vec<String>` a `ActiveAgentStatus` en `state.rs`
+  2. Se agregó `info_messages` a la respuesta de `get_agent_status` en `main.rs`
+  3. En `agent.rs`, `notificar_usuario` tipo "informativo" ahora agrega a `info_messages` (con límite de 100)
+  4. En `app.js`, `startAgentMonitoring()` ahora monitorea `info_messages` y muestra notificaciones toast + agrega al chat
+  5. Se creó `showInfoToast()` para notificaciones flotantes con auto-dismiss
+- **Tests de regresión**: `tests/exhaustive_tests.rs` — tests `reg_bug002_*` que validan: presencia de info_messages en estado, consumo por frontend, límite de 100 mensajes.
+
+### BUG #17 (BUG-003): El modo estudio da resúmenes en vez de enseñar
+- **Síntoma**: El agente en modo estudio responde con resúmenes, temarios o listas de temas, en lugar de enseñar paso a paso de forma interactiva.
+- **Causa**: El `study_system_prompt.txt` original no era lo suficientemente enfático en PROHIBIR resúmenes. Faltaba una regla explícita que dijera "JAMÁS respondas con un resumen del tema".
+- **Fix**: Se reescribió el prompt de estudio agregando:
+  - **Regla de Oro**: "PROHIBIDO DAR RESÚMENES O TEMARIOS" con ejemplos de qué NO hacer y qué SÍ hacer
+  - **Formato de respuesta obligatorio**: 5 pasos (concepto, explicación, pregunta, mini-ejercicio, esperar)
+  - **Regla de un solo concepto por mensaje**: no abrumar al alumno
+  - **"ENSEÑA, no resumas. HAZ, no listes."** como mantra repetido
+- **Tests de regresión**: `tests/exhaustive_tests.rs` — tests `reg_bug003_*` que validan: presencia de frases anti-resumen en el prompt, lecciones interactivas vs temarios pasivos.
+
+## Por qué estos bugs no fueron detectados por tests (Lección 2025)
+- **BUG-001 (PDF/DOCX)**: Los tests solo probaban archivos `.txt`, `.rs`, `.md`. No había tests con extensiones `.pdf` o `.docx`.
+- **BUG-002 (info_messages)**: No había tests de contrato API que verificaran que el campo `info_messages` estuviera en la respuesta de `/api/agent/status`. Tampoco había tests que simularan el polling del frontend.
+- **BUG-003 (resúmenes)**: Los tests no validaban el contenido semántico del prompt de estudio. Solo verificaban estructura, no reglas de comportamiento.
+- **BUG-004 (finalizar_tarea)**: El código estaba en una sola línea, lo que hacía difícil leerlo y testearlo. No había tests que verificaran el flujo completo de finalización de tarea.
+
+## Nuevas dependencias agregadas
+- `pdf-extract = "0.7"` — extracción de texto de PDFs
+- `zip = "1.1"` — lectura de archivos DOCX (formato ZIP con XML interno)
+
+## Cambios estructurales en el estado del agente
+- `ActiveAgentStatus` ahora tiene `info_messages: Vec<String>` (máx 100 mensajes)
+- `get_agent_status` ahora incluye `info_messages` en la respuesta JSON
+- `notificar_usuario` tipo "informativo" escribe en `info_messages` además de `steps`
 - **Causa**: `startAgentMonitoring()` en `app.js` hacía polling a `/api/agent/status` pero solo leía `statusRes.active` y `statusRes.captcha_pending`. NUNCA leía `statusRes.esperando_respuesta_usuario` ni `statusRes.pregunta_usuario`. El modal `agentQuestionModal` estaba definido en el HTML pero nunca se abría programáticamente.
 - **Fix**: Se agregó lógica en `startAgentMonitoring()` que revisa `esperando_respuesta_usuario` y `pregunta_usuario` y abre el modal. También se agregó detección de `esperando_aprobacion_plan` y `plan_propuesto` para abrir `agentPlanModal`. Se usan flags `agentQuestionShown` y `agentPlanShown` para evitar abrir el modal repetidamente durante el polling. También se agregaron los campos `esperando_aprobacion_plan` y `plan_propuesto` al endpoint `get_agent_status` (que no estaban en la respuesta JSON).
 - **Tests de regresión**: `tests/frontend_regression_tests.js` — 10 tests (A-001 a A-010) que validan: detección de pregunta, no re-mostrar, pregunta vacía, sin pregunta, detección de plan, reset de flags, CAPTCHA, pregunta+plan simultáneos, agente inactivo, respuesta de error.
