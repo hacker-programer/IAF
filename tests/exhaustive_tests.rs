@@ -1028,23 +1028,24 @@ mod edge_case_tests {
     }
 
     /// Caso límite: Contenido de archivo vacío
+    /// Caso límite: Contenido de archivo vacío
     #[test]
     fn edge_archivo_vacio() {
         let content = "";
 
+        // En Rust, "".lines() devuelve un iterador vacío (0 líneas), no 1.
         let lines: Vec<&str> = content.lines().collect();
-        assert_eq!(lines.len(), 1); // Un archivo vacío tiene 1 línea (vacía)
-        assert_eq!(lines[0], "");
+        assert_eq!(lines.len(), 0);
 
         // Intentar leer rango de un archivo vacío
-        let total_lines = lines.len();
-        let start = 1;
-        let end = 5;
-        let start_idx = start.saturating_sub(1);
-        let end_idx = end.min(total_lines);
+        let total_lines = lines.len(); // 0
+        let start: i32 = 1;
+        let end: i32 = 5;
+        let start_idx = start.saturating_sub(1) as usize; // 0
+        let end_idx = (end as usize).min(total_lines); // 0
 
         assert_eq!(start_idx, 0);
-        assert_eq!(end_idx, 1);
+        assert_eq!(end_idx, 0);
     }
 
     /// Caso límite: Pregunta del agente muy larga
