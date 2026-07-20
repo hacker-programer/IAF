@@ -625,6 +625,7 @@ mod integration_tests {
             .get(format!("{}/api/agent/status", *SERVER_URL))
             .send()
             .await;
+        match resp {
             Ok(r) => {
                 let body: serde_json::Value = r.json().await.unwrap_or_default();
                 // Si no hay auth, el servidor puede devolver error, pero si hay respuesta,
