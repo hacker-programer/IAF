@@ -97,15 +97,8 @@ async fn require_auth(
 // Chat Helpers (nueva estructura de almacenamiento)
 // ============================================================================
 
-fn sanitize_filename(name: &str) -> String {
-    name.chars()
-        .map(|c| if c.is_alphanumeric() || c == '-' || c == '_' || c == ' ' { c } else { '_' })
-        .collect::<String>()
-        .trim()
-        .replace(" ", "_")
-        .chars()
-        .take(40)
-        .collect()
+use iaf::utils::sanitize_filename;
+
 }
 
 fn get_chat_dir(state: &AppState, username: &str, is_admin_or_port80: bool) -> PathBuf {
