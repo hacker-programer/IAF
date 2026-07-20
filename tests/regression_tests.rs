@@ -736,20 +736,16 @@ mod edge_case_tests {
 
         // sanitize_filename usa is_ascii_alphanumeric: todo no-ASCII → _
         assert!(sanitized.chars().all(|c| c.is_ascii()),
-            "El nombre sanitizado no debe contener caracteres no-ASCII");
-        assert!(!sanitized.contains('á'));
-        assert!(!sanitized.contains('♥'));
-        assert!(!sanitized.contains('¿'));
-        assert!(!sanitized.contains('ó'));
-    }
-    /// BUG #3 Edge: Proyecto con path inválido
+    /// BUG #2 Edge: Título con caracteres especiales
     #[test]
-    fn test_project_with_invalid_path() {
-        let projects = vec![
-            json!({"name": "valid", "path": "C:\\valid\\path"}),
-            json!({"name": "invalid", "path": ""}),
-        ];
+    fn test_title_with_special_characters() {
+        let title = "Análisis ♥ del código: ¿bug o feature?";
+        let sanitized = sanitize_filename(title);
 
+        // sanitize_filename usa is_ascii_alphanumeric: todo no-ASCII → _
+        assert!(sanitized.chars().all(|c| c.is_ascii()),
+            "El nombre sanitizado no debe contener caracteres no-ASCII");
+    }
         let find = |name: &str| -> Option<String> {
             projects.iter()
                 .find(|p| p["name"] == name && !p["path"].as_str().unwrap_or("").is_empty())
