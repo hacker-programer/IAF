@@ -27,11 +27,8 @@ pub async fn run_agent_loop(
         let prompts = state.prompts.lock().unwrap();
         prompts.global_current.clone()
     };
-    };
 
     let local_prompt = project_name.as_ref().and_then(|name| {
-        let prompts = state.prompts.lock().unwrap();
-        prompts.projects.get(name).cloned()
     });
 
     let mut system_prompt = if let Some(local) = local_prompt {
