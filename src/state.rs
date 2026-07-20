@@ -133,7 +133,6 @@ pub struct AuditStep {
 // ============================================================================
 // Estado del Agente Activo
 // ============================================================================
-
 #[derive(Clone, Default, Serialize, Deserialize)]
 pub struct ActiveAgentStatus {
     pub running: bool,
@@ -148,8 +147,6 @@ pub struct ActiveAgentStatus {
     pub esperando_aprobacion_plan: bool,
     pub plan_propuesto: Option<String>,
     /// Mensajes informativos acumulados durante la ejecución (BUG-002)
-    /// El frontend los consume en tiempo real vía /api/agent/status
-    pub info_messages: Vec<String>,
     /// El frontend los consume en tiempo real vía /api/agent/status
     pub info_messages: Vec<String>,
     pub thinking_content: Vec<String>,
