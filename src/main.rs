@@ -1167,8 +1167,6 @@ async fn chat_endpoint(
                     };
                 }
             });
-                }
-            });
         }
     }
 
@@ -1180,6 +1178,7 @@ async fn chat_endpoint(
     })).into_response()
 }
 
+async fn get_chats(
 async fn get_chats(
     State(state): State<AppState>,
     headers: HeaderMap,
