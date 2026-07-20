@@ -300,6 +300,7 @@ mod regression_tests {
                 "BUG-003 REGRESIÓN: El prompt de estudio debe contener '{}'", frase);
         }
     }
+    #[test]
     fn reg_bug003_leccion_es_interactiva_no_resumen() {
         // Una lección interactiva debe tener:
         let leccion = json!({
