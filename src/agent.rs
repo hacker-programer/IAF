@@ -658,21 +658,76 @@ pub async fn run_agent_loop(
                             let proj_path = get_project_path(&state, proj_name);
                             let full_path = Path::new(&proj_path).join(rel_path);
                             let ext = full_path.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
-                            if ext == "pdf" || ext == "docx" {
+                            if ext == "pdf" {
                                 let path_str = full_path.to_string_lossy().to_string();
-                                if ext == "pdf" {
-                                    match std::process::Command::new("pdftotext").args(["-layout", &path_str, "-"]).output() {
-                                        Ok(out) if out.status.success() => {
-                                            let t = String::from_utf8_lossy(&out.stdout).to_string();
-                                            if t.trim().is_empty() { "PDF sin texto extraible. Usa analyze_images para ver el PDF.".to_string() }
-                                            else { format!("[PDF: {}]
-
-{}", rel_path, t) }
+                                // Intentar extraer texto del PDF usando pdf-extract (Rust nativo)
+                                match pdf_extract::extract_text(&full_path) {
+                                    Ok(text) => {
+                                        if text.trim().is_empty() {
+                                            "PDF sin texto extraíble. Usa analyze_images para ver el PDF visualmente.".to_string()
+                                        } else {
+                                            format!("[PDF: {}]\n\n{}", rel_path, text)
                                         }
-                                        _ => "No se pudo leer el PDF. Instala pdftotext o PyPDF2. Usa analyze_images como alternativa.".to_string()
                                     }
-                                } else {
-                                    "El archivo DOCX no se puede leer directamente. Instala python-docx: pip install python-docx. Usa analyze_images como alternativa.".to_string()
+                                    Err(e) => {
+                                        // Fallback: intentar pdftotext como CLI si pdf-extract falla
+                                        match std::process::Command::new("pdftotext")
+                                            .args(["-layout", &path_str, "-"])
+                                            .output()
+                                        {
+                                            Ok(out) if out.status.success() => {
+                                                let t = String::from_utf8_lossy(&out.stdout).to_string();
+                                                if t.trim().is_empty() {
+                                                    "PDF sin texto extraíble. Usa analyze_images para ver el PDF visualmente.".to_string()
+                                                } else {
+                                                    format!("[PDF: {}]\n\n{}", rel_path, t)
+                                                }
+                                            }
+                                            _ => format!(
+                                                "No se pudo leer el PDF: {}. Usa analyze_images como alternativa para verlo visualmente.",
+                                                e
+                                            )
+                                        }
+                                    }
+                                }
+                            } else if ext == "docx" {
+                                // Leer DOCX nativamente: los archivos .docx son ZIP con XML dentro
+                                match extract_text_from_docx(&full_path) {
+                                    Ok(text) => {
+                                        if text.trim().is_empty() {
+                                            "El archivo DOCX no contiene texto extraíble.".to_string()
+                                        } else {
+                                            format!("[DOCX: {}]\n\n{}", rel_path, text)
+                                        }
+                                    }
+                                    Err(e) => {
+                                        // Fallback: intentar python-docx como CLI
+                                        let path_str = full_path.to_string_lossy().to_string();
+                                        let script = format!(
+                                            "import sys; from docx import Document; doc = Document('{}'); [print(p.text) for p in doc.paragraphs]",
+                                            path_str.replace('\'', "\\'")
+                                        );
+                                        match std::process::Command::new("python3")
+                                            .args(["-c", &script])
+                                            .output()
+                                            .or_else(|_| std::process::Command::new("python")
+                                                .args(["-c", &script])
+                                                .output())
+                                        {
+                                            Ok(out) if out.status.success() => {
+                                                let t = String::from_utf8_lossy(&out.stdout).to_string();
+                                                if t.trim().is_empty() {
+                                                    "El archivo DOCX no contiene texto extraíble.".to_string()
+                                                } else {
+                                                    format!("[DOCX: {}]\n\n{}", rel_path, t)
+                                                }
+                                            }
+                                            _ => format!(
+                                                "No se pudo leer el DOCX: {}. Instala python-docx (pip install python-docx) o usa analyze_images.",
+                                                e
+                                            )
+                                        }
+                                    }
                                 }
                             } else {
                                 match fs::read_to_string(&full_path) {
@@ -685,10 +740,10 @@ pub async fn run_agent_loop(
                                         let start_idx = start.saturating_sub(1);
                                         let end_idx = end.min(total_lines);
                                         if start_idx >= total_lines || start_idx > end_idx {
-                                            format!("Error: El rango de lÃƒÂ­neas {}-{} es invÃƒÂ¡lido para un archivo de {} lÃƒÂ­neas.", start, end, total_lines)
+                                            format!("Error: El rango de líneas {}-{} es inválido para un archivo de {} líneas.", start, end, total_lines)
                                         } else {
                                             let chunk = lines[start_idx..end_idx].join("\n");
-                                            format!("// LÃƒÂ­neas {}-{} de {} en {}\n{}", start_idx + 1, end_idx, total_lines, rel_path, chunk)
+                                            format!("// Líneas {}-{} de {} en {}\n{}", start_idx + 1, end_idx, total_lines, rel_path, chunk)
                                         }
                                     } else {
                                         content
@@ -701,7 +756,6 @@ pub async fn run_agent_loop(
                             "No hay ningún proyecto activo seleccionado.".to_string()
                         }
                     }
-                    "write_file_with_commit" => {
                         'write_handler: {
                         let rel_path = args["path"].as_str().unwrap_or("");
                         let commit_msg = args["commit_message"].as_str().unwrap_or("Update by Agent");
