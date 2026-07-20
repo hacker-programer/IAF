@@ -832,19 +832,55 @@ function addMessage(role, text) {
     div.innerHTML = `<strong>${role === 'user' ? 'Tú' : 'Agente'}:</strong> ${text.replace(/\n/g, '<br>')}`;
     document.getElementById('chatArea').appendChild(div);
     document.getElementById('chatArea').scrollTop = document.getElementById('chatArea').scrollHeight;
-}
-
 // ---- Agent Monitoring (Console) ----
-// BUG FIX #A: Ahora también monitorea esperando_respuesta_usuario,
-// pregunta_usuario, esperando_aprobacion_plan y plan_propuesto.
+// BUG-002 FIX: Reestructurado para que los mensajes informativos se consuman
+// SIEMPRE, incluso cuando el agente ya terminó. La lógica anterior solo
+// consultaba info_messages si (active || running), lo que causaba que los
+// mensajes se perdieran cuando el agente finalizaba entre polls.
 async function startAgentMonitoring() {
     if (agentMonitorInterval) clearInterval(agentMonitorInterval);
     document.getElementById('interruptBtn').classList.remove('hidden');
     let lastInfoMessageCount = 0;
+    let lastSessionId = null;
 
     agentMonitorInterval = setInterval(async () => {
         const statusRes = await apiCall('/api/agent/status');
 
+        // BUG-002 FIX: Reiniciar contador solo cuando cambia la sesión
+        if (statusRes.current_session_id && statusRes.current_session_id !== lastSessionId) {
+            lastSessionId = statusRes.current_session_id;
+            lastInfoMessageCount = 0;
+        }
+
+        // BUG-002 FIX: Consumir info_messages SIEMPRE, independientemente
+        // de si el agente está corriendo o ya terminó
+        if (statusRes.info_messages && Array.isArray(statusRes.info_messages)) {
+            const currentCount = statusRes.info_messages.length;
+            if (currentCount > lastInfoMessageCount && currentCount > 0) {
+                const newMessages = statusRes.info_messages.slice(lastInfoMessageCount);
+                newMessages.forEach(function(msg) {
+                    showInfoToast(msg);
+                    addMessage('agent', '[i] ' + msg);
+                });
+                lastInfoMessageCount = currentCount;
+            }
+        }
+
+        // Mostrar mensaje final si el agente terminó
+        if (statusRes.finished && statusRes.final_message) {
+            showInfoToast('✓ ' + statusRes.final_message);
+            // Limpiar el intervalo después de mostrar el mensaje final
+            // pero dar tiempo para que se muestren los info_messages pendientes
+            setTimeout(() => {
+                if (agentMonitorInterval) {
+                    clearInterval(agentMonitorInterval);
+                    agentMonitorInterval = null;
+                    document.getElementById('interruptBtn').classList.add('hidden');
+                }
+            }, 2000);
+        }
+
+        // El resto de la lógica solo aplica cuando el agente está activo
         if (statusRes.status === 'ok' && (statusRes.active || statusRes.running)) {
             // Actualizar pasos de auditoría en la consola
             const stepsRes = await apiCall('/api/agent/steps');
@@ -852,7 +888,7 @@ async function startAgentMonitoring() {
                 renderConsoleSteps(stepsRes.steps);
             }
 
-            // BUG FIX #A — Mostrar pregunta del agente al usuario
+            // Mostrar pregunta del agente al usuario
             if (statusRes.esperando_respuesta_usuario && statusRes.pregunta_usuario && !agentQuestionShown) {
                 agentQuestionShown = true;
                 document.getElementById('agentQuestionPrompt').textContent = statusRes.pregunta_usuario;
@@ -872,27 +908,6 @@ async function startAgentMonitoring() {
                 document.getElementById('captchaAlert').classList.remove('hidden');
             }
 
-            // BUG FIX #B (BUG-002): Mostrar mensajes informativos en tiempo real
-            if (statusRes.info_messages && Array.isArray(statusRes.info_messages)) {
-                const currentCount = statusRes.info_messages.length;
-                if (currentCount > lastInfoMessageCount && currentCount > 0) {
-                    const newMessages = statusRes.info_messages.slice(lastInfoMessageCount);
-                    newMessages.forEach(function(msg) {
-                        showInfoToast(msg);
-                        addMessage('agent', '[i] ' + msg);
-                    });
-                    lastInfoMessageCount = currentCount;
-                }
-            }
-
-            // Si el agente finalizo, mostrar mensaje final
-            if (statusRes.finished) {
-                lastInfoMessageCount = 0;
-                if (statusRes.final_message) {
-                    showInfoToast('OK ' + statusRes.final_message);
-                }
-            }
-
             // Si el agente ya no está esperando respuesta, resetear flag
             if (!statusRes.esperando_respuesta_usuario) {
                 agentQuestionShown = false;
@@ -900,28 +915,14 @@ async function startAgentMonitoring() {
             if (!statusRes.esperando_aprobacion_plan) {
                 agentPlanShown = false;
             }
-        } else {
-            // Agente detenido
+        } else if (!statusRes.finished) {
+            // Agente detenido pero no finalizado (posiblemente interrumpido)
             document.getElementById('interruptBtn').classList.add('hidden');
             agentQuestionShown = false;
             agentPlanShown = false;
-            lastInfoMessageCount = 0;
         }
     }, 1500);
 }
-function renderConsoleSteps(steps) {
-    const area = document.getElementById('consoleArea');
-    area.innerHTML = steps.map(s => {
-        let cls = 'console-step';
-        const stype = s.step_type || s.type || ''; // Compatibilidad con ambos nombres de campo
-        if (stype === 'tool_call') cls += ' tool_call';
-        else if (stype === 'tool_result') cls += ' tool_result';
-        else if (stype === 'error') cls += ' error';
-        else if (stype === 'informativo') cls += ' info';
-        else if (stype === 'thinking') cls += ' thinking';
-        else if (stype === 'pregunta') cls += ' pregunta';
-        return `<div class="${cls}">
-            <div class="console-step-title">${s.title || s.step_type || s.type || ''}</div>
             <div class="console-step-detail">${s.detail || ''}</div>
         </div>`;
     }).join('');
