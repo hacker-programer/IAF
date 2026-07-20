@@ -1702,13 +1702,87 @@ pub async fn run_agent_loop(
     }
 }
 
+
 fn save_chat_steps_to_disk(state: &AppState, session_id_opt: &Option<String>, steps: &[crate::state::AuditStep]) {
     if let Some(ref session_id) = *session_id_opt {
-        let chat_file = state.base_workspace.join(".config").join("chats").join(format!("{}.json", session_id));
-        if chat_file.exists() {
+        // Buscar el archivo por UUID en el nombre (formato: <title>-<uuid>.json)
+        // o en subdirectorios de usuario
+        if let Some(chat_file) = find_chat_file_by_session_id(&state.base_workspace, session_id) {
             if let Ok(content) = fs::read_to_string(&chat_file) {
                 if let Ok(mut session) = serde_json::from_str::<crate::state::ChatSession>(&content) {
                     session.steps = Some(steps.to_vec());
+                    let _ = fs::write(&chat_file, serde_json::to_string_pretty(&session).unwrap());
+                }
+            }
+        }
+    }
+}
+
+/// Busca un archivo de chat (.json) que contenga el session_id (UUID) en su nombre.
+/// Busca recursivamente en el directorio de chats y sus subdirectorios (por usuario).
+/// Soporta tanto el formato nuevo (<title>-<uuid>.json) como el antiguo (<uuid>.json).
+fn find_chat_file_by_session_id(base_workspace: &Path, session_id: &str) -> Option<PathBuf> {
+    let chats_dir = base_workspace.join(".config").join("chats");
+    if !chats_dir.exists() {
+        return None;
+    }
+    
+    // Buscar recursivamente en chats/ y subdirectorios
+    if let Ok(entries) = std::fs::read_dir(&chats_dir) {
+        for entry in entries.filter_map(|e| e.ok()) {
+            let path = entry.path();
+            if path.is_dir() {
+                // Buscar en subdirectorio (por usuario)
+                if let Ok(sub_entries) = std::fs::read_dir(&path) {
+                    for sub_entry in sub_entries.filter_map(|e| e.ok()) {
+                        let sub_path = sub_entry.path();
+                        if sub_path.is_file() {
+                            if let Some(fname) = sub_path.file_stem().and_then(|s| s.to_str()) {
+                                if fname.contains(session_id) && sub_path.extension().and_then(|e| e.to_str()) == Some("json") {
+                                    return Some(sub_path);
+                                }
+                            }
+                        }
+                    }
+                }
+            } else if path.is_file() {
+                if let Some(fname) = path.file_stem().and_then(|s| s.to_str()) {
+                    if fname.contains(session_id) && path.extension().and_then(|e| e.to_str()) == Some("json") {
+                        return Some(path);
+                    }
+                }
+            }
+        }
+    }
+    
+    // Fallback: intentar el formato antiguo <uuid>.json directamente
+    let old_format = chats_dir.join(format!("{}.json", session_id));
+    if old_format.exists() {
+        return Some(old_format);
+    }
+    
+    None
+}
+
+/// Guarda un mensaje en el archivo JSON de la conversación en disco de forma persistente.
+/// Busca el archivo por session_id usando find_chat_file_by_session_id.
+fn save_agent_message_to_disk(state: &AppState, session_id: &str, role: &str, content: &str) {
+    if let Some(chat_file) = find_chat_file_by_session_id(&state.base_workspace, session_id) {
+        if let Ok(file_content) = fs::read_to_string(&chat_file) {
+            if let Ok(mut session) = serde_json::from_str::<crate::state::ChatSession>(&file_content) {
+                let is_duplicate = session.messages.last()
+                    .map(|m| m.content == content && m.role == role)
+                    .unwrap_or(false);
+                if !is_duplicate {
+                    session.messages.push(crate::state::ChatMessage {
+                        role: role.to_string(),
+                        content: content.to_string(),
+                        timestamp: std::time::SystemTime::now()
+                            .duration_since(std::time::UNIX_EPOCH).unwrap().as_secs(),
+                    });
+                    if let Some(parent) = chat_file.parent() {
+                        let _ = fs::create_dir_all(parent);
+                    }
                     let _ = fs::write(&chat_file, serde_json::to_string_pretty(&session).unwrap());
                 }
             }
