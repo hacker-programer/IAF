@@ -665,56 +665,100 @@ pub async fn run_agent_loop(
                                 .unwrap_or("")
                                 .to_lowercase();
 
-                            // --- PDF: extraer texto con pdf-extract ---
+                            // --- PDF: intentar extraer texto con herramientas del sistema ---
                             if extension == "pdf" {
-                                match std::fs::read(&full_path) {
-                                    Ok(bytes) => {
-                                        match pdf_extract::extract_text_from_mem(&bytes) {
-                                            Ok(text) => {
+                                let pdf_path_str = full_path.to_string_lossy().to_string();
+                                // Intentar pdftotext (poppler-utils)
+                                match std::process::Command::new("pdftotext")
+                                    .args(["-layout", &pdf_path_str, "-"])
+                                    .output()
+                                {
+                                    Ok(out) if out.status.success() => {
+                                        let text = String::from_utf8_lossy(&out.stdout).to_string();
+                                        if text.trim().is_empty() {
+                                            "El PDF fue procesado pero no contiene texto extraíble (puede ser escaneado o basado en imágenes). Prueba con la herramienta analyze_images para OCR.".to_string()
+                                        } else {
+                                            format!("[PDF extraído: {}]\n\n{}", rel_path, text)
+                                        }
+                                    }
+                                    _ => {
+                                        // Fallback: intentar con Python + PyPDF2
+                                        match std::process::Command::new("python")
+                                            .args(["-c", &format!(
+                                                "import sys; sys.path.insert(0, '.'); \
+                                                 try:\n    from PyPDF2 import PdfReader\n    r = PdfReader(r'{}')\n    for p in r.pages:\n        t = p.extract_text()\n        if t: print(t)\nexcept ImportError:\n    sys.exit(1)",
+                                                pdf_path_str.replace("'", "\\'")
+                                            )])
+                                            .output()
+                                        {
+                                            Ok(out) if out.status.success() => {
+                                                let text = String::from_utf8_lossy(&out.stdout).to_string();
                                                 if text.trim().is_empty() {
-                                                    "El PDF fue leído pero no contiene texto extraíble (puede ser escaneado o basado en imágenes).".to_string()
+                                                    "El PDF fue leído pero no contiene texto extraíble.".to_string()
                                                 } else {
                                                     format!("[PDF extraído: {}]\n\n{}", rel_path, text)
                                                 }
                                             }
-                                            Err(e) => format!("Error al extraer texto del PDF '{}': {}", rel_path, e),
+                                            _ => {
+                                                "No se pudo extraer texto del PDF. Instala pdftotext (poppler-utils) o PyPDF2 (pip install PyPDF2) para habilitar la lectura de PDFs. Como alternativa, usa la herramienta analyze_images para analizar el PDF visualmente.".to_string()
+                                            }
                                         }
                                     }
-                                    Err(e) => format!("Error leyendo archivo PDF: {}", e),
                                 }
                             }
                             // --- DOCX: extraer texto del XML interno ---
                             else if extension == "docx" {
-                                match std::fs::read(&full_path) {
-                                    Ok(bytes) => {
-                                        let cursor = std::io::Cursor::new(bytes);
-                                        match zip::ZipArchive::new(cursor) {
-                                            Ok(mut archive) => {
-                                                // Buscar word/document.xml dentro del ZIP
-                                                match archive.by_name("word/document.xml") {
-                                                    Ok(mut doc_xml) => {
-                                                        use std::io::Read;
-                                                        let mut xml_content = String::new();
-                                                        match doc_xml.read_to_string(&mut xml_content) {
-                                                            Ok(_) => {
-                                                                // Extraer texto de los tags <w:t>
-                                                                let text = extract_text_from_docx_xml(&xml_content);
-                                                                if text.trim().is_empty() {
-                                                                    "El DOCX fue leído pero no contiene texto extraíble.".to_string()
-                                                                } else {
-                                                                    format!("[DOCX extraído: {}]\n\n{}", rel_path, text)
-                                                                }
-                                                            }
-                                                            Err(e) => format!("Error al leer document.xml del DOCX: {}", e),
-                                                        }
-                                                    }
-                                                    Err(_) => "El archivo DOCX no contiene word/document.xml (formato inválido).".to_string(),
-                                                }
-                                            }
-                                            Err(e) => format!("Error al abrir DOCX como ZIP: {}", e),
+                                let docx_path_str = full_path.to_string_lossy().to_string();
+                                // Intentar con Python + python-docx
+                                match std::process::Command::new("python")
+                                    .args(["-c", &format!(
+                                        "import sys; \
+                                         try:\n    from docx import Document\n    doc = Document(r'{}')\n    for p in doc.paragraphs:\n        print(p.text)\nexcept ImportError:\n    sys.exit(1)",
+                                        docx_path_str.replace("'", "\\'")
+                                    )])
+                                    .output()
+                                {
+                                    Ok(out) if out.status.success() => {
+                                        let text = String::from_utf8_lossy(&out.stdout).to_string();
+                                        if text.trim().is_empty() {
+                                            "El DOCX fue leído pero no contiene texto.".to_string()
+                                        } else {
+                                            format!("[DOCX extraído: {}]\n\n{}", rel_path, text)
                                         }
                                     }
-                                    Err(e) => format!("Error leyendo archivo DOCX: {}", e),
+                                    _ => {
+                                        // Fallback: extraer manualmente con PowerShell (ZIP + XML)
+                                        let ps_script = format!(
+                                            "Add-Type -AssemblyName System.IO.Compression.FileSystem; \
+                                             $zip = [System.IO.Compression.ZipFile]::OpenRead('{}'); \
+                                             $entry = $zip.GetEntry('word/document.xml'); \
+                                             if ($entry) {{ \
+                                                 $stream = $entry.Open(); \
+                                                 $reader = [System.IO.StreamReader]::new($stream); \
+                                                 $xml = $reader.ReadToEnd(); \
+                                                 $reader.Close(); $stream.Close(); \
+                                                 $xml -replace '<[^>]+>', '' \
+                                             }}; \
+                                             $zip.Dispose()",
+                                            docx_path_str.replace("'", "''")
+                                        );
+                                        match std::process::Command::new("powershell")
+                                            .args(["-NoProfile", "-Command", &ps_script])
+                                            .output()
+                                        {
+                                            Ok(out) if out.status.success() => {
+                                                let text = String::from_utf8_lossy(&out.stdout).to_string();
+                                                if text.trim().is_empty() {
+                                                    "El DOCX fue leído pero no contiene texto extraíble. Instala python-docx (pip install python-docx) para mejor soporte.".to_string()
+                                                } else {
+                                                    format!("[DOCX extraído: {}]\n\n{}", rel_path, text)
+                                                }
+                                            }
+                                            _ => {
+                                                "No se pudo extraer texto del DOCX. Instala python-docx (pip install python-docx) para habilitar la lectura de DOCX.".to_string()
+                                            }
+                                        }
+                                    }
                                 }
                             }
                             // --- Archivos de texto normales ---
@@ -745,9 +789,6 @@ pub async fn run_agent_loop(
                             "No hay ningún proyecto activo seleccionado.".to_string()
                         }
                     }
-                        'write_handler: {
-                        let rel_path = args["path"].as_str().unwrap_or("");
-                        let commit_msg = args["commit_message"].as_str().unwrap_or("Update by Agent");
                         let start_line_opt = args["start_line"].as_i64();
                         let end_line_opt = args["end_line"].as_i64();
 
