@@ -14,7 +14,7 @@
 // ============================================================================
 
 use serde_json::json;
-// std::path::PathBuf y std::fs no se usan directamente en tests simulados;
+use iaf::utils::sanitize_filename;
 // se eliminan para evitar warnings.
 
 // ============================================================================
