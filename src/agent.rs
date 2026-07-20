@@ -697,7 +697,8 @@ pub async fn run_agent_loop(
                                 Err(e) => format!("Error leyendo archivo: {}", e),
                             }
                             }
-                            "No hay ningÃƒÂºn proyecto activo seleccionado.".to_string()
+                        } else {
+                            "No hay ningún proyecto activo seleccionado.".to_string()
                         }
                     }
                     "write_file_with_commit" => {
