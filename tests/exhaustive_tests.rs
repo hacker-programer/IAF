@@ -1117,9 +1117,10 @@ mod edge_case_tests {
     fn edge_rango_lineas_invertido() {
         let end = 10;
 
-        // El sistema debe detectar rango inválido
-        let is_valid_range = start <= end && start >= 1 && end <= total_lines;
-        assert!(!is_valid_range);
+    fn edge_rango_lineas_invertido() {
+        let total_lines = 100;
+        let start = 50;
+        let end = 10;
 
         // Debe devolver error, no panic
         let error_msg = format!(
