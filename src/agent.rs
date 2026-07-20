@@ -23,7 +23,7 @@ pub async fn run_agent_loop(
     _username: &str,
     _mode: &str,
 ) -> Result<String, Box<dyn Error + Send + Sync>> {
-) -> Result<String, Box<dyn Error + Send + Sync>> {
+    let global_prompt = {
         let prompts = state.prompts.lock().unwrap();
         prompts.global_current.clone()
     };
