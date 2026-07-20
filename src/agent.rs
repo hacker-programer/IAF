@@ -657,7 +657,23 @@ pub async fn run_agent_loop(
                         if let Some(ref proj_name) = project_name {
                             let proj_path = get_project_path(&state, proj_name);
                             let full_path = Path::new(&proj_path).join(rel_path);
-                            match fs::read_to_string(&full_path) {
+                            let ext = full_path.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
+                            if ext == "pdf" || ext == "docx" {
+                                let path_str = full_path.to_string_lossy().to_string();
+                                if ext == "pdf" {
+                                    match std::process::Command::new("pdftotext").args(["-layout", &path_str, "-"]).output() {
+                                        Ok(out) if out.status.success() => {
+                                            let t = String::from_utf8_lossy(&out.stdout).to_string();
+                                            if t.trim().is_empty() { "PDF sin texto extraible. Usa analyze_images para OCR.".to_string() }
+                                            else { format!("[PDF: {}]\n\n{}", rel_path, t) }
+                                        }
+                                        _ => "No se pudo leer el PDF. Instala pdftotext o PyPDF2. Usa analyze_images como alternativa.".to_string()
+                                    }
+                                } else {
+                                    "El archivo DOCX no se puede leer directamente. Instala python-docx (pip install python-docx) o usa analyze_images para analizarlo visualmente.".to_string()
+                                }
+                            } else {
+                                match fs::read_to_string(&full_path) {
                                 Ok(content) => {
                                     if start_line_opt.is_some() || end_line_opt.is_some() {
                                         let lines: Vec<&str> = content.lines().collect();
@@ -677,6 +693,7 @@ pub async fn run_agent_loop(
                                     }
                                 }
                                 Err(e) => format!("Error leyendo archivo: {}", e),
+                            }
                             }
                         } else {
                             "No hay ningÃƒÂºn proyecto activo seleccionado.".to_string()
@@ -881,6 +898,22 @@ pub async fn run_agent_loop(
                             
                             if start_line_opt.is_some() || end_line_opt.is_some() {
                                 // EdiciÃƒÂ³n por rango de lÃƒÂ­neas en archivo existente
+                                let ext = full_path.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
+                            if ext == "pdf" || ext == "docx" {
+                                let path_str = full_path.to_string_lossy().to_string();
+                                if ext == "pdf" {
+                                    match std::process::Command::new("pdftotext").args(["-layout", &path_str, "-"]).output() {
+                                        Ok(out) if out.status.success() => {
+                                            let t = String::from_utf8_lossy(&out.stdout).to_string();
+                                            if t.trim().is_empty() { "PDF sin texto extraible. Usa analyze_images para OCR.".to_string() }
+                                            else { format!("[PDF: {}]\n\n{}", rel_path, t) }
+                                        }
+                                        _ => "No se pudo leer el PDF. Instala pdftotext o PyPDF2. Usa analyze_images como alternativa.".to_string()
+                                    }
+                                } else {
+                                    "El archivo DOCX no se puede leer directamente. Instala python-docx (pip install python-docx) o usa analyze_images para analizarlo visualmente.".to_string()
+                                }
+                            } else {
                                 match fs::read_to_string(&full_path) {
                                     Ok(orig_content) => {
                                         let line_ending = if orig_content.contains("\r\n") { "\r\n" } else { "\n" };
@@ -1290,7 +1323,9 @@ pub async fn run_agent_loop(
                             // tipo informativo
                             {
                                 let mut status = state.active_agent.lock().unwrap();
-                                status.steps.push(crate::state::AuditStep {
+                                status.info_messages.push(mensaje.to_string());
+                                if status.info_messages.len() > 100 { status.info_messages.remove(0); }
+                                                                status.steps.push(crate::state::AuditStep {
                                     step_type: "informativo".to_string(),
                                     title: "NotificaciÃƒÂ³n del Agente".to_string(),
                                     detail: mensaje.to_string(),
@@ -1303,7 +1338,25 @@ pub async fn run_agent_loop(
                             format!("NotificaciÃƒÂ³n enviada con ÃƒÂ©xito: {}", mensaje)
                         }
                     }
-                    "finalizar_tarea" => {                        // Limpiar todos los procesos hijo registrados antes de finalizar                        state.process_registry.kill_all();                        let msg = args["mensaje_final"].as_str().unwrap_or("Tarea finalizada.").to_string();                        // Notificar finalizacion en el estado del agente para que el frontend lo detecte                        {                            let mut status = state.active_agent.lock().unwrap();                            status.finished = true;                            status.final_message = Some(msg.clone());                            status.running = false;                            status.steps.push(crate::state::AuditStep {                                step_type: "thinking".to_string(),                                title: "Tarea Finalizada".to_string(),                                detail: format!("El agente ha finalizado la tarea: {}", msg),                                timestamp: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs(),                            });                            if let Some(ref s_id) = session_id {                                save_chat_steps_to_disk(&state, &Some(s_id.clone()), &status.steps);                            }                        }                        final_message = Some(msg);                        "Tarea finalizada correctamente.".to_string()                    }                    "image_fetch" => {
+                    "finalizar_tarea" => {
+                        state.process_registry.kill_all();
+                        let msg = args["mensaje_final"].as_str().unwrap_or("Tarea finalizada.").to_string();
+                        let final_msg = if msg.trim().is_empty() { "Tarea finalizada.".to_string() } else { msg };
+                        { let mut status = state.active_agent.lock().unwrap();
+                            status.finished = true; status.final_message = Some(final_msg.clone());
+                            status.running = false; status.esperando_respuesta_usuario = false;
+                            status.esperando_aprobacion_plan = false; status.info_messages.clear();
+                            status.steps.push(crate::state::AuditStep {
+                                step_type: "thinking".to_string(), title: "Tarea Finalizada".to_string(),
+                                detail: format!("El agente ha finalizado la tarea: {}", final_msg),
+                                timestamp: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs(),
+                            });
+                            if let Some(ref s_id) = session_id { save_chat_steps_to_disk(&state, &Some(s_id.clone()), &status.steps); }
+                        }
+                        final_message = Some(final_msg);
+                        "Tarea finalizada correctamente.".to_string()
+                    }
+                    "image_fetch" => {
                         let url = args["url"].as_str().unwrap_or("");
                         if url.is_empty() {
                             json!({"error": "No se proporcionÃƒÂ³ URL"}).to_string()
