@@ -1385,7 +1385,11 @@ pub async fn run_agent_loop(
                         { let mut status = state.active_agent.lock().unwrap();
                             status.finished = true; status.final_message = Some(final_msg.clone());
                             status.running = false; status.esperando_respuesta_usuario = false;
-                            status.esperando_aprobacion_plan = false; status.info_messages.clear();
+                            status.esperando_aprobacion_plan = false;
+                            // BUG-002 FIX: No limpiar info_messages aquí. El frontend los consume
+                            // incrementalmente vía lastInfoMessageCount. Si se limpian, el
+                            // frontend pierde los mensajes que no alcanzó a leer antes de
+                            // que el agente terminara.
                             status.steps.push(crate::state::AuditStep {
                                 step_type: "thinking".to_string(), title: "Tarea Finalizada".to_string(),
                                 detail: format!("El agente ha finalizado la tarea: {}", final_msg),
@@ -1395,6 +1399,7 @@ pub async fn run_agent_loop(
                         }
                         final_message = Some(final_msg);
                         "Tarea finalizada correctamente.".to_string()
+                        }
                         }
                     "image_fetch" => {
                         let url = args["url"].as_str().unwrap_or("");
