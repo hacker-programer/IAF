@@ -896,10 +896,9 @@ mod fault_injection_tests {
 
         let state = Arc::new(Mutex::new(json!({
             "running": true,
-            "pending_notification": null::<String>,
+            "pending_notification": null,
             "steps": []
         })));
-
         let state_clone = state.clone();
         let agent_thread = thread::spawn(move || {
             // Agente escribe notificación
