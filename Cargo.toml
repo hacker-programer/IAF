@@ -31,3 +31,5 @@ pdf-extract = "0.7"
 zip = "1.1"
 [dev-dependencies]
 tokio-test = "0.4"
+pdf-extract = "0.7"
+zip = { version = "1.1", default-features = false, features = ["deflate"] }
