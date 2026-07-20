@@ -274,6 +274,7 @@ mod regression_tests {
     // =========================================================================
 
     /// Verifica que el system prompt de estudio contenga directivas anti-resumen
+    /// Verifica que el system prompt de estudio contenga directivas anti-resumen
     #[test]
     fn reg_bug003_study_prompt_contiene_directivas_anti_resumen() {
         // Estas frases deben aparecer en el study system prompt
@@ -288,9 +289,9 @@ mod regression_tests {
         // Simulamos verificación de que el prompt contiene estas frases
         // (el test real leería el archivo prompts/study_system_prompt.txt)
         let prompt_simulado = concat!(
-            "Eres un TUTOR EXPERTO. Tu meta es ENSEÑAR, no hacer el trabajo.\n",
+            "Eres un TUTOR EXPERTO. Tu meta es ENSEÑAR, no hacer el trabajo por el alumno.\n",
             "NUNCA escribas el código final. Explica, guía, da pistas.\n",
-            "No des resúmenes ni temarios: ENSEÑA, no resumas.\n",
+            "No dar resúmenes ni temarios: ENSEÑA, no resumas.\n",
             "Enseña paso a paso. Cada concepto debe ser explicado.\n",
         );
 
@@ -299,8 +300,6 @@ mod regression_tests {
                 "BUG-003 REGRESIÓN: El prompt de estudio debe contener '{}'", frase);
         }
     }
-
-    /// Verifica que el contenido de una lección sea interactivo, no un resumen
     #[test]
     fn reg_bug003_leccion_es_interactiva_no_resumen() {
         // Una lección interactiva debe tener:
