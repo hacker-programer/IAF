@@ -99,7 +99,7 @@ async fn require_auth(
 
 use iaf::utils::sanitize_filename;
 
-}
+
 
 fn get_chat_dir(state: &AppState, username: &str, is_admin_or_port80: bool) -> PathBuf {
     if is_admin_or_port80 || username == "admin_local" {
