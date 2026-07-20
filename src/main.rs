@@ -1531,8 +1531,6 @@ async fn get_agent_status(State(state): State<AppState>) -> impl IntoResponse {
         "status": "ok",
         "active": status.running,
         "running": status.running,
-        "finished": status.finished,
-        "final_message": status.final_message,
         "interrupted": status.interrupted,
         "esperando_respuesta_usuario": status.esperando_respuesta_usuario,
         "pregunta_usuario": status.pregunta_usuario,
@@ -1541,11 +1539,11 @@ async fn get_agent_status(State(state): State<AppState>) -> impl IntoResponse {
         "current_session_id": status.current_session_id,
     }))
 }
-    State(state): State<AppState>,
-    headers: HeaderMap,
-}
 async fn agent_steps(
     State(state): State<AppState>,
+    headers: HeaderMap,
+) -> impl IntoResponse {
+    let _username = match require_auth(&state, &headers).await {
         Ok(u) => u,
         Err(_) => return Json(json!({ "status": "ok", "steps": [] })).into_response(),
     };
