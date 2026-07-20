@@ -15,8 +15,6 @@
 
 use serde_json::json;
 use iaf::utils::sanitize_filename;
-// se eliminan para evitar warnings.
-
 // ============================================================================
 // BUG #1: notificar_usuario informativo no se muestra en tiempo real
 // ============================================================================
