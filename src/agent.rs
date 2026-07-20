@@ -1657,13 +1657,17 @@ pub async fn run_agent_loop(
                             tool_result.clone()
                         },
                         timestamp: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs(),
-                    });
-                    save_chat_steps_to_disk(&state, &session_id, &status.steps);
+            if let Some(msg) = final_message {
+                // Asegurar que el estado refleje la finalización
+                {
+                    let mut status = state.active_agent.lock().unwrap();
+                    status.finished = true;
+                    status.final_message = Some(msg.clone());
+                    status.running = false;
                 }
-
-                let display_result = state.tool_results.store(call_id, func_name, &tool_result);
-
-                tool_responses.push(json!({
+                state.process_registry.kill_all();
+                return Ok(msg);
+            }
                     "role": "tool",
                     "tool_call_id": call_id,
                     "content": display_result
