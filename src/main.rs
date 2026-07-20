@@ -1143,6 +1143,7 @@ async fn chat_endpoint(
 
                 let mut ag = state_bg.active_agent.lock().unwrap();
                 ag.running = false;
+                if !ag.finished { ag.finished = true; ag.final_message = match &result { Ok(resp) => Some(resp.clone()), Err(e) => Some(format!("Error: {}", e)), }; }
             });
         }
     }
