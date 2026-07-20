@@ -1304,6 +1304,22 @@ pub async fn run_agent_loop(
                         // Limpiar todos los procesos hijo registrados antes de finalizar
                         state.process_registry.kill_all();
                         let msg = args["mensaje_final"].as_str().unwrap_or("Tarea finalizada.").to_string();
+                        // Notificar finalización en el estado del agente para que el frontend lo detecte
+                        {
+                            let mut status = state.active_agent.lock().unwrap();
+                            status.finished = true;
+                            status.final_message = Some(msg.clone());
+                            status.running = false;
+                            status.steps.push(crate::state::AuditStep {
+                                step_type: "thinking".to_string(),
+                                title: "Tarea Finalizada".to_string(),
+                                detail: format!("El agente ha finalizado la tarea: {}", msg),
+                                timestamp: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs(),
+                            });
+                            if let Some(ref s_id) = session_id {
+                                save_chat_steps_to_disk(&state, &Some(s_id.clone()), &status.steps);
+                            }
+                        }
                         final_message = Some(msg);
                         "Tarea finalizada correctamente.".to_string()
                     }
