@@ -1,4 +1,4 @@
-﻿#![allow(dead_code, unused_imports, unused_variables)]
+#![allow(dead_code, unused_imports, unused_variables)]
 use serde_json::{json, Value};
 use std::error::Error;
 use std::process::Command;
@@ -20,8 +20,10 @@ pub async fn run_agent_loop(
     voyage_key: &str,
     openrouter_key: &str,
     session_id: Option<String>,
+    _username: &str,
+    _mode: &str,
 ) -> Result<String, Box<dyn Error + Send + Sync>> {
-    let global_prompt = {
+) -> Result<String, Box<dyn Error + Send + Sync>> {
         let prompts = state.prompts.lock().unwrap();
         prompts.global_current.clone()
     };
@@ -602,22 +604,7 @@ pub async fn run_agent_loop(
             }
             
             if let Some(ref s_id) = session_id {
-                let chat_file = state.base_workspace.join(".config").join("chats").join(format!("{}.json", s_id));
-                if chat_file.exists() {
-                    if let Ok(content_json) = fs::read_to_string(&chat_file) {
-                        if let Ok(mut session) = serde_json::from_str::<crate::state::ChatSession>(&content_json) {
-                            let is_duplicate = session.messages.last().map(|m| m.content == content && m.role == "agent").unwrap_or(false);
-                            if !is_duplicate {
-                                session.messages.push(crate::state::ChatMessage {
-                                    role: "agent".to_string(),
-                                    content: content.to_string(),
-                                    timestamp: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs(),
-                                });
-                                let _ = fs::write(&chat_file, serde_json::to_string_pretty(&session).unwrap());
-                            }
-                        }
-                    }
-                }
+                save_agent_message_to_disk(&state, s_id, "agent", &content);
             }
         }
 
@@ -1259,22 +1246,7 @@ pub async fn run_agent_loop(
                         let mensaje = args["mensaje"].as_str().unwrap_or("");
                         
                         if let Some(ref s_id) = session_id {
-                            let chat_file = state.base_workspace.join(".config").join("chats").join(format!("{}.json", s_id));
-                            if chat_file.exists() {
-                                if let Ok(content_json) = fs::read_to_string(&chat_file) {
-                                    if let Ok(mut session) = serde_json::from_str::<crate::state::ChatSession>(&content_json) {
-                                        let is_duplicate = session.messages.last().map(|m| m.content == mensaje && m.role == "agent").unwrap_or(false);
-                                        if !is_duplicate {
-                                            session.messages.push(crate::state::ChatMessage {
-                                                role: "agent".to_string(),
-                                                content: mensaje.to_string(),
-                                                timestamp: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs(),
-                                            });
-                                            let _ = fs::write(&chat_file, serde_json::to_string_pretty(&session).unwrap());
-                                        }
-                                    }
-                                }
-                            }
+                            save_agent_message_to_disk(&state, s_id, "agent", &mensaje);
                         }
                         
                         if tipo == "pregunta" {
@@ -1335,6 +1307,22 @@ pub async fn run_agent_loop(
                         // Limpiar todos los procesos hijo registrados antes de finalizar
                         state.process_registry.kill_all();
                         let msg = args["mensaje_final"].as_str().unwrap_or("Tarea finalizada.").to_string();
+                        // Notificar finalizacion en el estado del agente para que el frontend lo detecte
+                        {
+                            let mut status = state.active_agent.lock().unwrap();
+                            status.finished = true;
+                            status.final_message = Some(msg.clone());
+                            status.running = false;
+                            status.steps.push(crate::state::AuditStep {
+                                step_type: "thinking".to_string(),
+                                title: "Tarea Finalizada".to_string(),
+                                detail: format!("El agente ha finalizado la tarea: {}", msg),
+                                timestamp: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs(),
+                            });
+                            if let Some(ref s_id) = session_id {
+                                save_chat_steps_to_disk(&state, &Some(s_id.clone()), &status.steps);
+                            }
+                        }
                         final_message = Some(msg);
                         "Tarea finalizada correctamente.".to_string()
                     }
@@ -1689,6 +1677,13 @@ pub async fn run_agent_loop(
                 messages.push(tr);
             }
             if let Some(msg) = final_message {
+                // Asegurar que el estado refleje la finalizacion
+                {
+                    let mut status = state.active_agent.lock().unwrap();
+                    status.finished = true;
+                    status.final_message = Some(msg.clone());
+                    status.running = false;
+                }
                 state.process_registry.kill_all();
                 return Ok(msg);
             }
@@ -1702,13 +1697,65 @@ pub async fn run_agent_loop(
     }
 }
 
+
 fn save_chat_steps_to_disk(state: &AppState, session_id_opt: &Option<String>, steps: &[crate::state::AuditStep]) {
     if let Some(ref session_id) = *session_id_opt {
-        let chat_file = state.base_workspace.join(".config").join("chats").join(format!("{}.json", session_id));
-        if chat_file.exists() {
+        if let Some(chat_file) = find_chat_file_by_session_id(&state.base_workspace, session_id) {
             if let Ok(content) = fs::read_to_string(&chat_file) {
                 if let Ok(mut session) = serde_json::from_str::<crate::state::ChatSession>(&content) {
                     session.steps = Some(steps.to_vec());
+                    let _ = fs::write(&chat_file, serde_json::to_string_pretty(&session).unwrap());
+                }
+            }
+        }
+    }
+}
+
+fn find_chat_file_by_session_id(base_workspace: &Path, session_id: &str) -> Option<PathBuf> {
+    let chats_dir = base_workspace.join(".config").join("chats");
+    if !chats_dir.exists() { return None; }
+    if let Ok(entries) = std::fs::read_dir(&chats_dir) {
+        for entry in entries.filter_map(|e| e.ok()) {
+            let path = entry.path();
+            if path.is_dir() {
+                if let Ok(sub_entries) = std::fs::read_dir(&path) {
+                    for sub_entry in sub_entries.filter_map(|e| e.ok()) {
+                        let sub_path = sub_entry.path();
+                        if sub_path.is_file() {
+                            if let Some(fname) = sub_path.file_stem().and_then(|s| s.to_str()) {
+                                if fname.contains(session_id) and sub_path.extension().and_then(|e| e.to_str()) == Some("json") {
+                                    return Some(sub_path);
+                                }
+                            }
+                        }
+                    }
+                }
+            } else if path.is_file() {
+                if let Some(fname) = path.file_stem().and_then(|s| s.to_str()) {
+                    if fname.contains(session_id) and path.extension().and_then(|e| e.to_str()) == Some("json") {
+                        return Some(path);
+                    }
+                }
+            }
+        }
+    }
+    let old_format = chats_dir.join(format!("{}.json", session_id));
+    if old_format.exists() { return Some(old_format); }
+    None
+}
+
+fn save_agent_message_to_disk(state: &AppState, session_id: &str, role: &str, content: &str) {
+    if let Some(chat_file) = find_chat_file_by_session_id(&state.base_workspace, session_id) {
+        if let Ok(file_content) = fs::read_to_string(&chat_file) {
+            if let Ok(mut session) = serde_json::from_str::<crate::state::ChatSession>(&file_content) {
+                let is_duplicate = session.messages.last()
+                    .map(|m| m.content == content && m.role == role).unwrap_or(false);
+                if !is_duplicate {
+                    session.messages.push(crate::state::ChatMessage {
+                        role: role.to_string(), content: content.to_string(),
+                        timestamp: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs(),
+                    });
+                    if let Some(parent) = chat_file.parent() { let _ = fs::create_dir_all(parent); }
                     let _ = fs::write(&chat_file, serde_json::to_string_pretty(&session).unwrap());
                 }
             }
@@ -1995,7 +2042,7 @@ async fn compress_active_messages_if_needed(
 
                             // Guardar en el archivo JSON de la conversaciÃƒÂ³n en disco de forma persistente
                             if let Some(ref session_id) = *session_id_opt {
-                                let chat_file = state.base_workspace.join(".config").join("chats").join(format!("{}.json", session_id));
+                                if let Some(chat_file) = find_chat_file_by_session_id(&state.base_workspace, session_id) {
                                 if chat_file.exists() {
                                     if let Ok(content) = fs::read_to_string(&chat_file) {
                                         if let Ok(mut session) = serde_json::from_str::<crate::state::ChatSession>(&content) {
