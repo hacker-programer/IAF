@@ -1167,6 +1167,13 @@ async fn chat_endpoint(
                     };
                 }
             });
+                }
+            });
+        }
+    }
+
+    Json(json!({
+        "status": "ok",
         "session_id": session.id,
         "title": session.title,
         "chat_path": save_path.to_string_lossy(),
