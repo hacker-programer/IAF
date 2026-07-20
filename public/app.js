@@ -840,6 +840,8 @@ function addMessage(role, text) {
 async function startAgentMonitoring() {
     if (agentMonitorInterval) clearInterval(agentMonitorInterval);
     document.getElementById('interruptBtn').classList.remove('hidden');
+    let lastInfoMessageCount = 0;
+
     agentMonitorInterval = setInterval(async () => {
         const statusRes = await apiCall('/api/agent/status');
 
@@ -870,6 +872,27 @@ async function startAgentMonitoring() {
                 document.getElementById('captchaAlert').classList.remove('hidden');
             }
 
+            // BUG FIX #B (BUG-002): Mostrar mensajes informativos en tiempo real
+            if (statusRes.info_messages && Array.isArray(statusRes.info_messages)) {
+                const currentCount = statusRes.info_messages.length;
+                if (currentCount > lastInfoMessageCount && currentCount > 0) {
+                    const newMessages = statusRes.info_messages.slice(lastInfoMessageCount);
+                    newMessages.forEach(function(msg) {
+                        showInfoToast(msg);
+                        addMessage('agent', '[i] ' + msg);
+                    });
+                    lastInfoMessageCount = currentCount;
+                }
+            }
+
+            // Si el agente finalizo, mostrar mensaje final
+            if (statusRes.finished) {
+                lastInfoMessageCount = 0;
+                if (statusRes.final_message) {
+                    showInfoToast('OK ' + statusRes.final_message);
+                }
+            }
+
             // Si el agente ya no está esperando respuesta, resetear flag
             if (!statusRes.esperando_respuesta_usuario) {
                 agentQuestionShown = false;
@@ -882,6 +905,7 @@ async function startAgentMonitoring() {
             document.getElementById('interruptBtn').classList.add('hidden');
             agentQuestionShown = false;
             agentPlanShown = false;
+            lastInfoMessageCount = 0;
         }
     }, 1500);
 }
@@ -902,6 +926,23 @@ function renderConsoleSteps(steps) {
         </div>`;
     }).join('');
     area.scrollTop = area.scrollHeight;
+}
+
+
+function showInfoToast(message) {
+    var toast = document.createElement('div');
+    toast.className = 'info-toast';
+    toast.textContent = message;
+    toast.style.cssText = 'position:fixed;bottom:20px;right:20px;background:linear-gradient(135deg,#1a1a2e,#16213e);color:#e0e0e0;padding:12px 20px;border-radius:8px;border:1px solid var(--accent,#00d4ff);box-shadow:0 4px 20px rgba(0,0,0,0.5);z-index:10000;max-width:400px;font-size:13px;animation:slideIn 0.3s ease-out;cursor:pointer;';
+    toast.onclick = function() { toast.remove(); };
+    document.body.appendChild(toast);
+    setTimeout(function() {
+        if (toast.parentNode) {
+            toast.style.opacity = '0';
+            toast.style.transition = 'opacity 0.3s';
+            setTimeout(function() { if (toast.parentNode) toast.remove(); }, 300);
+        }
+    }, 8000);
 }
 
 document.getElementById('interruptBtn').onclick = async () => {
