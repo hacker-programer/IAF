@@ -7,7 +7,7 @@ use crate::validator::validate_file_after_write;
 use crate::scraper::{perform_search, scraper_clean_tags};
 use crate::sub_agent;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use base64::{engine::general_purpose, Engine as _};
 use uuid::Uuid;
 const DEEPSEEK_API_URL: &str = "https://api.deepseek.com/v1/chat/completions";
