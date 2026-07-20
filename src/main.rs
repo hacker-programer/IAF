@@ -2081,6 +2081,7 @@ async fn main() {
         challenge_store: ChallengeStore::new(300),
         session_store: SessionStore::new(),
         study_engine: StudyEngine::new(base_workspace.clone()),
+        sync_store: SyncStore::new(&config_dir),
         connected_clients: Arc::new(Mutex::new(HashMap::new())),
         client_pending_requests: Arc::new(Mutex::new(HashMap::new())),
         client_responses: Arc::new(Mutex::new(HashMap::new())),
