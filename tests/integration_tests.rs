@@ -880,6 +880,7 @@ mod study_mode_tests {
     }
 
     // =========================================================================
+    // =========================================================================
     // REG-STU-PATH-002: La ruta del knowledge base debe ser learnings.json
     // =========================================================================
 
@@ -890,11 +891,14 @@ mod study_mode_tests {
         let expected_path = base.join(".config").join("data").join(username).join("learnings.json");
         let path_str = expected_path.to_string_lossy().to_string();
 
-        assert!(path_str.contains(".config/data"), "REG-STU-PATH-002: Ruta debe contener .config/data");
+        // Verificar componentes por separado (multiplataforma: Windows usa \, Linux usa /)
+        assert!(path_str.contains(".config"), "REG-STU-PATH-002: Ruta debe contener .config");
+        assert!(path_str.contains("data"), "REG-STU-PATH-002: Ruta debe contener 'data'");
+        assert!(path_str.contains(username), "REG-STU-PATH-002: Ruta debe contener el username");
         assert!(path_str.ends_with("learnings.json"), "REG-STU-PATH-002: El archivo debe llamarse learnings.json");
-        assert!(!path_str.contains("study/knowledge"), "REG-STU-PATH-002: NO debe usar study/knowledge");
+        assert!(!path_str.contains("study"), "REG-STU-PATH-002: NO debe usar 'study' en la ruta");
+        assert!(!path_str.contains("knowledge"), "REG-STU-PATH-002: NO debe usar 'knowledge' en la ruta");
     }
-
     // =========================================================================
     // REG-STU-PATH-003: StudyEngine::new recibe base_workspace en main.rs
     // =========================================================================
