@@ -657,138 +657,35 @@ pub async fn run_agent_loop(
                         if let Some(ref proj_name) = project_name {
                             let proj_path = get_project_path(&state, proj_name);
                             let full_path = Path::new(&proj_path).join(rel_path);
-
-                            // Detectar extensión para formatos especiales (BUG-001 fix)
-                            let extension = full_path
-                                .extension()
-                                .and_then(|e| e.to_str())
-                                .unwrap_or("")
-                                .to_lowercase();
-
-                            // --- PDF: intentar extraer texto con herramientas del sistema ---
-                            if extension == "pdf" {
-                                let pdf_path_str = full_path.to_string_lossy().to_string();
-                                // Intentar pdftotext (poppler-utils)
-                                match std::process::Command::new("pdftotext")
-                                    .args(["-layout", &pdf_path_str, "-"])
-                                    .output()
-                                {
-                                    Ok(out) if out.status.success() => {
-                                        let text = String::from_utf8_lossy(&out.stdout).to_string();
-                                        if text.trim().is_empty() {
-                                            "El PDF fue procesado pero no contiene texto extraíble (puede ser escaneado o basado en imágenes). Prueba con la herramienta analyze_images para OCR.".to_string()
+                            match fs::read_to_string(&full_path) {
+                                Ok(content) => {
+                                    if start_line_opt.is_some() || end_line_opt.is_some() {
+                                        let lines: Vec<&str> = content.lines().collect();
+                                        let total_lines = lines.len();
+                                        let start = start_line_opt.unwrap_or(1).max(1) as usize;
+                                        let end = end_line_opt.unwrap_or(total_lines as i64).max(1) as usize;
+                                        let start_idx = start.saturating_sub(1);
+                                        let end_idx = end.min(total_lines);
+                                        if start_idx >= total_lines || start_idx > end_idx {
+                                            format!("Error: El rango de lÃƒÂ­neas {}-{} es invÃƒÂ¡lido para un archivo de {} lÃƒÂ­neas.", start, end, total_lines)
                                         } else {
-                                            format!("[PDF extraído: {}]\n\n{}", rel_path, text)
+                                            let chunk = lines[start_idx..end_idx].join("\n");
+                                            format!("// LÃƒÂ­neas {}-{} de {} en {}\n{}", start_idx + 1, end_idx, total_lines, rel_path, chunk)
                                         }
-                                    }
-                                    _ => {
-                                        // Fallback: intentar con Python + PyPDF2
-                                        match std::process::Command::new("python")
-                                            .args(["-c", &format!(
-                                                "import sys; sys.path.insert(0, '.'); \
-                                                 try:\n    from PyPDF2 import PdfReader\n    r = PdfReader(r'{}')\n    for p in r.pages:\n        t = p.extract_text()\n        if t: print(t)\nexcept ImportError:\n    sys.exit(1)",
-                                                pdf_path_str.replace("'", "\\'")
-                                            )])
-                                            .output()
-                                        {
-                                            Ok(out) if out.status.success() => {
-                                                let text = String::from_utf8_lossy(&out.stdout).to_string();
-                                                if text.trim().is_empty() {
-                                                    "El PDF fue leído pero no contiene texto extraíble.".to_string()
-                                                } else {
-                                                    format!("[PDF extraído: {}]\n\n{}", rel_path, text)
-                                                }
-                                            }
-                                            _ => {
-                                                "No se pudo extraer texto del PDF. Instala pdftotext (poppler-utils) o PyPDF2 (pip install PyPDF2) para habilitar la lectura de PDFs. Como alternativa, usa la herramienta analyze_images para analizar el PDF visualmente.".to_string()
-                                            }
-                                        }
+                                    } else {
+                                        content
                                     }
                                 }
-                            }
-                            // --- DOCX: extraer texto del XML interno ---
-                            else if extension == "docx" {
-                                let docx_path_str = full_path.to_string_lossy().to_string();
-                                // Intentar con Python + python-docx
-                                match std::process::Command::new("python")
-                                    .args(["-c", &format!(
-                                        "import sys; \
-                                         try:\n    from docx import Document\n    doc = Document(r'{}')\n    for p in doc.paragraphs:\n        print(p.text)\nexcept ImportError:\n    sys.exit(1)",
-                                        docx_path_str.replace("'", "\\'")
-                                    )])
-                                    .output()
-                                {
-                                    Ok(out) if out.status.success() => {
-                                        let text = String::from_utf8_lossy(&out.stdout).to_string();
-                                        if text.trim().is_empty() {
-                                            "El DOCX fue leído pero no contiene texto.".to_string()
-                                        } else {
-                                            format!("[DOCX extraído: {}]\n\n{}", rel_path, text)
-                                        }
-                                    }
-                                    _ => {
-                                        // Fallback: extraer manualmente con PowerShell (ZIP + XML)
-                                        let ps_script = format!(
-                                            "Add-Type -AssemblyName System.IO.Compression.FileSystem; \
-                                             $zip = [System.IO.Compression.ZipFile]::OpenRead('{}'); \
-                                             $entry = $zip.GetEntry('word/document.xml'); \
-                                             if ($entry) {{ \
-                                                 $stream = $entry.Open(); \
-                                                 $reader = [System.IO.StreamReader]::new($stream); \
-                                                 $xml = $reader.ReadToEnd(); \
-                                                 $reader.Close(); $stream.Close(); \
-                                                 $xml -replace '<[^>]+>', '' \
-                                             }}; \
-                                             $zip.Dispose()",
-                                            docx_path_str.replace("'", "''")
-                                        );
-                                        match std::process::Command::new("powershell")
-                                            .args(["-NoProfile", "-Command", &ps_script])
-                                            .output()
-                                        {
-                                            Ok(out) if out.status.success() => {
-                                                let text = String::from_utf8_lossy(&out.stdout).to_string();
-                                                if text.trim().is_empty() {
-                                                    "El DOCX fue leído pero no contiene texto extraíble. Instala python-docx (pip install python-docx) para mejor soporte.".to_string()
-                                                } else {
-                                                    format!("[DOCX extraído: {}]\n\n{}", rel_path, text)
-                                                }
-                                            }
-                                            _ => {
-                                                "No se pudo extraer texto del DOCX. Instala python-docx (pip install python-docx) para habilitar la lectura de DOCX.".to_string()
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                            // --- Archivos de texto normales ---
-                            else {
-                                match fs::read_to_string(&full_path) {
-                                    Ok(content) => {
-                                        if start_line_opt.is_some() || end_line_opt.is_some() {
-                                            let lines: Vec<&str> = content.lines().collect();
-                                            let total_lines = lines.len();
-                                            let start = start_line_opt.unwrap_or(1).max(1) as usize;
-                                            let end = end_line_opt.unwrap_or(total_lines as i64).max(1) as usize;
-                                            let start_idx = start.saturating_sub(1);
-                                            let end_idx = end.min(total_lines);
-                                            if start_idx >= total_lines || start_idx > end_idx {
-                                                format!("Error: El rango de líneas {}-{} es inválido para un archivo de {} líneas.", start, end, total_lines)
-                                            } else {
-                                                let chunk = lines[start_idx..end_idx].join("\n");
-                                                format!("// Líneas {}-{} de {} en {}\n{}", start_idx + 1, end_idx, total_lines, rel_path, chunk)
-                                            }
-                                        } else {
-                                            content
-                                        }
-                                    }
-                                    Err(e) => format!("Error leyendo archivo: {}", e),
-                                }
+                                Err(e) => format!("Error leyendo archivo: {}", e),
                             }
                         } else {
-                            "No hay ningún proyecto activo seleccionado.".to_string()
+                            "No hay ningÃƒÂºn proyecto activo seleccionado.".to_string()
                         }
                     }
+                    "write_file_with_commit" => {
+                        'write_handler: {
+                        let rel_path = args["path"].as_str().unwrap_or("");
+                        let commit_msg = args["commit_message"].as_str().unwrap_or("Update by Agent");
                         let start_line_opt = args["start_line"].as_i64();
                         let end_line_opt = args["end_line"].as_i64();
 
@@ -1388,70 +1285,49 @@ pub async fn run_agent_loop(
                                     }
                                 }
                             };
+                            format!("Respuesta del usuario: {}", respuesta)
                         } else {
                             // tipo informativo
                             {
                                 let mut status = state.active_agent.lock().unwrap();
-                                // Agregar a info_messages para que el frontend lo muestre (BUG-002 fix)
-                                status.info_messages.push(mensaje.to_string());
-                                // Limitar info_messages a 100 para evitar crecimiento ilimitado
-                                if status.info_messages.len() > 100 {
-                                    status.info_messages.remove(0);
-                                }
                                 status.steps.push(crate::state::AuditStep {
                                     step_type: "informativo".to_string(),
-                                    title: "Notificación del Agente".to_string(),
+                                    title: "NotificaciÃƒÂ³n del Agente".to_string(),
                                     detail: mensaje.to_string(),
                                     timestamp: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs(),
                                 });
                                 if let Some(ref s_id) = session_id {
                                     save_chat_steps_to_disk(&state, &Some(s_id.clone()), &status.steps);
-                    "finalizar_tarea" => {
-                        // Limpiar todos los procesos hijo registrados antes de finalizar
-                        state.process_registry.kill_all();
-
-                        let msg = args["mensaje_final"]
-                            .as_str()
-                            .unwrap_or("Tarea finalizada.")
-                            .to_string();
-
-                        // Validar que el mensaje no esté vacío
-                        let final_msg = if msg.trim().is_empty() {
-                            "Tarea finalizada.".to_string()
-                        } else {
-                            msg
-                        };
-
-                        // Actualizar estado del agente para que el frontend lo detecte
-                        {
-                            let mut status = state.active_agent.lock().unwrap();
-                            status.finished = true;
-                            status.final_message = Some(final_msg.clone());
-                            status.running = false;
-                            status.esperando_respuesta_usuario = false;
-                            status.esperando_aprobacion_plan = false;
-                            // Limpiar info_messages al finalizar (BUG-004 fix)
-                            status.info_messages.clear();
-                            status.steps.push(crate::state::AuditStep {
-                                step_type: "thinking".to_string(),
-                                title: "Tarea Finalizada".to_string(),
-                                detail: format!("El agente ha finalizado la tarea: {}", final_msg),
-                                timestamp: std::time::SystemTime::now()
-                                    .duration_since(std::time::UNIX_EPOCH)
-                                    .unwrap()
-                                    .as_secs(),
-                            });
-                            if let Some(ref s_id) = session_id {
-                                save_chat_steps_to_disk(
-                                    &state,
-                                    &Some(s_id.clone()),
-                                    &status.steps,
-                                );
+                                }
                             }
+                            format!("NotificaciÃƒÂ³n enviada con ÃƒÂ©xito: {}", mensaje)
                         }
-                        final_message = Some(final_msg);
-                        "Tarea finalizada correctamente.".to_string()
                     }
+                    "finalizar_tarea" => {                        // Limpiar todos los procesos hijo registrados antes de finalizar                        state.process_registry.kill_all();                        let msg = args["mensaje_final"].as_str().unwrap_or("Tarea finalizada.").to_string();                        // Notificar finalizacion en el estado del agente para que el frontend lo detecte                        {                            let mut status = state.active_agent.lock().unwrap();                            status.finished = true;                            status.final_message = Some(msg.clone());                            status.running = false;                            status.steps.push(crate::state::AuditStep {                                step_type: "thinking".to_string(),                                title: "Tarea Finalizada".to_string(),                                detail: format!("El agente ha finalizado la tarea: {}", msg),                                timestamp: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs(),                            });                            if let Some(ref s_id) = session_id {                                save_chat_steps_to_disk(&state, &Some(s_id.clone()), &status.steps);                            }                        }                        final_message = Some(msg);                        "Tarea finalizada correctamente.".to_string()                    }                    "image_fetch" => {
+                        let url = args["url"].as_str().unwrap_or("");
+                        if url.is_empty() {
+                            json!({"error": "No se proporcionÃƒÂ³ URL"}).to_string()
+                        } else {
+                            let fetch_client = reqwest::Client::builder()
+                                .user_agent("Mozilla/5.0")
+                                .timeout(std::time::Duration::from_secs(30))
+                                .build();
+                            match fetch_client {
+                                Ok(c) => {
+                                    match c.get(url).send().await {
+                                        Ok(resp) => {
+                                            match resp.bytes().await {
+                                                Ok(bytes) => {
+                                                    let id = Uuid::new_v4().to_string();
+                                                    // Determinar nombre del archivo desde la URL
+                                                    let filename = reqwest::Url::parse(url)
+                                                        .ok()
+                                                        .and_then(|u| u.path_segments()
+                                                            .and_then(|s| s.last().map(|s| s.to_string())))
+                                                        .unwrap_or_else(|| "image.bin".to_string());
+                                                    let safe_name = format!("{}_{}", &id[..8], filename);
+                                                    let assets_dir = if let Some(ref proj_name) = project_name {
+                                                        let proj_path = get_project_path(&state, proj_name);
                                                         Path::new(&proj_path).join("src").join("assets").join("images")
                                                     } else {
                                                         state.base_workspace.join("assets").join("images")
@@ -2414,6 +2290,5 @@ fn sanitize_messages_for_api(messages: &mut Vec<serde_json::Value>) {
             }
         }
         i += 1;
-    }
     }
 }

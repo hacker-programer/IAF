@@ -144,14 +144,11 @@ pub struct ActiveAgentStatus {
     pub final_message: Option<String>,
     pub esperando_respuesta_usuario: bool,
     pub pregunta_usuario: Option<String>,
-    /// Mensaje de resumen final cuando el agente termina
-    pub final_message: Option<String>,
-    pub esperando_respuesta_usuario: bool,
-    pub pregunta_usuario: Option<String>,
     pub respuesta_usuario: Option<String>,
     pub esperando_aprobacion_plan: bool,
     pub plan_propuesto: Option<String>,
-    /// Mensajes informativos acumulados durante la ejecución (BUG-002 fix)
+    pub plan_propuesto: Option<String>,
+    /// Mensajes informativos acumulados durante la ejecución (BUG-002)
     /// El frontend los consume en tiempo real vía /api/agent/status
     pub info_messages: Vec<String>,
     pub thinking_content: Vec<String>,

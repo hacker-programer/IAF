@@ -837,14 +837,9 @@ function addMessage(role, text) {
 // ---- Agent Monitoring (Console) ----
 // BUG FIX #A: Ahora también monitorea esperando_respuesta_usuario,
 // pregunta_usuario, esperando_aprobacion_plan y plan_propuesto.
-// BUG FIX #B (BUG-002): Ahora también monitorea info_messages para
-// mostrar notificaciones informativas en tiempo real.
-let lastInfoMessageCount = 0; // Para detectar nuevos mensajes
-
 async function startAgentMonitoring() {
     if (agentMonitorInterval) clearInterval(agentMonitorInterval);
     document.getElementById('interruptBtn').classList.remove('hidden');
-    lastInfoMessageCount = 0;
     agentMonitorInterval = setInterval(async () => {
         const statusRes = await apiCall('/api/agent/status');
 
@@ -853,22 +848,6 @@ async function startAgentMonitoring() {
             const stepsRes = await apiCall('/api/agent/steps');
             if (stepsRes.status === 'ok' && stepsRes.steps) {
                 renderConsoleSteps(stepsRes.steps);
-            }
-
-            // BUG FIX #B (BUG-002): Mostrar mensajes informativos en tiempo real
-            if (statusRes.info_messages && Array.isArray(statusRes.info_messages)) {
-                const currentCount = statusRes.info_messages.length;
-                if (currentCount > lastInfoMessageCount && currentCount > 0) {
-                    // Hay nuevos mensajes informativos
-                    const newMessages = statusRes.info_messages.slice(lastInfoMessageCount);
-                    newMessages.forEach(msg => {
-                        // Mostrar como toast/notificación flotante
-                        showInfoToast(msg);
-                        // También agregar al área de chat como mensaje del agente
-                        addMessage('agent', '📢 ' + msg);
-                    });
-                    lastInfoMessageCount = currentCount;
-                }
             }
 
             // BUG FIX #A — Mostrar pregunta del agente al usuario
@@ -898,59 +877,14 @@ async function startAgentMonitoring() {
             if (!statusRes.esperando_aprobacion_plan) {
                 agentPlanShown = false;
             }
-
-            // Si el agente finalizó, mostrar mensaje final y resetear contador
-            if (statusRes.finished) {
-                lastInfoMessageCount = 0;
-                if (statusRes.final_message) {
-                    showInfoToast('✅ ' + statusRes.final_message);
-                }
-            }
         } else {
             // Agente detenido
             document.getElementById('interruptBtn').classList.add('hidden');
             agentQuestionShown = false;
             agentPlanShown = false;
-            lastInfoMessageCount = 0;
         }
     }, 1500);
 }
-
-/// Muestra una notificación toast flotante con el mensaje informativo
-function showInfoToast(message) {
-    // Crear elemento toast
-    const toast = document.createElement('div');
-    toast.className = 'info-toast';
-    toast.textContent = message;
-    toast.style.cssText = `
-        position: fixed;
-        bottom: 20px;
-        right: 20px;
-        background: linear-gradient(135deg, #1a1a2e, #16213e);
-        color: #e0e0e0;
-        padding: 12px 20px;
-        border-radius: 8px;
-        border: 1px solid var(--accent, #00d4ff);
-        box-shadow: 0 4px 20px rgba(0,0,0,0.5);
-        z-index: 10000;
-        max-width: 400px;
-        font-size: 13px;
-        animation: slideIn 0.3s ease-out;
-        cursor: pointer;
-    `;
-    toast.onclick = () => toast.remove();
-    document.body.appendChild(toast);
-
-    // Auto-eliminar después de 8 segundos
-    setTimeout(() => {
-        if (toast.parentNode) {
-            toast.style.opacity = '0';
-            toast.style.transition = 'opacity 0.3s';
-            setTimeout(() => { if (toast.parentNode) toast.remove(); }, 300);
-        }
-    }, 8000);
-}
-
 function renderConsoleSteps(steps) {
     const area = document.getElementById('consoleArea');
     area.innerHTML = steps.map(s => {
@@ -969,6 +903,7 @@ function renderConsoleSteps(steps) {
     }).join('');
     area.scrollTop = area.scrollHeight;
 }
+
 document.getElementById('interruptBtn').onclick = async () => {
     await apiCall('/api/agent/interrupt', 'POST');
     document.getElementById('interruptBtn').classList.add('hidden');
