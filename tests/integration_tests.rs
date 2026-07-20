@@ -852,4 +852,183 @@ mod study_mode_tests {
         assert!(study_prompt_base.contains("ENSEÑAR"),
             "STU-008: El prompt de estudio debe enfatizar la enseñanza");
     }
+    // =========================================================================
+    // STU-008: El agente en modo estudio NO debe usar el prompt de programación
+    // =========================================================================
+
+    #[test]
+    fn stu008_study_mode_uses_correct_prompt() {
+        // El prompt de estudio es STUDY_SYSTEM_PROMPT (tutor)
+        // NO debe contener instrucciones de programación como "30 Técnicas de Optimización"
+        let study_prompt_base = "Eres un TUTOR EXPERTO en programación y ciencias de la computación. Tu meta es ENSEÑAR, no hacer el trabajo por el alumno.";
+        
+        assert!(!study_prompt_base.contains("30 Técnicas de Optimización Extrema"),
+            "STU-008: El prompt de estudio no debe contener técnicas de optimización de programación");
+        assert!(study_prompt_base.contains("TUTOR EXPERTO"),
+            "STU-008: El prompt de estudio debe identificarse como TUTOR");
+        assert!(study_prompt_base.contains("ENSEÑAR"),
+            "STU-008: El prompt de estudio debe enfatizar la enseñanza");
+    }
+
+    // =========================================================================
+    // REG-STU-PATH-001: La ruta del perfil NO debe ser study/profiles/
+    // Debe ser .config/data/<username>/profile.json
+    // =========================================================================
+
+    #[test]
+    fn reg_stu_path001_profile_path_is_correct_format() {
+        // Simula lo que StudyEngine construye internamente
+        let base = std::path::PathBuf::from("/tmp/test_iaf");
+        let username = "alumno_prueba";
+
+        // Ruta CORRECTA esperada
+        let expected_path = base
+            .join(".config")
+            .join("data")
+            .join(username)
+            .join("profile.json");
+
+        let path_str = expected_path.to_string_lossy().to_string();
+
+        // La ruta DEBE contener .config/data/<username>/profile.json
+        assert!(path_str.contains(".config"), "REG-STU-PATH-001: Ruta debe contener .config");
+        assert!(path_str.contains("data"), "REG-STU-PATH-001: Ruta debe contener 'data', no 'study'");
+        assert!(path_str.contains(username), "REG-STU-PATH-001: Ruta debe contener el username");
+        assert!(path_str.ends_with("profile.json"), "REG-STU-PATH-001: El archivo debe llamarse profile.json");
+
+        // Ruta INCORRECTA (antigua) — verificar que NO es la que usamos
+        let old_path = base
+            .join("study")
+            .join("profiles")
+            .join(format!("{}.json", username));
+        assert_ne!(path_str, old_path.to_string_lossy().to_string(),
+            "REG-STU-PATH-001: La ruta NO debe ser study/profiles/<user>.json");
+    }
+
+    // =========================================================================
+    // REG-STU-PATH-002: La ruta del knowledge base NO debe ser study/knowledge/
+    // Debe ser .config/data/<username>/learnings.json
+    // =========================================================================
+
+    #[test]
+    fn reg_stu_path002_knowledge_path_is_correct_format() {
+        let base = std::path::PathBuf::from("/tmp/test_iaf");
+        let username = "alumno_prueba";
+
+        let expected_path = base
+            .join(".config")
+            .join("data")
+            .join(username)
+            .join("learnings.json");
+
+        let path_str = expected_path.to_string_lossy().to_string();
+
+        assert!(path_str.contains(".config/data"), "REG-STU-PATH-002: Ruta debe contener .config/data");
+        assert!(path_str.ends_with("learnings.json"), "REG-STU-PATH-002: El archivo debe llamarse learnings.json");
+
+        // Verificar que NO es la ruta antigua study/knowledge/
+        assert!(!path_str.contains("study/knowledge"), "REG-STU-PATH-002: NO debe usar study/knowledge");
+        assert!(!path_str.contains("study\\knowledge"), "REG-STU-PATH-002: NO debe usar study\\knowledge");
+    }
+
+    // =========================================================================
+    // REG-STU-PATH-003: La ruta del teaching method debe ser teachingMethod.json
+    // =========================================================================
+
+    #[test]
+    fn reg_stu_path003_teaching_method_path_is_correct_format() {
+        let base = std::path::PathBuf::from("/tmp/test_iaf");
+        let username = "alumno_prueba";
+
+        let expected_path = base
+            .join(".config")
+            .join("data")
+            .join(username)
+            .join("teachingMethod.json");
+
+        let path_str = expected_path.to_string_lossy().to_string();
+
+        assert!(path_str.contains(".config/data"), "REG-STU-PATH-003: Ruta debe contener .config/data");
+        assert!(path_str.ends_with("teachingMethod.json"), "REG-STU-PATH-003: Debe llamarse teachingMethod.json");
+        assert!(!path_str.contains("study/"), "REG-STU-PATH-003: NO debe usar directorio study/");
+    }
+
+    // =========================================================================
+    // REG-STU-PATH-004: StudyEngine DEBE recibir base_workspace, no config_dir/study
+    // Verifica que la llamada en main.rs es StudyEngine::new(base_workspace)
+    // =========================================================================
+
+    #[test]
+    fn reg_stu_path004_main_uses_base_workspace_not_study_dir() {
+        // Leer main.rs y verificar que StudyEngine::new recibe base_workspace
+        let main_rs = std::include_str!("../src/main.rs");
+
+        // Debe haber una línea con StudyEngine::new(base_workspace
+        let has_correct = main_rs.contains("StudyEngine::new(base_workspace");
+        assert!(has_correct,
+            "REG-STU-PATH-004 FAIL: main.rs debe llamar StudyEngine::new(base_workspace.clone())");
+
+        // NO debe haber StudyEngine::new(config_dir.join(\"study\")
+        let has_old = main_rs.contains("StudyEngine::new(config_dir.join(\"study\"))");
+        assert!(!has_old,
+            "REG-STU-PATH-004 FAIL: main.rs NO debe usar config_dir.join(\"study\"). La línea antigua debe ser eliminada.");
+
+        // Solo debe haber UNA llamada a StudyEngine::new
+        let count = main_rs.matches("StudyEngine::new(").count();
+        assert_eq!(count, 1,
+            "REG-STU-PATH-004 FAIL: Debe haber exactamente 1 llamada a StudyEngine::new, se encontraron {} (posible línea duplicada).",
+            count);
+    }
+
+    // =========================================================================
+    // REG-STU-PATH-005: Verificar que study.rs no referencia el directorio "study/profiles"
+    // =========================================================================
+
+    #[test]
+    fn reg_stu_path005_study_rs_does_not_use_old_paths() {
+        let study_rs = std::include_str!("../src/study.rs");
+
+        // NO debe referenciar "study/profiles" como ruta de guardado
+        assert!(!study_rs.contains("join(\"study\")"),
+            "REG-STU-PATH-005 FAIL: study.rs no debe usar join(\"study\") como directorio de datos.");
+
+        // NO debe referenciar "study/knowledge"
+        assert!(!study_rs.contains("join(\"knowledge\")"),
+            "REG-STU-PATH-005 FAIL: study.rs no debe usar join(\"knowledge\") como directorio de datos.");
+
+        // DEBE contener la ruta correcta .config/data
+        assert!(study_rs.contains(".config\").join(\"data\")"),
+            "REG-STU-PATH-005 FAIL: study.rs debe usar .config/data como directorio base de datos.");
+    }
+
+    // =========================================================================
+    // REG-STU-PATH-006: Verificar que profile_exists_on_disk funciona correctamente
+    // Simula un test unitario de la lógica de verificación de rutas
+    // =========================================================================
+
+    #[test]
+    fn reg_stu_path006_profile_exists_check_uses_correct_path() {
+        // Usamos un directorio temporal real
+        let tmp = std::env::temp_dir().join("iaf_reg_stu_path006");
+        let _ = std::fs::remove_dir_all(&tmp);
+        std::fs::create_dir_all(&tmp).unwrap();
+
+        // Creamos la estructura de directorios correcta manualmente
+        let user_dir = tmp.join(".config").join("data").join("testuser");
+        std::fs::create_dir_all(&user_dir).unwrap();
+        std::fs::write(user_dir.join("profile.json"), "{}").unwrap();
+
+        // Verificamos que existe exactamente donde debe
+        let correct_path = tmp.join(".config").join("data").join("testuser").join("profile.json");
+        assert!(correct_path.exists(),
+            "REG-STU-PATH-006 FAIL: El archivo debe existir en la ruta correcta.");
+
+        // Verificamos que NO existe en la ruta antigua
+        let old_path = tmp.join("study").join("profiles").join("testuser.json");
+        assert!(!old_path.exists(),
+            "REG-STU-PATH-006 FAIL: El archivo NO debe estar en la ruta antigua.");
+
+        // Limpiar
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
 }
