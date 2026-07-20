@@ -7,43 +7,11 @@ use crate::validator::validate_file_after_write;
 use crate::scraper::{perform_search, scraper_clean_tags};
 use crate::sub_agent;
 use std::fs;
-use std::io::Read;
 use std::path::{Path, PathBuf};
 use base64::{engine::general_purpose, Engine as _};
 use uuid::Uuid;
-// BUG-001: Soporte nativo PDF/DOCX
-use std::io::Read;
-fn extract_text_from_docx(path: &std::path::Path) -> Result<String, String> {
-    let file = std::fs::File::open(path).map_err(|e| format!("No se pudo abrir el DOCX: {}", e))?;
-    let mut archive = zip::ZipArchive::new(file).map_err(|e| format!("No se pudo leer el ZIP del DOCX: {}", e))?;
-    let mut doc_xml = archive.by_name("word/document.xml").map_err(|e| format!("No se encontro word/document.xml en el DOCX: {}", e))?;
-    let mut xml = String::new();
-    doc_xml.read_to_string(&mut xml).map_err(|e| format!("Error leyendo XML del DOCX: {}", e))?;
-    // Extraer texto de tags <w:t>
-    let mut text = String::new();
-    let mut reader = quick_xml::Reader::from_str(&xml);
-    reader.trim_text(true);
-    let mut in_text = false;
-    loop {
-        match reader.read_event() {
-            Ok(quick_xml::events::Event::Start(ref e)) => {
-                if e.local_name().as_ref() == b"t" { in_text = true; }
-            }
-            Ok(quick_xml::events::Event::Text(ref e)) => {
-                if in_text { text.push_str(&e.unescape().unwrap_or_default()); }
-            }
-            Ok(quick_xml::events::Event::End(ref e)) => {
-                if e.local_name().as_ref() == b"t" { in_text = false; }
-                if e.local_name().as_ref() == b"p" { text.push('\n'); }
-            }
-            Ok(quick_xml::events::Event::Eof) => break,
-            Err(e) => return Err(format!("Error parseando XML del DOCX: {}", e)),
-            _ => {}
-        }
-    }
-    Ok(text)
-}
 const DEEPSEEK_API_URL: &str = "https://api.deepseek.com/v1/chat/completions";
+
 pub async fn run_agent_loop(
     session_messages: Vec<crate::state::ChatMessage>,
     project_name: Option<String>,
@@ -52,8 +20,8 @@ pub async fn run_agent_loop(
     voyage_key: &str,
     openrouter_key: &str,
     session_id: Option<String>,
-    _username: &str,
-    _mode: &str,
+    username: &str,
+    mode: &str,
 ) -> Result<String, Box<dyn Error + Send + Sync>> {
     let global_prompt = {
         let prompts = state.prompts.lock().unwrap();
@@ -643,7 +611,7 @@ pub async fn run_agent_loop(
         if let Some(tool_calls) = message_val["tool_calls"].as_array() {
             messages.push(message_val.clone());
             let mut tool_responses = Vec::new();
-            let mut final_message = None;
+            let mut final_message: Option<String> = None;
 
             for tool_call in tool_calls {
                 // Verificar seÃƒÂ±al de interrupciÃƒÂ³n antes de cada herramienta
@@ -660,6 +628,8 @@ pub async fn run_agent_loop(
                 let args_str = tool_call["function"]["arguments"].as_str().unwrap_or("{}");
                 let args: Value = serde_json::from_str(args_str).unwrap_or(json!({}));
 
+                if func_name == "notificar_usuario" {
+                }
 
                 {
                     let mut status = state.active_agent.lock().unwrap();
@@ -687,70 +657,7 @@ pub async fn run_agent_loop(
                         if let Some(ref proj_name) = project_name {
                             let proj_path = get_project_path(&state, proj_name);
                             let full_path = Path::new(&proj_path).join(rel_path);
-                            let ext = full_path.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
-                            if ext == "pdf" {
-                                let path_str = full_path.to_string_lossy().to_string();
-                                // Intentar extraer texto del PDF usando pdf-extract (Rust nativo)
-                                match pdf_extract::extract_text(&full_path) {
-                                    Ok(text) => {
-                                        if text.trim().is_empty() {
-                                            "PDF sin texto extraíble. Usa analyze_images para ver el PDF visualmente.".to_string()
-                                        } else {
-                                            format!("[PDF: {}]\n\n{}", rel_path, text)
-                                        }
-                                    }
-                                    Err(e) => { else {
-                                                    format!("[PDF: {}]\n\n{}", rel_path, t)
-                                                }
-                                            }
-                                            _ => format!(
-                                                "No se pudo leer el PDF: {}. Usa analyze_images como alternativa para verlo visualmente.",
-                                                e
-                                            )
-                                        }
-                                    }
-                                }
-                            } else if ext == "docx" {
-                                // Leer DOCX nativamente: los archivos .docx son ZIP con XML dentro
-                                match extract_text_from_docx(&full_path) {
-                                    Ok(text) => {
-                                        if text.trim().is_empty() {
-                                            "El archivo DOCX no contiene texto extraíble.".to_string()
-                                        } else {
-                                            format!("[DOCX: {}]\n\n{}", rel_path, text)
-                                        }
-                                    }
-                                    Err(e) => {
-                                        // Fallback: intentar python-docx como CLI
-                                        let path_str = full_path.to_string_lossy().to_string();
-                                        let script = format!(
-                                            "import sys; from docx import Document; doc = Document('{}'); [print(p.text) for p in doc.paragraphs]",
-                                            path_str.replace('\'', "\\'")
-                                        );
-                                        match std::process::Command::new("python3")
-                                            .args(["-c", &script])
-                                            .output()
-                                            .or_else(|_| std::process::Command::new("python")
-                                                .args(["-c", &script])
-                                                .output())
-                                        {
-                                            Ok(out) if out.status.success() => {
-                                                let t = String::from_utf8_lossy(&out.stdout).to_string();
-                                                if t.trim().is_empty() {
-                                                    "El archivo DOCX no contiene texto extraíble.".to_string()
-                                                } else {
-                                                    format!("[DOCX: {}]\n\n{}", rel_path, t)
-                                                }
-                                            }
-                                            _ => format!(
-                                                "No se pudo leer el DOCX: {}. Instala python-docx (pip install python-docx) o usa analyze_images.",
-                                                e
-                                            )
-                                        }
-                                    }
-                                }
-                            } else {
-                                match fs::read_to_string(&full_path) {
+                            match fs::read_to_string(&full_path) {
                                 Ok(content) => {
                                     if start_line_opt.is_some() || end_line_opt.is_some() {
                                         let lines: Vec<&str> = content.lines().collect();
@@ -760,10 +667,10 @@ pub async fn run_agent_loop(
                                         let start_idx = start.saturating_sub(1);
                                         let end_idx = end.min(total_lines);
                                         if start_idx >= total_lines || start_idx > end_idx {
-                                            format!("Error: El rango de líneas {}-{} es inválido para un archivo de {} líneas.", start, end, total_lines)
+                                            format!("Error: El rango de lÃƒÂ­neas {}-{} es invÃƒÂ¡lido para un archivo de {} lÃƒÂ­neas.", start, end, total_lines)
                                         } else {
                                             let chunk = lines[start_idx..end_idx].join("\n");
-                                            format!("// Líneas {}-{} de {} en {}\n{}", start_idx + 1, end_idx, total_lines, rel_path, chunk)
+                                            format!("// LÃƒÂ­neas {}-{} de {} en {}\n{}", start_idx + 1, end_idx, total_lines, rel_path, chunk)
                                         }
                                     } else {
                                         content
@@ -771,11 +678,11 @@ pub async fn run_agent_loop(
                                 }
                                 Err(e) => format!("Error leyendo archivo: {}", e),
                             }
-                            }
                         } else {
-                            "No hay ningún proyecto activo seleccionado.".to_string()
+                            "No hay ningÃƒÂºn proyecto activo seleccionado.".to_string()
                         }
                     }
+                    "write_file_with_commit" => {
                         'write_handler: {
                         let rel_path = args["path"].as_str().unwrap_or("");
                         let commit_msg = args["commit_message"].as_str().unwrap_or("Update by Agent");
@@ -1383,11 +1290,14 @@ pub async fn run_agent_loop(
                             // tipo informativo
                             {
                                 let mut status = state.active_agent.lock().unwrap();
+                                // Agregar a info_messages para frontend (BUG-002)
                                 status.info_messages.push(mensaje.to_string());
-                                if status.info_messages.len() > 100 { status.info_messages.remove(0); }
+                                if status.info_messages.len() > 100 {
+                                    status.info_messages.remove(0);
+                                }
                                 status.steps.push(crate::state::AuditStep {
                                     step_type: "informativo".to_string(),
-                                    title: "NotificaciÃƒÂ³n del Agente".to_string(),
+                                    title: "Notificación del Agente".to_string(),
                                     detail: mensaje.to_string(),
                                     timestamp: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs(),
                                 });
@@ -1395,33 +1305,10 @@ pub async fn run_agent_loop(
                                     save_chat_steps_to_disk(&state, &Some(s_id.clone()), &status.steps);
                                 }
                             }
-                            format!("NotificaciÃƒÂ³n enviada con ÃƒÂ©xito: {}", mensaje)
+                            format!("Notificación enviada con éxito: {}", mensaje)
                         }
                     }
-                    "finalizar_tarea" => {
-                        state.process_registry.kill_all();
-                        let msg = args["mensaje_final"].as_str().unwrap_or("Tarea finalizada.").to_string();
-                        let final_msg = if msg.trim().is_empty() { "Tarea finalizada.".to_string() } else { msg };
-                        { let mut status = state.active_agent.lock().unwrap();
-                            status.finished = true; status.final_message = Some(final_msg.clone());
-                            status.running = false; status.esperando_respuesta_usuario = false;
-                            status.esperando_aprobacion_plan = false;
-                            // BUG-002 FIX: No limpiar info_messages aquí. El frontend los consume
-                            // incrementalmente vía lastInfoMessageCount. Si se limpian, el
-                            // frontend pierde los mensajes que no alcanzó a leer antes de
-                            // que el agente terminara.
-                            status.steps.push(crate::state::AuditStep {
-                                step_type: "thinking".to_string(), title: "Tarea Finalizada".to_string(),
-                                detail: format!("El agente ha finalizado la tarea: {}", final_msg),
-                                timestamp: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs(),
-                            });
-                            if let Some(ref s_id) = session_id { save_chat_steps_to_disk(&state, &Some(s_id.clone()), &status.steps); }
-                        }
-                        final_message = Some(final_msg);
-                        "Tarea finalizada correctamente.".to_string()
-                        }
-                        }
-                    "image_fetch" => {
+                    "finalizar_tarea" => {                        // Limpiar todos los procesos hijo registrados antes de finalizar                        state.process_registry.kill_all();                        let msg = args["mensaje_final"].as_str().unwrap_or("Tarea finalizada.").to_string();                        // Notificar finalizacion en el estado del agente para que el frontend lo detecte                        {                            let mut status = state.active_agent.lock().unwrap();                            status.finished = true;                            status.final_message = Some(msg.clone());                            status.running = false;                            status.steps.push(crate::state::AuditStep {                                step_type: "thinking".to_string(),                                title: "Tarea Finalizada".to_string(),                                detail: format!("El agente ha finalizado la tarea: {}", msg),                                timestamp: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs(),                            });                            if let Some(ref s_id) = session_id {                                save_chat_steps_to_disk(&state, &Some(s_id.clone()), &status.steps);                            }                        }                        final_message = Some(msg);                        "Tarea finalizada correctamente.".to_string()                    }                    "image_fetch" => {
                         let url = args["url"].as_str().unwrap_or("");
                         if url.is_empty() {
                             json!({"error": "No se proporcionÃƒÂ³ URL"}).to_string()
@@ -2136,37 +2023,7 @@ async fn compress_active_messages_if_needed(
                             messages.extend(last_messages); // AÃƒÂ±adir los ÃƒÂºltimos 4 mensajes
 
                             // Guardar en el archivo JSON de la conversaciÃƒÂ³n en disco de forma persistente
-                            if let Some(ref session_id) = *session_id_opt {
-                                if let Some(chat_file) = find_chat_file_by_session_id(&state.base_workspace, session_id) {
-                                if chat_file.exists() {
-                                    if let Ok(content) = fs::read_to_string(&chat_file) {
-                                        if let Ok(mut session) = serde_json::from_str::<crate::state::ChatSession>(&content) {
-                                            let mut disk_messages = Vec::new();
-                                            for m in messages.iter() {
-                                                let role = m["role"].as_str().unwrap_or("");
-                                                let content_str = m["content"].as_str().unwrap_or("");
-                                                if role == "user" {
-                                                    disk_messages.push(crate::state::ChatMessage {
-                                                        role: "user".to_string(),
-                                                        content: content_str.to_string(),
-                                                        timestamp: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs(),
-                                                    });
-                                                } else if role == "assistant" {
-                                                    disk_messages.push(crate::state::ChatMessage {
-                                                        role: "agent".to_string(),
-                                                        content: content_str.to_string(),
-                                                        timestamp: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs(),
-                                                    });
-                                                }
-                                            }
-                                            session.messages = disk_messages;
-                                            let _ = fs::write(&chat_file, serde_json::to_string_pretty(&session).unwrap());
-                                        }
-                                    }
-                                }
-                                }
-                            }
-
+                            if let Some(ref session_id) = *session_id_opt {                                if let Some(chat_file) = find_chat_file_by_session_id(&state.base_workspace, session_id) {                                    if let Ok(content) = fs::read_to_string(&chat_file) {                                        if let Ok(mut session) = serde_json::from_str::<crate::state::ChatSession>(&content) {                                            let mut disk_messages = Vec::new();                                            for m in messages.iter() {                                                let role = m["role"].as_str().unwrap_or("");                                                let content_str = m["content"].as_str().unwrap_or("");                                                if role == "user" {                                                    disk_messages.push(crate::state::ChatMessage {                                                        role: "user".to_string(),                                                        content: content_str.to_string(),                                                        timestamp: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs(),                                                    });                                                } else if role == "assistant" {                                                    disk_messages.push(crate::state::ChatMessage {                                                        role: "agent".to_string(),                                                        content: content_str.to_string(),                                                        timestamp: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs(),                                                    });                                                }                                            }                                            session.messages = disk_messages;                                            let _ = fs::write(&chat_file, serde_json::to_string_pretty(&session).unwrap());                                        }                                    }                                }                            }
                             // Registrar ÃƒÂ©xito en auditorÃƒÂ­a
                             {
                                 let mut status = state.active_agent.lock().unwrap();
