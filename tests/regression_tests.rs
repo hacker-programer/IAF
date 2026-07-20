@@ -15,6 +15,7 @@
 
 use serde_json::json;
 use iaf::utils::sanitize_filename;
+use iaf::utils::sanitize_filename;
 
 // ============================================================================
 // BUG #1: notificar_usuario informativo no se muestra en tiempo real
@@ -35,7 +36,7 @@ mod bug1_notificar_usuario_informativo {
     fn test_notificar_usuario_informativo_saves_to_disk() {
         // Simulación del flujo: el agente llama notificar_usuario
         let mensaje = "Estoy analizando el archivo main.rs...";
-        let tipo = "informativo";
+        let _tipo = "informativo";
 
         // Verificar que el mensaje se guarda correctamente
         let agent_msg = json!({
@@ -214,7 +215,7 @@ mod bug3_directorio_proyecto_no_inyectado {
     #[test]
     fn test_project_path_should_be_injected() {
         let project_name = "citybound";
-        let project_path = "C:\\Users\\Fa\\Desktop\\IAF\\citybound";
+        let _project_path = "C:\\Users\\Fa\\Desktop\\IAF\\citybound";
 
         // El system prompt debería incluir algo como:
         let expected_injection = format!(
@@ -339,8 +340,7 @@ mod bug4_no_pdf_docx_reader {
 // memoria (state.prompts) pueden no estar sincronizados con disco.
 
 #[cfg(test)]
-
-    use super::*;
+mod bug5_system_prompt_local_no_cargado {
 
     /// Test: Simula la carga del system prompt local desde disco
     #[test]
@@ -423,7 +423,7 @@ mod bug6_perfil_usuario_no_inyectado {
     /// Test: El system prompt DEBERÍA incluir el perfil del usuario
     #[test]
     fn test_profile_should_be_injected_into_system_prompt() {
-        let profile = json!({
+        let _profile = json!({
             "username": "alumno_test",
             "age": 14,
             "high_capabilities": "Matemáticas avanzadas",
@@ -463,7 +463,7 @@ mod bug6_perfil_usuario_no_inyectado {
     #[test]
     fn test_study_engine_profile_access() {
         // Simular la API del StudyEngine
-        let profile = json!({
+        let _profile = json!({
             "username": "alumno_test",
             "age": 14,
             "phase": "NotStarted",
@@ -1034,7 +1034,7 @@ mod e2e_tests {
         });
 
         // 2. El servidor crea la sesión
-        let session_id = "test-uuid-123";
+        let _session_id = "test-uuid-123";
         let _session_id = "test-uuid-123";
 
         let initial_title = sanitize_filename(chat_input["message"].as_str().unwrap());
@@ -1042,7 +1042,7 @@ mod e2e_tests {
         // El título sanitizado: espacios → _, no-ASCII → _, truncado a 40 chars
         assert_eq!(initial_title, "Analiza_el_c_digo_de_citybound");
         assert!(initial_title.chars().all(|c| c.is_ascii()));
-        let project_path = "C:\\Users\\Fa\\Desktop\\IAF\\citybound";
+        let _project_path = "C:\\Users\\Fa\\Desktop\\IAF\\citybound";
         let _project_path = "C:\\Users\\Fa\\Desktop\\IAF\\citybound";
         assert!(!system_prompt_has_path, 
             "BUG #3 confirmado: system prompt no incluye el path del proyecto");
@@ -1054,7 +1054,7 @@ mod e2e_tests {
             "BUG #1 confirmado: notificación informativa no visible en chat");
 
         // 5. El agente intenta leer un PDF del proyecto (BUG #4)
-        let project_has_pdf = true;
+        let _project_has_pdf = true;
         let _project_has_pdf = true;
         assert!(!can_read_pdf,
             "BUG #4 confirmado: no puede leer PDFs");
