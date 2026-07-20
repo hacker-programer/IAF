@@ -1242,8 +1242,8 @@ pub async fn run_agent_loop(
                         let mensaje = args["mensaje"].as_str().unwrap_or("");
                         
                         if let Some(ref s_id) = session_id {
-                        if let Some(ref s_id) = session_id {
                             save_agent_message_to_disk(&state, s_id, "agent", mensaje);
+                        }
                         }
                         
                         if tipo == "pregunta" {
