@@ -1242,22 +1242,8 @@ pub async fn run_agent_loop(
                         let mensaje = args["mensaje"].as_str().unwrap_or("");
                         
                         if let Some(ref s_id) = session_id {
-                            let chat_file = state.base_workspace.join(".config").join("chats").join(format!("{}.json", s_id));
-                            if chat_file.exists() {
-                                if let Ok(content_json) = fs::read_to_string(&chat_file) {
-                                    if let Ok(mut session) = serde_json::from_str::<crate::state::ChatSession>(&content_json) {
-                                        let is_duplicate = session.messages.last().map(|m| m.content == mensaje && m.role == "agent").unwrap_or(false);
-                                        if !is_duplicate {
-                                            session.messages.push(crate::state::ChatMessage {
-                                                role: "agent".to_string(),
-                                                content: mensaje.to_string(),
-                                                timestamp: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs(),
-                                            });
-                                            let _ = fs::write(&chat_file, serde_json::to_string_pretty(&session).unwrap());
-                                        }
-                                    }
-                                }
-                            }
+                        if let Some(ref s_id) = session_id {
+                            save_agent_message_to_disk(&state, s_id, "agent", mensaje);
                         }
                         
                         if tipo == "pregunta" {
