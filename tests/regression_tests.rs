@@ -733,7 +733,6 @@ mod edge_case_tests {
 
     /// BUG #2 Edge: Título con caracteres especiales
     #[test]
-    #[test]
     fn test_title_with_special_characters() {
         let title = "Análisis ♥ del código: ¿bug o feature?";
         let sanitized = sanitize_filename(title);
