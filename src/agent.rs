@@ -23,8 +23,10 @@ pub async fn run_agent_loop(
     _username: &str,
     _mode: &str,
 ) -> Result<String, Box<dyn Error + Send + Sync>> {
+    let global_prompt = {
         let prompts = state.prompts.lock().unwrap();
         prompts.global_current.clone()
+    };
     };
 
     let local_prompt = project_name.as_ref().and_then(|name| {
