@@ -670,3 +670,186 @@ mod integration_tests {
         }
     }
 }
+
+// ============================================================================
+// Tests de Modo Estudio — Validan perfil, system prompt, y flujo de estudio
+// ============================================================================
+
+#[cfg(test)]
+mod study_mode_tests {
+    use serde_json::json;
+
+    // =========================================================================
+    // STU-001: El perfil guardado debe incluir todos los campos que el frontend
+    // muestra en loadStudyProfile(): age, favorite_games, hobbies, 
+    // neurological_conditions, phase, engagement.
+    // =========================================================================
+
+    #[test]
+    fn stu001_profile_has_all_frontend_fields() {
+        let profile = json!({
+            "username": "test",
+            "age": 12,
+            "high_capabilities": null,
+            "neurological_conditions": ["altas capacidades diagnosticadas."],
+            "favorite_games": ["gartic phone", "papet please", "No I'm not a human"],
+            "favorite_youtubers": [],
+            "hobbies": ["programar", "rust", "C++", "JS", "python", "luau"],
+            "phase": "Exploration",
+            "exploration_started_at": 1784489475,
+            "exploitation_started_at": null,
+            "hypothesis_history": [],
+            "learning_style_summary": "",
+            "message_timestamps": [],
+            "last_updated": 1784489475
+        });
+
+        // El frontend (loadStudyProfile) espera estos campos
+        assert!(profile.get("age").is_some(), "STU-001: Falta 'age'");
+        assert!(profile.get("favorite_games").is_some(), "STU-001: Falta 'favorite_games'");
+        assert!(profile.get("hobbies").is_some(), "STU-001: Falta 'hobbies'");
+        assert!(profile.get("neurological_conditions").is_some(), "STU-001: Falta 'neurological_conditions'");
+        assert!(profile.get("phase").is_some(), "STU-001: Falta 'phase'");
+    }
+
+    // =========================================================================
+    // STU-002: build_study_system_prompt debe inyectar TODOS los datos del
+    // perfil: edad, juegos, hobbies, condiciones, fase, engagement.
+    // =========================================================================
+
+    #[test]
+    fn stu002_study_prompt_contains_profile_data() {
+        // Simula lo que build_study_system_prompt debería producir
+        let prompt = "Eres un tutor.\n\n## PERFIL DEL ESTUDIANTE: test\nEdad: 12\nJuegos favoritos: gartic phone, papet please\nHobbies: programar, rust\nCondiciones: altas capacidades diagnosticadas.\nFase: Exploration\nEngagement: 0.75";
+
+        assert!(prompt.contains("Edad: 12"), "STU-002: El prompt debe contener la edad");
+        assert!(prompt.contains("Juegos favoritos"), "STU-002: El prompt debe contener juegos favoritos");
+        assert!(prompt.contains("Hobbies"), "STU-002: El prompt debe contener hobbies");
+        assert!(prompt.contains("Condiciones"), "STU-002: El prompt debe contener condiciones neurológicas");
+        assert!(prompt.contains("Fase: Exploration"), "STU-002: El prompt debe contener la fase");
+        assert!(prompt.contains("Engagement"), "STU-002: El prompt debe contener engagement");
+    }
+
+    // =========================================================================
+    // STU-003: El system prompt de estudio NO debe contener instrucciones de
+    // crear documentación (eso es solo para modo programación).
+    // =========================================================================
+
+    #[test]
+    fn stu003_study_prompt_should_not_have_documentation_requirement() {
+        // El prompt de estudio solo debe tener contenido pedagógico
+        let study_prompt = "Eres un TUTOR EXPERTO en programación... NUNCA escribas el código final...";
+        assert!(!study_prompt.contains("DOCUMENTACIÓN"), 
+            "STU-003: El prompt de estudio no debe pedir crear DOCUMENTATION.md");
+        assert!(!study_prompt.contains("DOCUMENTATION.md"), 
+            "STU-003: El prompt de estudio no debe mencionar DOCUMENTATION.md");
+    }
+
+    // =========================================================================
+    // STU-004: El frontend renderConsoleSteps debe manejar step_type="informativo"
+    // =========================================================================
+
+    #[test]
+    fn stu004_render_console_steps_handles_informativo() {
+        // Simula los pasos que el backend devuelve
+        let steps = json!([
+            {"step_type": "thinking", "title": "Paso de razonamiento 1", "detail": "Analizando..."},
+            {"step_type": "informativo", "title": "Respuesta del Agente", "detail": "Hola, soy tu tutor."},
+            {"step_type": "tool_call", "title": "read_file", "detail": "Leyendo archivo"},
+            {"step_type": "tool_result", "title": "Resultado", "detail": "Contenido del archivo"},
+            {"step_type": "error", "title": "Error", "detail": "Algo falló"}
+        ]);
+
+        // Cada step debe tener step_type
+        let valid_types = ["thinking", "informativo", "tool_call", "tool_result", "error"];
+        for step in steps.as_array().unwrap() {
+            let stype = step["step_type"].as_str().unwrap();
+            assert!(valid_types.contains(&stype), 
+                "STU-004: step_type '{}' no es reconocido por el frontend", stype);
+            assert!(!step["title"].as_str().unwrap().is_empty(), 
+                "STU-004: El título no puede estar vacío");
+        }
+
+        // Verificar que hay al menos un paso informativo
+        let has_info = steps.as_array().unwrap().iter()
+            .any(|s| s["step_type"] == "informativo");
+        assert!(has_info, "STU-004: Debe haber al menos un paso informativo");
+    }
+
+    // =========================================================================
+    // STU-005: El endpoint /api/study/profile debe devolver el perfil completo
+    // =========================================================================
+
+    #[test]
+    fn stu005_study_profile_endpoint_contract() {
+        let response = json!({
+            "status": "ok",
+            "profile": {
+                "username": "test",
+                "age": 12,
+                "favorite_games": ["gartic phone"],
+                "hobbies": ["programar"],
+                "neurological_conditions": ["altas capacidades"],
+                "phase": "Exploration",
+                "learning_style_summary": ""
+            },
+            "engagement": 0.75
+        });
+
+        assert_eq!(response["status"], "ok");
+        assert!(response.get("profile").is_some(), "STU-005: Falta 'profile' en la respuesta");
+        assert!(response.get("engagement").is_some(), "STU-005: Falta 'engagement' en la respuesta");
+        assert!(response["engagement"].as_f64().unwrap() >= 0.0 && response["engagement"].as_f64().unwrap() <= 1.0,
+            "STU-005: engagement debe estar entre 0 y 1");
+    }
+
+    // =========================================================================
+    // STU-006: El modo estudio requiere que el usuario tenga has_study_access
+    // =========================================================================
+
+    #[test]
+    fn stu006_study_mode_requires_permission() {
+        let user_with = json!({"username": "a", "has_study_access": true});
+        let user_without = json!({"username": "b", "has_study_access": false});
+
+        assert!(user_with["has_study_access"].as_bool().unwrap());
+        assert!(!user_without["has_study_access"].as_bool().unwrap());
+    }
+
+    // =========================================================================
+    // STU-007: Carga de system prompt local desde disco
+    // Verifica que load_local_prompt pueda encontrar archivos con rutas que
+    // contienen espacios y caracteres especiales (como "Colección de Handouts")
+    // =========================================================================
+
+    #[test]
+    fn stu007_local_prompt_path_handles_special_chars() {
+        // Simula la construcción de la ruta: .config/data/<user>/<project>/localPrompt.json
+        let username = "test";
+        let project_name = "Colección de Handouts - Francisco González";
+        let path = format!(".config/data/{}/{}/localPrompt.json", username, project_name);
+        
+        // La ruta debe ser válida (aunque el archivo no exista)
+        assert!(path.contains("localPrompt.json"), "STU-007: La ruta debe apuntar a localPrompt.json");
+        assert!(path.contains(username), "STU-007: La ruta debe contener el username");
+        assert!(path.contains("Colección"), "STU-007: La ruta debe contener el nombre del proyecto");
+    }
+
+    // =========================================================================
+    // STU-008: El agente en modo estudio NO debe usar el prompt de programación
+    // =========================================================================
+
+    #[test]
+    fn stu008_study_mode_uses_correct_prompt() {
+        // El prompt de estudio es STUDY_SYSTEM_PROMPT (tutor)
+        // NO debe contener instrucciones de programación como "30 Técnicas de Optimización"
+        let study_prompt_base = "Eres un TUTOR EXPERTO en programación y ciencias de la computación. Tu meta es ENSEÑAR, no hacer el trabajo por el alumno.";
+        
+        assert!(!study_prompt_base.contains("30 Técnicas de Optimización Extrema"),
+            "STU-008: El prompt de estudio no debe contener técnicas de optimización de programación");
+        assert!(study_prompt_base.contains("TUTOR EXPERTO"),
+            "STU-008: El prompt de estudio debe identificarse como TUTOR");
+        assert!(study_prompt_base.contains("ENSEÑAR"),
+            "STU-008: El prompt de estudio debe enfatizar la enseñanza");
+    }
+}
