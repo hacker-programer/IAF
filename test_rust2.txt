@@ -1,0 +1,51 @@
+﻿cargo :    Compiling iaf v0.1.0 (C:\Users\Fa\Desktop\IAF)
+En línea: 1 Carácter: 102
++ ... o-target" ; cargo test --test integration_tests regression_tests -- - ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (   Compiling ia...Fa\Desktop\IAF):String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+warning: unexpected `cfg` condition value: `integration`
+   --> tests\integration_tests.rs:603:7
+    |
+603 | #[cfg(feature = "integration")]
+    |       ^^^^^^^^^^^^^^^^^^^^^^^ help: remove the condition
+    |
+    = note: no expected values for `feature`
+    = help: consider adding `integration` as a feature in `Cargo.toml`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+    = note: `#[warn(unexpected_cfgs)]` on by default
+
+warning: unused variable: `user`
+   --> tests\integration_tests.rs:520:13
+    |
+520 |         let user = "admin";
+    |             ^^^^ help: if this is intentional, prefix it with an underscore: `_user`
+    |
+    = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: `iaf` (test "integration_tests") generated 2 warnings (run `cargo fix --test "integration_tests" -p iaf` to apply 1 suggestion)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 56.90s
+     Running tests\integration_tests.rs (C:\Users\Fa\AppData\Local\Temp\cargo-target\debug\deps\integration_tests-8a2d936e88abbfce.exe)
+
+running 17 tests
+test regression_tests::reg001_agent_status_has_all_required_fields ... ok
+test regression_tests::reg001_agent_status_idle_state_is_correct ... ok
+test regression_tests::reg002_agent_question_state_is_detectable ... ok
+test regression_tests::reg002_frontend_can_distinguish_question_state ... ok
+test regression_tests::reg003_agent_resets_after_interruption ... ok
+test regression_tests::reg003_agent_resets_question_state_after_response ... ok
+test regression_tests::reg004_agent_plan_state_is_detectable ... ok
+test regression_tests::reg004_frontend_can_detect_plan_state ... ok
+test regression_tests::reg005_responder_endpoint_contract ... ok
+test regression_tests::reg006_multiple_consecutive_questions ... ok
+test regression_tests::reg007_field_names_are_consistent ... ok
+test regression_tests::reg008_active_agent_status_default_is_safe ... ok
+test regression_tests::reg009_question_modal_close_does_not_affect_other_state ... ok
+test regression_tests::reg010_copy_nonce_command_format_is_correct ... ok
+test regression_tests::reg010_copy_nonce_command_with_empty_nonce_is_handled ... ok
+test regression_tests::reg010_copy_nonce_handles_special_characters ... ok
+test regression_tests::reg010b_fallback_copy_mechanism_exists ... ok
+
+test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 8 filtered out; finished in 0.27s
+

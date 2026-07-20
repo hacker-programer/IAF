@@ -1,0 +1,24 @@
+﻿cargo :     Checking iaf v0.1.0 (C:\Users\Fa\Desktop\IAF)
+En línea: 1 Carácter: 102
++ ... \Users\Fa\AppData\Local\Temp\cargo-target" ; cargo check 2>&1 | Out-F ...
++                                                  ~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (    Checking ia...Fa\Desktop\IAF):String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+error: this file contains an unclosed delimiter
+    --> src\agent.rs:2344:3
+     |
+1937 | ) {
+     |   - unclosed delimiter
+...
+2043 |                                 if let Some(chat_file) = find_chat_file_by_session_id(&state.base_workspace, session_id) {
+     |                                                                                                                          - this delimiter might not be properly 
+closed...
+...
+2070 |                             }
+     |                             - ...as it matches this but it has different indentation
+...
+2344 | }
+     |  ^
+
+error: could not compile `iaf` (bin "iaf") due to 1 previous error

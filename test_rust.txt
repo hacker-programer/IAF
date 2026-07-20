@@ -1,0 +1,33 @@
+﻿cargo :    Compiling iaf v0.1.0 (C:\Users\Fa\Desktop\IAF)
+En línea: 1 Carácter: 102
++ ... o-target" ; cargo test --test integration_tests regression_tests -- - ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (   Compiling ia...Fa\Desktop\IAF):String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+warning: unexpected `cfg` condition value: `integration`
+   --> tests\integration_tests.rs:603:7
+    |
+603 | #[cfg(feature = "integration")]
+    |       ^^^^^^^^^^^^^^^^^^^^^^^ help: remove the condition
+    |
+    = note: no expected values for `feature`
+    = help: consider adding `integration` as a feature in `Cargo.toml`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+    = note: `#[warn(unexpected_cfgs)]` on by default
+
+error[E0599]: no method named `startsWith` found for struct `std::string::String` in the current scope
+   --> tests\integration_tests.rs:529:21
+    |
+529 |         assert!(cmd.startsWith(".\\scripts\\sign_nonce.ps1"));
+    |                     ^^^^^^^^^^
+    |
+help: there is a method `starts_with` with a similar name
+    |
+529 -         assert!(cmd.startsWith(".\\scripts\\sign_nonce.ps1"));
+529 +         assert!(cmd.starts_with(".\\scripts\\sign_nonce.ps1"));
+    |
+
+For more information about this error, try `rustc --explain E0599`.
+warning: `iaf` (test "integration_tests") generated 1 warning
+error: could not compile `iaf` (test "integration_tests") due to 1 previous error; 1 warning emitted

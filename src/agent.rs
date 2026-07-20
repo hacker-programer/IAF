@@ -20,8 +20,6 @@ pub async fn run_agent_loop(
     voyage_key: &str,
     openrouter_key: &str,
     session_id: Option<String>,
-    _username: &str,
-    _mode: &str,
 ) -> Result<String, Box<dyn Error + Send + Sync>> {
     let global_prompt = {
         let prompts = state.prompts.lock().unwrap();
@@ -1303,30 +1301,7 @@ pub async fn run_agent_loop(
                             format!("NotificaciÃƒÂ³n enviada con ÃƒÂ©xito: {}", mensaje)
                         }
                     }
-                    "finalizar_tarea" => {
-                        // Limpiar todos los procesos hijo registrados antes de finalizar
-                        state.process_registry.kill_all();
-                        let msg = args["mensaje_final"].as_str().unwrap_or("Tarea finalizada.").to_string();
-                        // Notificar finalizacion en el estado del agente para que el frontend lo detecte
-                        {
-                            let mut status = state.active_agent.lock().unwrap();
-                            status.finished = true;
-                            status.final_message = Some(msg.clone());
-                            status.running = false;
-                            status.steps.push(crate::state::AuditStep {
-                                step_type: "thinking".to_string(),
-                                title: "Tarea Finalizada".to_string(),
-                                detail: format!("El agente ha finalizado la tarea: {}", msg),
-                                timestamp: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs(),
-                            });
-                            if let Some(ref s_id) = session_id {
-                                save_chat_steps_to_disk(&state, &Some(s_id.clone()), &status.steps);
-                            }
-                        }
-                        final_message = Some(msg);
-                        "Tarea finalizada correctamente.".to_string()
-                    }
-                    "image_fetch" => {
+                    "finalizar_tarea" => {                        // Limpiar todos los procesos hijo registrados antes de finalizar                        state.process_registry.kill_all();                        let msg = args["mensaje_final"].as_str().unwrap_or("Tarea finalizada.").to_string();                        // Notificar finalizacion en el estado del agente para que el frontend lo detecte                        {                            let mut status = state.active_agent.lock().unwrap();                            status.finished = true;                            status.final_message = Some(msg.clone());                            status.running = false;                            status.steps.push(crate::state::AuditStep {                                step_type: "thinking".to_string(),                                title: "Tarea Finalizada".to_string(),                                detail: format!("El agente ha finalizado la tarea: {}", msg),                                timestamp: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs(),                            });                            if let Some(ref s_id) = session_id {                                save_chat_steps_to_disk(&state, &Some(s_id.clone()), &status.steps);                            }                        }                        final_message = Some(msg);                        "Tarea finalizada correctamente.".to_string()                    }                    "image_fetch" => {
                         let url = args["url"].as_str().unwrap_or("");
                         if url.is_empty() {
                             json!({"error": "No se proporcionÃƒÂ³ URL"}).to_string()
@@ -1676,18 +1651,7 @@ pub async fn run_agent_loop(
             for tr in tool_responses {
                 messages.push(tr);
             }
-            if let Some(msg) = final_message {
-                // Asegurar que el estado refleje la finalizacion
-                {
-                    let mut status = state.active_agent.lock().unwrap();
-                    status.finished = true;
-                    status.final_message = Some(msg.clone());
-                    status.running = false;
-                }
-                state.process_registry.kill_all();
-                return Ok(msg);
-            }
-        } else {
+            if let Some(msg) = final_message {                // Asegurar que el estado refleje la finalizacion                {                    let mut status = state.active_agent.lock().unwrap();                    status.finished = true;                    status.final_message = Some(msg.clone());                    status.running = false;                }                state.process_registry.kill_all();                return Ok(msg);            }        } else {
             messages.push(message_val.clone());
             messages.push(json!({
                 "role": "user",
@@ -2041,36 +2005,7 @@ async fn compress_active_messages_if_needed(
                             messages.extend(last_messages); // AÃƒÂ±adir los ÃƒÂºltimos 4 mensajes
 
                             // Guardar en el archivo JSON de la conversaciÃƒÂ³n en disco de forma persistente
-                            if let Some(ref session_id) = *session_id_opt {
-                                if let Some(chat_file) = find_chat_file_by_session_id(&state.base_workspace, session_id) {
-                                if chat_file.exists() {
-                                    if let Ok(content) = fs::read_to_string(&chat_file) {
-                                        if let Ok(mut session) = serde_json::from_str::<crate::state::ChatSession>(&content) {
-                                            let mut disk_messages = Vec::new();
-                                            for m in messages.iter() {
-                                                let role = m["role"].as_str().unwrap_or("");
-                                                let content_str = m["content"].as_str().unwrap_or("");
-                                                if role == "user" {
-                                                    disk_messages.push(crate::state::ChatMessage {
-                                                        role: "user".to_string(),
-                                                        content: content_str.to_string(),
-                                                        timestamp: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs(),
-                                                    });
-                                                } else if role == "assistant" {
-                                                    disk_messages.push(crate::state::ChatMessage {
-                                                        role: "agent".to_string(),
-                                                        content: content_str.to_string(),
-                                                        timestamp: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs(),
-                                                    });
-                                                }
-                                            }
-                                            session.messages = disk_messages;
-                                            let _ = fs::write(&chat_file, serde_json::to_string_pretty(&session).unwrap());
-                                        }
-                                    }
-                                }
-                            }
-
+                            if let Some(ref session_id) = *session_id_opt {                                if let Some(chat_file) = find_chat_file_by_session_id(&state.base_workspace, session_id) {                                    if let Ok(content) = fs::read_to_string(&chat_file) {                                        if let Ok(mut session) = serde_json::from_str::<crate::state::ChatSession>(&content) {                                            let mut disk_messages = Vec::new();                                            for m in messages.iter() {                                                let role = m["role"].as_str().unwrap_or("");                                                let content_str = m["content"].as_str().unwrap_or("");                                                if role == "user" {                                                    disk_messages.push(crate::state::ChatMessage {                                                        role: "user".to_string(),                                                        content: content_str.to_string(),                                                        timestamp: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs(),                                                    });                                                } else if role == "assistant" {                                                    disk_messages.push(crate::state::ChatMessage {                                                        role: "agent".to_string(),                                                        content: content_str.to_string(),                                                        timestamp: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs(),                                                    });                                                }                                            }                                            session.messages = disk_messages;                                            let _ = fs::write(&chat_file, serde_json::to_string_pretty(&session).unwrap());                                        }                                    }                                }                            }
                             // Registrar ÃƒÂ©xito en auditorÃƒÂ­a
                             {
                                 let mut status = state.active_agent.lock().unwrap();
