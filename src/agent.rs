@@ -2037,9 +2037,9 @@ async fn compress_active_messages_if_needed(
                             messages.extend(last_messages); // AÃƒÂ±adir los ÃƒÂºltimos 4 mensajes
 
                             // Guardar en el archivo JSON de la conversaciÃƒÂ³n en disco de forma persistente
+                            // Guardar en el archivo JSON de la conversación en disco de forma persistente
                             if let Some(ref session_id) = *session_id_opt {
-                                let chat_file = state.base_workspace.join(".config").join("chats").join(format!("{}.json", session_id));
-                                if chat_file.exists() {
+                                if let Some(chat_file) = find_chat_file_by_session_id(&state.base_workspace, session_id) {
                                     if let Ok(content) = fs::read_to_string(&chat_file) {
                                         if let Ok(mut session) = serde_json::from_str::<crate::state::ChatSession>(&content) {
                                             let mut disk_messages = Vec::new();
@@ -2062,6 +2062,7 @@ async fn compress_active_messages_if_needed(
                                             }
                                             session.messages = disk_messages;
                                             let _ = fs::write(&chat_file, serde_json::to_string_pretty(&session).unwrap());
+                                        }
                                         }
                                     }
                                 }
