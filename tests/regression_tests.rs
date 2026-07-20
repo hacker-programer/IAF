@@ -175,13 +175,10 @@ mod bug2_titulo_chat_truncado {
         assert!(sanitized.chars().all(|c| c.is_ascii()));
         assert_eq!(sanitized.len(), 38);
     }
-    }
 }
 
 // ============================================================================
 // BUG #3: agente no conoce el directorio del proyecto seleccionado
-// ============================================================================
-// En agent.rs, get_project_path se usa para comandos de git, pero el path
 // ============================================================================
 // En agent.rs, get_project_path se usa para comandos de git, pero el path
 // NUNCA se inyecta en el system prompt. El agente no sabe en qué carpeta
