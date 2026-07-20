@@ -133,14 +133,7 @@ impl StudyEngine {
 
         // Cargar perfiles guardados desde disco
         let profiles: HashMap<String, UserLearningProfile> = {
-        let _ = fs::create_dir_all(data_dir.join("knowledge"));
-        let _ = fs::create_dir_all(data_dir.join("projects"));
-
-        // Cargar perfiles guardados desde disco
-        let profiles: HashMap<String, UserLearningProfile> = {
             let profiles_dir = data_dir.join("profiles");
-            let mut map = HashMap::new();
-            if profiles_dir.exists() {
                 if let Ok(entries) = fs::read_dir(&profiles_dir) {
                     for entry in entries.filter_map(Result::ok) {
                         let path = entry.path();
