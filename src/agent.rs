@@ -1748,7 +1748,7 @@ fn find_chat_file_by_session_id(base_workspace: &Path, session_id: &str) -> Opti
                 }
             } else if path.is_file() {
                 if let Some(fname) = path.file_stem().and_then(|s| s.to_str()) {
-                    if fname.contains(session_id) and path.extension().and_then(|e| e.to_str()) == Some("json") {
+                    if fname.contains(session_id) && path.extension().and_then(|e| e.to_str()) == Some("json") {
                         return Some(path);
                     }
                 }
