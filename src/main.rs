@@ -1526,6 +1526,7 @@ async fn get_projects(State(state): State<AppState>) -> impl IntoResponse {
 }
 
 async fn get_agent_status(State(state): State<AppState>) -> impl IntoResponse {
+    let status = state.active_agent.lock().unwrap().clone();
     Json(json!({
         "status": "ok",
         "active": status.running,
@@ -1538,7 +1539,6 @@ async fn get_agent_status(State(state): State<AppState>) -> impl IntoResponse {
         "current_session_id": status.current_session_id,
     }))
 }
-
 async fn agent_steps(
     State(state): State<AppState>,
     headers: HeaderMap,
