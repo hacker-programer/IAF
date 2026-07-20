@@ -1,4 +1,4 @@
-#![allow(dead_code, unused_imports, unused_variables, unused_mut, unused_assignments, unused_must_use)]
+﻿#![allow(dead_code, unused_imports, unused_variables, unused_mut, unused_assignments, unused_must_use)]
 use axum::{
     extract::{State, Json, Path as AxumPath},
     response::IntoResponse,
@@ -1085,14 +1085,7 @@ async fn chat_endpoint(
         if !agent.running {
             agent.running = true;
             agent.interrupted = false;
-            agent.finished = false;
-            agent.final_message = None;
-            // BUG FIX: Solo limpiar steps si es conversacion NUEVA. Si es existente, cargar desde sesion.
-            if chat_file.is_some() {
-                if let Some(ref steps) = session.steps { agent.steps = steps.clone(); }
-            } else {
-                agent.steps.clear();
-            }
+            agent.steps.clear();
             agent.thinking_content.clear();
             agent.esperando_respuesta_usuario = false;
             agent.respuesta_usuario = None;
@@ -1102,7 +1095,6 @@ async fn chat_endpoint(
             agent.current_session_id = Some(session_id.clone());
 
             let state_bg = state.clone();
-            let session_bg = session.clone();
             let session_bg = session.clone();
             let sid_bg = session_id.clone();
             let uname_bg = username.clone();
@@ -1151,7 +1143,6 @@ async fn chat_endpoint(
 
                 let mut ag = state_bg.active_agent.lock().unwrap();
                 ag.running = false;
-                if !ag.finished { ag.finished = true; ag.final_message = match &result { Ok(resp) => Some(resp.clone()), Err(e) => Some(format!("Error: {}", e)), }; }
             });
         }
     }
@@ -1540,8 +1531,6 @@ async fn get_agent_status(State(state): State<AppState>) -> impl IntoResponse {
         "status": "ok",
         "active": status.running,
         "running": status.running,
-        "finished": status.finished,
-        "final_message": status.final_message,
         "interrupted": status.interrupted,
         "esperando_respuesta_usuario": status.esperando_respuesta_usuario,
         "pregunta_usuario": status.pregunta_usuario,
