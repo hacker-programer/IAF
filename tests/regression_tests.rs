@@ -727,7 +727,7 @@ mod edge_case_tests {
             // El frontend debe ignorar notificaciones vacías
             assert!(true);
         }
-    }
+        let _tipo = "informativo";
     /// BUG #2 Edge: Título con caracteres especiales
     #[test]
     fn test_title_with_special_characters() {
