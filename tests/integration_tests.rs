@@ -597,9 +597,8 @@ mod regression_tests {
 // ============================================================================
 // Tests de IntegraciÃ³n (requieren servidor corriendo)
 // ============================================================================
-
 #[cfg(test)]
-#[cfg(test)]
+mod integration_tests {
 mod integration_tests {
     use reqwest::Client;
 
