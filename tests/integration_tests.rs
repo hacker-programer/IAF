@@ -852,24 +852,11 @@ mod regression_study_tests {
     use std::path::PathBuf;
 
     /// Crea un directorio temporal único para cada test
-    fn tmp_dir(name: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!("iaf_reg_{}", name));
-        let _ = fs::remove_dir_all(&dir);
-        let _ = fs::create_dir_all(&dir);
-        dir
-    }
 
     // =========================================================================
-    // REG-STU-001: El perfil debe guardarse en .config/data/<user>/profile.json
-    // NO en .config/study/profiles/<user>.json
-    //
-    // BUG: StudyEngine usaba config_dir.join("study") como data_dir, causando
-    // que los perfiles se guardaran en .config/study/profiles/ en vez de
-    // .config/data/<user>/profile.json como especifica la base.
+    // REG-STU-PATH-001: La ruta del perfil NO debe ser study/profiles/
+    // Debe ser .config/data/<username>/profile.json
     // =========================================================================
-
-    #[test]
-    fn reg_stu001_profile_correct_path_structure() {
         let tmp = tmp_dir("stu001");
 
         // Simular la estructura que el engine debe crear
