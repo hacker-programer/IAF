@@ -1078,14 +1078,14 @@ async fn chat_endpoint(
     let save_path = get_chat_path(&state, &username, is_admin, &session.title, &session.id);
     let _ = fs::create_dir_all(save_path.parent().unwrap());
     let _ = fs::write(&save_path, serde_json::to_string_pretty(&session).unwrap());
-
     // Iniciar agente en background (BUG #4 fix)
     {
         let mut agent = state.active_agent.lock().unwrap();
         if !agent.running {
             agent.running = true;
             agent.interrupted = false;
-            agent.steps.clear();
+            agent.finished = false;
+            agent.final_message = None;
             agent.thinking_content.clear();
             agent.esperando_respuesta_usuario = false;
             agent.respuesta_usuario = None;
@@ -1093,6 +1093,21 @@ async fn chat_endpoint(
             agent.plan_propuesto = None;
             agent.pregunta_usuario = None;
             agent.current_session_id = Some(session_id.clone());
+            
+            // BUG FIX: Solo limpiar steps si es una conversación NUEVA.
+            // Si es continuación de una existente, cargar steps desde el archivo de sesión
+            // para preservar el historial de iteraciones.
+            if chat_file.is_some() {
+                // Conversación existente: cargar steps guardados
+                if let Some(ref steps) = session.steps {
+                    agent.steps = steps.clone();
+                } else {
+                    // Si no hay steps guardados, preservar los actuales (no limpiar)
+                }
+            } else {
+                // Conversación nueva: limpiar steps
+                agent.steps.clear();
+            }
 
             let state_bg = state.clone();
             let session_bg = session.clone();
