@@ -949,7 +949,12 @@ function showInfoToast(message) {
             setTimeout(() => { if (toast.parentNode) toast.remove(); }, 300);
         }
     }, 8000);
-}
+function renderConsoleSteps(steps) {
+    const area = document.getElementById('consoleArea');
+    area.innerHTML = steps.map(s => {
+        let cls = 'console-step';
+        const stype = s.step_type || s.type || ''; // Compatibilidad con ambos nombres de campo
+        if (stype === 'tool_call') cls += ' tool_call';
         else if (stype === 'tool_result') cls += ' tool_result';
         else if (stype === 'error') cls += ' error';
         else if (stype === 'informativo') cls += ' info';
@@ -962,7 +967,6 @@ function showInfoToast(message) {
     }).join('');
     area.scrollTop = area.scrollHeight;
 }
-
 document.getElementById('interruptBtn').onclick = async () => {
     await apiCall('/api/agent/interrupt', 'POST');
     document.getElementById('interruptBtn').classList.add('hidden');
