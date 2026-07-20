@@ -1788,9 +1788,13 @@ fn save_agent_message_to_disk(state: &AppState, session_id: &str, role: &str, co
                         content: content.to_string(),
                         timestamp: std::time::SystemTime::now()
                             .duration_since(std::time::UNIX_EPOCH).unwrap().as_secs(),
-                    });
-                    if let Some(parent) = chat_file.parent() {
-                        let _ = fs::create_dir_all(parent);
+fn get_project_path(state: &AppState, name: &str) -> String {
+    let projs = state.projects.lock().unwrap();
+    projs.iter()
+        .find(|p| p.name == name)
+        .map(|p| p.path.clone())
+        .unwrap_or_else(|| state.base_workspace.join(name).to_string_lossy().to_string())
+}
                     }
                     let _ = fs::write(&chat_file, serde_json::to_string_pretty(&session).unwrap());
                 }
