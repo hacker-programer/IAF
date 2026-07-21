@@ -88,10 +88,8 @@ mod study_engine_tests {
         let tmp = tmp_dir("se_exists");
         let engine = StudyEngine::new(tmp.clone());
 
-        // Usuario sin perfil
         assert!(!engine.profile_exists_on_disk("ghost_user"));
 
-        // Crear perfil
         let profile = engine.get_or_create_profile("real_user");
         engine.save_profile(&profile).unwrap();
 
@@ -110,7 +108,6 @@ mod study_engine_tests {
         let kb_path = tmp.join(".config").join("data").join("alumno1").join("learnings.json");
         assert!(kb_path.exists());
 
-        // Crear nuevo engine y verificar que carga
         let engine2 = StudyEngine::new(tmp);
         let kb2 = engine2.get_knowledge("alumno1");
         assert!(kb2.is_some());
@@ -141,12 +138,10 @@ mod study_engine_tests {
         let tmp = tmp_dir("se_internal");
         let data_dir = tmp.join(".config").join("data");
 
-        // Crear _projects (interno)
         let projects_dir = data_dir.join("_projects");
         fs::create_dir_all(&projects_dir).unwrap();
         fs::write(projects_dir.join("p1.json"), "{}").unwrap();
 
-        // Crear usuario real
         let user_dir = data_dir.join("real_user");
         fs::create_dir_all(&user_dir).unwrap();
         let profile = json!({"username":"real_user","age":15,"phase":"Exploration","high_capabilities":null,"neurological_conditions":[],"favorite_games":[],"favorite_youtubers":[],"hobbies":[],"exploration_started_at":null,"exploitation_started_at":null,"hypothesis_history":[],"learning_style_summary":"","message_timestamps":[],"last_updated":0});
@@ -154,7 +149,6 @@ mod study_engine_tests {
 
         let engine = StudyEngine::new(tmp);
         assert!(engine.get_profile("real_user").is_some());
-        // _projects NO debe aparecer como usuario
         assert!(engine.get_profile("_projects").is_none());
     }
 
@@ -262,7 +256,7 @@ mod sanitize_filename_tests {
 
 #[cfg(test)]
 mod active_agent_status_tests {
-    use crate::state::ActiveAgentStatus;
+    use iaf::state::ActiveAgentStatus;
 
     #[test]
     fn default_no_tiene_preguntas_ni_planes_pendientes() {
@@ -339,7 +333,6 @@ mod docx_tests {
         let _ = std::fs::create_dir_all(&dir);
         let docx_path = dir.join("test_real.docx");
 
-        // Crear DOCX con ZIP
         let file = std::fs::File::create(&docx_path).unwrap();
         let mut zip_writer = zip::ZipWriter::new(file);
         let options = zip::write::FileOptions::default()
@@ -360,7 +353,6 @@ mod docx_tests {
 
         assert!(docx_path.exists());
 
-        // Leer como ZIP y extraer texto
         let file = std::fs::File::open(&docx_path).unwrap();
         let mut archive = zip::ZipArchive::new(file).unwrap();
         let mut doc_xml = archive.by_name("word/document.xml").unwrap();
@@ -368,7 +360,6 @@ mod docx_tests {
         use std::io::Read;
         doc_xml.read_to_string(&mut xml_str).unwrap();
 
-        // Extraer texto con quick-xml
         let mut text = String::new();
         let mut reader = quick_xml::Reader::from_str(&xml_str);
         reader.trim_text(true);
@@ -419,7 +410,6 @@ mod docx_tests {
         zip_writer.write_all(xml.as_bytes()).unwrap();
         zip_writer.finish().unwrap();
 
-        // Leer y verificar que no hay texto
         let file = std::fs::File::open(&docx_path).unwrap();
         let mut archive = zip::ZipArchive::new(file).unwrap();
         let mut doc_xml = archive.by_name("word/document.xml").unwrap();
@@ -462,7 +452,8 @@ mod docx_tests {
 
 #[cfg(test)]
 mod user_store_tests {
-    use crate::auth::UserStore;
+    use iaf::auth::UserStore;
+    use iaf::auth::UserLimits;
 
     #[test]
     fn crear_usuario_con_password_funciona() {
@@ -470,7 +461,7 @@ mod user_store_tests {
         let result = store.create_user_with_password(
             "testuser", "secure123", false,
             vec!["read_file".to_string(), "search_code".to_string()],
-            crate::auth::UserLimits::default(),
+            UserLimits::default(),
             true, false, false, false,
         );
         assert!(result.is_ok());
@@ -486,7 +477,7 @@ mod user_store_tests {
         store.create_user_with_password(
             "user1", "mypassword", false,
             vec!["read_file".to_string()],
-            crate::auth::UserLimits::default(),
+            UserLimits::default(),
             true, false, false, false,
         ).unwrap();
 
@@ -501,7 +492,7 @@ mod user_store_tests {
         store.create_user_with_password(
             "user1", "mypassword", false,
             vec!["read_file".to_string()],
-            crate::auth::UserLimits::default(),
+            UserLimits::default(),
             true, false, false, false,
         ).unwrap();
 
@@ -513,11 +504,11 @@ mod user_store_tests {
     #[test]
     fn crear_admin_con_public_key() {
         let store = UserStore::new();
-        let public_key = "a".repeat(64); // 64 chars hex
+        let public_key = "a".repeat(64);
         let result = store.create_admin(
             "admin1", &public_key,
             vec!["read_file".to_string()],
-            crate::auth::UserLimits::admin(),
+            UserLimits::admin(),
         );
         assert!(result.is_ok());
 
@@ -531,12 +522,12 @@ mod user_store_tests {
         let store = UserStore::new();
         store.create_user_with_password(
             "u1", "pw1", false, vec!["read_file".to_string()],
-            crate::auth::UserLimits::default(),
+            UserLimits::default(),
             true, false, false, false,
         ).unwrap();
         store.create_user_with_password(
             "u2", "pw2", false, vec!["read_file".to_string()],
-            crate::auth::UserLimits::default(),
+            UserLimits::default(),
             false, true, false, false,
         ).unwrap();
 
@@ -548,7 +539,7 @@ mod user_store_tests {
     fn has_study_access_admin_siempre_true() {
         let store = UserStore::new();
         let pk = "b".repeat(64);
-        store.create_admin("admin2", &pk, vec!["read_file".to_string()], crate::auth::UserLimits::admin()).unwrap();
+        store.create_admin("admin2", &pk, vec!["read_file".to_string()], UserLimits::admin()).unwrap();
         let user = store.find_user("admin2").unwrap();
         assert!(user.has_study_access());
         assert!(user.has_programming_access());
@@ -559,7 +550,7 @@ mod user_store_tests {
         let store = UserStore::new();
         store.create_user_with_password(
             "user_study", "pw", false, vec!["read_file".to_string()],
-            crate::auth::UserLimits::default(),
+            UserLimits::default(),
             true, false, false, false,
         ).unwrap();
 
@@ -576,7 +567,7 @@ mod user_store_tests {
 
 #[cfg(test)]
 mod cicle_phase_tests {
-    use crate::state::CiclePhase;
+    use iaf::state::CiclePhase;
 
     #[test]
     fn ciclo_completo_de_fases() {
@@ -603,7 +594,6 @@ mod cicle_phase_tests {
         assert_eq!(phase, CiclePhase::Terminar);
         assert_eq!(phase.as_str(), "ciclo6_terminar");
 
-        // Terminar se queda en Terminar
         phase = phase.next();
         assert_eq!(phase, CiclePhase::Terminar);
     }
@@ -621,7 +611,7 @@ mod cicle_phase_tests {
 
 #[cfg(test)]
 mod chat_session_tests {
-    use crate::state::{ChatSession, ChatMessage};
+    use iaf::state::{ChatSession, ChatMessage};
 
     #[test]
     fn chat_session_se_serializa_y_deserializa() {
@@ -667,7 +657,6 @@ mod api_contract_tests {
 
     #[test]
     fn respuesta_agent_status_tiene_estructura_correcta() {
-        // Verifica el contrato de /api/agent/status
         let response = json!({
             "status": "ok",
             "active": true,
