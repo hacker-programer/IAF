@@ -659,8 +659,6 @@ pub async fn run_agent_loop(
                 let args_str = tool_call["function"]["arguments"].as_str().unwrap_or("{}");
                 let args: Value = serde_json::from_str(args_str).unwrap_or(json!({}));
 
-                if func_name == "notificar_usuario" {
-                }
 
                 {
                     let mut status = state.active_agent.lock().unwrap();
