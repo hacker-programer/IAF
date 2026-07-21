@@ -1,7 +1,0 @@
-﻿cargo :     Finished `dev` profile [unoptimized + debuginfo] target(s) in 2.76s
-En línea: 1 Carácter: 102
-+ ... \Users\Fa\AppData\Local\Temp\cargo-target" ; cargo check 2>&1 | Out-F ...
-+                                                  ~~~~~~~~~~~~~~~~
-    + CategoryInfo          : NotSpecified: (    Finished `d...get(s) in 2.76s:String) [], RemoteException
-    + FullyQualifiedErrorId : NativeCommandError
- 

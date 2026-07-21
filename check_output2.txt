@@ -1,7 +1,0 @@
-﻿cargo :     Blocking waiting for file lock on build directory
-En línea: 1 Carácter: 79
-+ ... ck tests/integration_tests.rs 2>&1 ; cargo check --tests 2>&1 | Out-F ...
-+                                          ~~~~~~~~~~~~~~~~~~~~~~~~
-    + CategoryInfo          : NotSpecified: (    Blocking wa...build directory:String) [], RemoteException
-    + FullyQualifiedErrorId : NativeCommandError
- 
