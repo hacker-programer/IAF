@@ -10,7 +10,38 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use base64::{engine::general_purpose, Engine as _};
 use uuid::Uuid;
+use std::io::Read;
 const DEEPSEEK_API_URL: &str = "https://api.deepseek.com/v1/chat/completions";
+// BUG-001: Extraccion nativa de texto de archivos DOCX via zip + quick-xml
+fn extract_text_from_docx(path: &std::path::Path) -> Result<String, String> {
+    let file = std::fs::File::open(path).map_err(|e| format!("No se pudo abrir el DOCX: {}", e))?;
+    let mut archive = zip::ZipArchive::new(file).map_err(|e| format!("No se pudo leer el ZIP del DOCX: {}", e))?;
+    let mut doc_xml = archive.by_name("word/document.xml").map_err(|e| format!("No se encontro word/document.xml en el DOCX: {}", e))?;
+    let mut xml = String::new();
+    doc_xml.read_to_string(&mut xml).map_err(|e| format!("Error leyendo XML del DOCX: {}", e))?;
+    let mut text = String::new();
+    let mut reader = quick_xml::Reader::from_str(&xml);
+    reader.trim_text(true);
+    let mut in_text = false;
+    loop {
+        match reader.read_event() {
+            Ok(quick_xml::events::Event::Start(ref e)) => {
+                if e.local_name().as_ref() == b"t" { in_text = true; }
+            }
+            Ok(quick_xml::events::Event::Text(ref e)) => {
+                if in_text { text.push_str(&e.unescape().unwrap_or_default()); }
+            }
+            Ok(quick_xml::events::Event::End(ref e)) => {
+                if e.local_name().as_ref() == b"t" { in_text = false; }
+                if e.local_name().as_ref() == b"p" { text.push('\n'); }
+            }
+            Ok(quick_xml::events::Event::Eof) => break,
+            Err(e) => return Err(format!("Error parseando XML del DOCX: {}", e)),
+            _ => {}
+        }
+    }
+    Ok(text)
+}
 
 pub async fn run_agent_loop(
     session_messages: Vec<crate::state::ChatMessage>,
@@ -657,7 +688,25 @@ pub async fn run_agent_loop(
                         if let Some(ref proj_name) = project_name {
                             let proj_path = get_project_path(&state, proj_name);
                             let full_path = Path::new(&proj_path).join(rel_path);
-                            match fs::read_to_string(&full_path) {
+                            let ext = full_path.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
+                            if ext == "pdf" {
+                                match pdf_extract::extract_text(&full_path) {
+                                    Ok(t) => {
+                                        if t.trim().is_empty() { "PDF sin texto extraible (puede ser escaneado o basado en imagenes). Usa analyze_images para ver el PDF visualmente.".to_string() }
+                                        else { format!("[PDF: {}]\n\n{}", rel_path, t) }
+                                    }
+                                    Err(e) => format!("Error al extraer texto del PDF: {}. Si contiene imagenes, usa analyze_images.", e)
+                                }
+                            } else if ext == "docx" {
+                                match extract_text_from_docx(&full_path) {
+                                    Ok(t) => {
+                                        if t.trim().is_empty() { "DOCX sin texto extraible (documento vacio o solo imagenes).".to_string() }
+                                        else { format!("[DOCX: {}]\n\n{}", rel_path, t) }
+                                    }
+                                    Err(e) => format!("Error al extraer texto del DOCX: {}. Si contiene imagenes, usa analyze_images.", e)
+                                }
+                            } else {
+                                match fs::read_to_string(&full_path) {
                                 Ok(content) => {
                                     if start_line_opt.is_some() || end_line_opt.is_some() {
                                         let lines: Vec<&str> = content.lines().collect();
@@ -667,16 +716,17 @@ pub async fn run_agent_loop(
                                         let start_idx = start.saturating_sub(1);
                                         let end_idx = end.min(total_lines);
                                         if start_idx >= total_lines || start_idx > end_idx {
-                                            format!("Error: El rango de lÃƒÂ­neas {}-{} es invÃƒÂ¡lido para un archivo de {} lÃƒÂ­neas.", start, end, total_lines)
+                                            format!("Error: El rango de lineas {}-{} es invalido para un archivo de {} lineas.", start, end, total_lines)
                                         } else {
                                             let chunk = lines[start_idx..end_idx].join("\n");
-                                            format!("// LÃƒÂ­neas {}-{} de {} en {}\n{}", start_idx + 1, end_idx, total_lines, rel_path, chunk)
+                                            format!("// Lineas {}-{} de {} en {}\n{}", start_idx + 1, end_idx, total_lines, rel_path, chunk)
                                         }
                                     } else {
                                         content
                                     }
                                 }
                                 Err(e) => format!("Error leyendo archivo: {}", e),
+                                }
                             }
                         } else {
                             "No hay ningÃƒÂºn proyecto activo seleccionado.".to_string()
@@ -1308,7 +1358,31 @@ pub async fn run_agent_loop(
                             format!("Notificación enviada con éxito: {}", mensaje)
                         }
                     }
-                    "finalizar_tarea" => {                        // Limpiar todos los procesos hijo registrados antes de finalizar                        state.process_registry.kill_all();                        let msg = args["mensaje_final"].as_str().unwrap_or("Tarea finalizada.").to_string();                        // Notificar finalizacion en el estado del agente para que el frontend lo detecte                        {                            let mut status = state.active_agent.lock().unwrap();                            status.finished = true;                            status.final_message = Some(msg.clone());                            status.running = false;                            status.steps.push(crate::state::AuditStep {                                step_type: "thinking".to_string(),                                title: "Tarea Finalizada".to_string(),                                detail: format!("El agente ha finalizado la tarea: {}", msg),                                timestamp: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs(),                            });                            if let Some(ref s_id) = session_id {                                save_chat_steps_to_disk(&state, &Some(s_id.clone()), &status.steps);                            }                        }                        final_message = Some(msg);                        "Tarea finalizada correctamente.".to_string()                    }                    "image_fetch" => {
+                    "finalizar_tarea" => {
+                        state.process_registry.kill_all();
+                        let msg = args["mensaje_final"].as_str().unwrap_or("Tarea finalizada.").to_string();
+                        let final_msg = if msg.trim().is_empty() { "Tarea finalizada.".to_string() } else { msg };
+                        {
+                            let mut status = state.active_agent.lock().unwrap();
+                            status.finished = true;
+                            status.final_message = Some(final_msg.clone());
+                            status.running = false;
+                            status.esperando_respuesta_usuario = false;
+                            status.esperando_aprobacion_plan = false;
+                            // BUG-002 FIX: No limpiar info_messages. El frontend los consume incrementalmente.
+                            status.steps.push(crate::state::AuditStep {
+                                step_type: "thinking".to_string(),
+                                title: "Tarea Finalizada".to_string(),
+                                detail: format!("El agente ha finalizado la tarea: {}", final_msg),
+                                timestamp: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs(),
+                            });
+                            if let Some(ref s_id) = session_id {
+                                save_chat_steps_to_disk(&state, &Some(s_id.clone()), &status.steps);
+                            }
+                        }
+                        final_message = Some(final_msg);
+                        "Tarea finalizada correctamente.".to_string()
+                    }                    "image_fetch" => {
                         let url = args["url"].as_str().unwrap_or("");
                         if url.is_empty() {
                             json!({"error": "No se proporcionÃƒÂ³ URL"}).to_string()
