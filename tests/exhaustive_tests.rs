@@ -15,6 +15,7 @@
 
 #[cfg(test)]
 mod source_code_verification_tests {
+    #![allow(unused_imports, unused_variables, unused_assignments, unused_mut)]
     use std::path::Path;
 
     // =========================================================================
@@ -285,6 +286,7 @@ mod source_code_verification_tests {
 
 #[cfg(test)]
 mod regression_tests {
+    #![allow(unused_imports, unused_variables, unused_assignments, unused_mut)]
 
     // =========================================================================
     // REG-BUG-004: finalizar_tarea no debe requerir URL
@@ -443,6 +445,7 @@ mod regression_tests {
 
 #[cfg(test)]
 mod integration_tests {
+    #![allow(unused_imports, unused_variables, unused_assignments, unused_mut)]
     use std::path::Path;
 
     // =========================================================================
@@ -613,6 +616,7 @@ mod integration_tests {
 
 #[cfg(test)]
 mod stress_tests {
+    #![allow(unused_imports, unused_variables, unused_assignments, unused_mut)]
 
     #[test]
     fn info_messages_masivo_10000_mensajes() {
@@ -675,6 +679,7 @@ mod stress_tests {
 
 #[cfg(test)]
 mod fault_injection_tests {
+    #![allow(unused_imports, unused_variables, unused_assignments, unused_mut)]
 
     #[test]
     fn archivo_inexistente_devuelve_error_no_panico() {
@@ -747,6 +752,7 @@ mod fault_injection_tests {
 
 #[cfg(test)]
 mod edge_case_tests {
+    #![allow(unused_imports, unused_variables, unused_assignments, unused_mut)]
 
     #[test]
     fn mensaje_final_vacio_completo() {
@@ -854,6 +860,7 @@ mod edge_case_tests {
 
 #[cfg(test)]
 mod smoke_tests {
+    #![allow(unused_imports, unused_variables, unused_assignments, unused_mut)]
 
     #[test]
     fn herramientas_requeridas_definidas_en_agent_rs() {
@@ -892,6 +899,7 @@ mod smoke_tests {
 
 #[cfg(test)]
 mod regression_new_bugs {
+    #![allow(unused_imports, unused_variables, unused_assignments, unused_mut)]
 
     // =========================================================================
     // BUG: No carga el perfil de estudio en el frontend

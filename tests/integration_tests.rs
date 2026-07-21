@@ -27,6 +27,7 @@ fn tmp_dir(name: &str) -> PathBuf {
 
 #[cfg(test)]
 mod study_engine_tests {
+    #![allow(unused_imports, unused_variables, unused_assignments, unused_mut)]
     use super::*;
     use iaf::study::StudyEngine;
     use serde_json::json;
@@ -186,6 +187,7 @@ mod study_engine_tests {
 
 #[cfg(test)]
 mod sanitize_filename_tests {
+    #![allow(unused_imports, unused_variables, unused_assignments, unused_mut)]
     use iaf::utils::sanitize_filename;
 
     #[test]
@@ -256,6 +258,7 @@ mod sanitize_filename_tests {
 
 #[cfg(test)]
 mod active_agent_status_tests {
+    #![allow(unused_imports, unused_variables, unused_assignments, unused_mut)]
     use iaf::state::ActiveAgentStatus;
 
     #[test]
@@ -326,6 +329,7 @@ mod active_agent_status_tests {
 
 #[cfg(test)]
 mod docx_tests {
+    #![allow(unused_imports, unused_variables, unused_assignments, unused_mut)]
 
     #[test]
     fn crear_docx_y_extraer_texto_con_quick_xml() {
@@ -452,6 +456,7 @@ mod docx_tests {
 
 #[cfg(test)]
 mod user_store_tests {
+    #![allow(unused_imports, unused_variables, unused_assignments, unused_mut)]
     use iaf::auth::UserStore;
     use iaf::auth::UserLimits;
 
@@ -567,6 +572,7 @@ mod user_store_tests {
 
 #[cfg(test)]
 mod cicle_phase_tests {
+    #![allow(unused_imports, unused_variables, unused_assignments, unused_mut)]
     use iaf::state::CiclePhase;
 
     #[test]
@@ -611,6 +617,7 @@ mod cicle_phase_tests {
 
 #[cfg(test)]
 mod chat_session_tests {
+    #![allow(unused_imports, unused_variables, unused_assignments, unused_mut)]
     use iaf::state::{ChatSession, ChatMessage};
 
     #[test]
@@ -653,6 +660,7 @@ mod chat_session_tests {
 
 #[cfg(test)]
 mod api_contract_tests {
+    #![allow(unused_imports, unused_variables, unused_assignments, unused_mut)]
     use serde_json::json;
 
     #[test]
