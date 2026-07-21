@@ -828,8 +828,6 @@ async function sendMessageToAgent(text, mode) {
 
 function addMessage(role, text) {
     const div = document.createElement('div');
-function addMessage(role, text) {
-    const div = document.createElement('div');
     div.className = `message ${role}-msg`;
     div.innerHTML = `<strong>${role === 'user' ? 'Tú' : 'Agente'}:</strong> ${text.replace(/\n/g, '<br>')}`;
     document.getElementById('chatArea').appendChild(div);
