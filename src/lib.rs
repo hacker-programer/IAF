@@ -5,3 +5,4 @@ pub mod auth;
 pub mod study;
 pub mod desktop;
 pub mod sync;
+pub mod client_protocol;
