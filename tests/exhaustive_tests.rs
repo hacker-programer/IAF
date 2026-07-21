@@ -883,3 +883,137 @@ mod smoke_tests {
             "Las tool definitions deben tener function object");
     }
 }
+
+
+// ============================================================================
+// SECCIÓN 6: TESTS DE REGRESIÓN — Bugs descubiertos en sesión 2025-07
+// Estos bugs NO tenían tests. Ahora sí.
+// ============================================================================
+
+#[cfg(test)]
+mod regression_new_bugs {
+
+    // =========================================================================
+    // BUG: No carga el perfil de estudio en el frontend
+    // Causa: loadStudyProfile podía fallar silenciosamente o no ser llamada
+    // =========================================================================
+
+    #[test]
+    fn app_js_contiene_load_study_profile() {
+        let js = include_str!("../public/app.js");
+        assert!(js.contains("function loadStudyProfile"),
+            "REGRESION: app.js no contiene loadStudyProfile. El perfil de estudio no se cargara.");
+        assert!(js.contains("/api/study/profile"),
+            "REGRESION: app.js no llama a /api/study/profile. El perfil no se obtiene del backend.");
+    }
+
+    #[test]
+    fn app_js_load_study_profile_maneja_respuesta() {
+        let js = include_str!("../public/app.js");
+        // Debe acceder a res.profile y res.engagement
+        assert!(js.contains("res.profile") || js.contains("profileAge"),
+            "REGRESION: loadStudyProfile no procesa res.profile.");
+    }
+
+    // =========================================================================
+    // BUG: No ve el system prompt local ni el directorio del proyecto
+    // Causa: agent.rs no recibía project_name o no lo usaba
+    // =========================================================================
+
+    #[test]
+    fn agent_rs_recibe_project_name_y_local_prompt() {
+        let src = include_str!("../src/agent.rs");
+        // Debe recibir project_name como parametro
+        assert!(src.contains("project_name: Option<String>"),
+            "REGRESION: run_agent_loop no recibe project_name.");
+        // Debe cargar el prompt local
+        assert!(src.contains("prompts.projects.get(name)"),
+            "REGRESION: agent.rs no carga local_prompt desde prompts.projects.");
+        // Debe formatear el system prompt con el local
+        assert!(src.contains("Project Specific Prompt:"),
+            "REGRESION: agent.rs no incluye el prompt local en el system prompt.");
+    }
+
+    #[test]
+    fn agent_rs_usa_get_project_path() {
+        let src = include_str!("../src/agent.rs");
+        assert!(src.contains("get_project_path"),
+            "REGRESION: agent.rs no usa get_project_path. No conoce el directorio del proyecto.");
+        assert!(src.contains("proj_path"),
+            "REGRESION: agent.rs no construye la ruta del proyecto.");
+    }
+
+    // =========================================================================
+    // BUG: No se puede empezar una conversación
+    // Causa: addMessage estaba definida dos veces (duplicada)
+    // =========================================================================
+
+    #[test]
+    fn app_js_add_message_definida_una_sola_vez() {
+        let js = include_str!("../public/app.js");
+        let count = js.matches("function addMessage").count();
+        assert_eq!(count, 1,
+            "REGRESION: addMessage esta definida {} veces. Debe estar definida UNA sola vez. La duplicacion rompe el inicio de conversacion.", count);
+    }
+
+    #[test]
+    fn app_js_add_message_cierra_llaves_correctamente() {
+        let js = include_str!("../public/app.js");
+        // La funcion addMessage debe tener su cuerpo completo con appendChild
+        assert!(js.contains("appendChild(div)"),
+            "REGRESION: addMessage no contiene appendChild. La funcion esta incompleta.");
+        assert!(js.contains("scrollTop = document.getElementById"),
+            "REGRESION: addMessage no hace scroll. La funcion esta incompleta.");
+    }
+
+    #[test]
+    fn app_js_send_message_to_agent_existe() {
+        let js = include_str!("../public/app.js");
+        assert!(js.contains("function sendMessageToAgent"),
+            "REGRESION: app.js no contiene sendMessageToAgent.");
+        assert!(js.contains("/api/chat"),
+            "REGRESION: sendMessageToAgent no llama a /api/chat.");
+        assert!(js.contains("startAgentMonitoring()"),
+            "REGRESION: sendMessageToAgent no inicia el monitoreo del agente.");
+    }
+
+    // =========================================================================
+    // BUG: El perfil de usuario no se pasa al agente
+    // =========================================================================
+
+    #[test]
+    fn agent_rs_recibe_username_y_mode() {
+        let src = include_str!("../src/agent.rs");
+        assert!(src.contains("username: &str"),
+            "REGRESION: run_agent_loop no recibe username. No puede cargar el perfil.");
+        assert!(src.contains("mode: &str"),
+            "REGRESION: run_agent_loop no recibe mode. No sabe si es estudio o programacion.");
+    }
+
+    #[test]
+    fn main_rs_pasa_username_y_mode_al_agente() {
+        let src = include_str!("../src/main.rs");
+        // Debe pasar username y mode a run_agent_loop
+        assert!(src.contains("run_agent_loop"),
+            "REGRESION: main.rs no llama a run_agent_loop.");
+        assert!(src.contains("&uname_bg"),
+            "REGRESION: main.rs no pasa username al agente.");
+        assert!(src.contains("&mode_bg"),
+            "REGRESION: main.rs no pasa mode al agente.");
+    }
+
+    // =========================================================================
+    // BUG: System prompt local no se aplica correctamente
+    // =========================================================================
+
+    #[test]
+    fn agent_rs_local_prompt_overridea_global() {
+        let src = include_str!("../src/agent.rs");
+        // Debe haber un if let o similar que combine global + local
+        assert!(src.contains("local_prompt") || src.contains("prompts.projects.get"),
+            "REGRESION: agent.rs no carga el prompt local del proyecto.");
+        // El formato debe incluir "Project Specific Prompt:"
+        assert!(src.contains("Project Specific Prompt:"),
+            "REGRESION: El prompt local no se incluye en el system prompt.");
+    }
+}
