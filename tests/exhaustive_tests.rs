@@ -577,7 +577,7 @@ mod integration_tests {
     #[test]
     fn active_agent_status_default_es_seguro() {
         // Crear un estado por defecto como lo haria el servidor
-        let status = crate::state::ActiveAgentStatus::default();
+        let status = iaf::state::ActiveAgentStatus::default();
 
         // Por defecto NO debe haber preguntas ni planes pendientes
         assert!(!status.running);
@@ -592,7 +592,7 @@ mod integration_tests {
 
     #[test]
     fn active_agent_status_json_tiene_campos_requeridos() {
-        let status = crate::state::ActiveAgentStatus::default();
+        let status = iaf::state::ActiveAgentStatus::default();
         let json = serde_json::to_value(&status).unwrap();
 
         let campos_requeridos = [
@@ -826,7 +826,7 @@ mod edge_case_tests {
 
     #[test]
     fn estado_agente_con_todos_los_campos_null_o_default() {
-        let status = crate::state::ActiveAgentStatus::default();
+        let status = iaf::state::ActiveAgentStatus::default();
         let json = serde_json::to_value(&status).unwrap();
 
         // Verificar que el JSON se serializa correctamente
@@ -845,7 +845,7 @@ mod edge_case_tests {
 
     #[test]
     fn info_messages_vacio_en_json_es_array_vacio() {
-        let status = crate::state::ActiveAgentStatus::default();
+        let status = iaf::state::ActiveAgentStatus::default();
         let json = serde_json::to_value(&status).unwrap();
         let arr = json["info_messages"].as_array().unwrap();
         assert!(arr.is_empty());
