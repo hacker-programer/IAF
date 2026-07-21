@@ -607,7 +607,7 @@ mod cicle_phase_tests {
             CiclePhase::BusquedaBugs,
             CiclePhase::Reduccion,
             CiclePhase::SegundaBusquedaBugs,
-            CiclePhase::TerminarTarea,
+            CiclePhase::Terminar,
         ];
         assert_eq!(fases.len(), 6);
     }

@@ -926,7 +926,7 @@ async function startAgentMonitoring() {
 }
 
 function renderConsoleSteps(steps) {
-    const area = document.getElementById('consoleOutput');
+    const area = document.getElementById('consoleArea');
     if (!area) return;
     area.innerHTML = steps.map(function(s) {
         return `<div class="console-step">
