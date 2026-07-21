@@ -706,7 +706,7 @@ mod api_contract_tests {
     #[test]
     fn api_agent_interrupt_existe() {
         let src = include_str!("../src/main.rs");
-        assert!(src.contains("interrupt_agent"), "Falta interrupt_agent en main.rs");
+        assert!(src.contains("agent_interrupt"), "Falta agent_interrupt en main.rs");
     }
 
     #[test]
