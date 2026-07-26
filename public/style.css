@@ -371,7 +371,7 @@ textarea {
     border-bottom-left-radius: 4px;
 }
 
-/* BUG-021: Estilo para mensajes informativos en tiempo real en el chat */
+/* Mensajes informativos en tiempo real en el chat */
 .info-msg {
     align-self: flex-start;
     background: rgba(0, 212, 255, 0.08);
@@ -387,7 +387,7 @@ textarea {
     to { opacity: 1; transform: translateX(0); }
 }
 
-/* Estilo para el mensaje final de tarea completada */
+/* Mensaje final de tarea completada */
 .final-msg {
     align-self: center;
     background: rgba(16, 185, 129, 0.12);
@@ -445,7 +445,7 @@ textarea {
 
 .hidden { display: none !important; }
 
-/* ---- INFO TOAST (BUG-002: notificaciones en tiempo real) ---- */
+/* ---- INFO TOAST (notificaciones en tiempo real) ---- */
 .info-toast {
     position: fixed;
     bottom: 20px;
