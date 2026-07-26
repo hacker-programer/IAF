@@ -676,7 +676,7 @@ mod api_contract_tests {
 
     #[test]
     fn api_agent_status_tiene_todos_los_campos() {
-        let src = include_str!("src/main.rs");
+        let src = include_str!("../src/main.rs");
         assert!(src.contains("get_agent_status"), "Falta get_agent_status en main.rs");
         assert!(src.contains("info_messages"), "get_agent_status no incluye info_messages");
         assert!(src.contains("final_message"), "get_agent_status no incluye final_message");
@@ -686,26 +686,26 @@ mod api_contract_tests {
 
     #[test]
     fn api_chat_endpoint_acepta_mode() {
-        let src = include_str!("src/main.rs");
+        let src = include_str!("../src/main.rs");
         assert!(src.contains("chat_endpoint"), "Falta chat_endpoint en main.rs");
         assert!(src.contains("payload.mode"), "chat_endpoint no procesa mode");
     }
 
     #[test]
     fn api_agent_responder_existe() {
-        let src = include_str!("src/main.rs");
+        let src = include_str!("../src/main.rs");
         assert!(src.contains("agent_responder"), "Falta agent_responder en main.rs");
     }
 
     #[test]
     fn api_agent_aprobar_plan_existe() {
-        let src = include_str!("src/main.rs");
+        let src = include_str!("../src/main.rs");
         assert!(src.contains("agent_approve_plan"), "Falta agent_approve_plan en main.rs");
     }
 
     #[test]
     fn api_agent_interrupt_existe() {
-        let src = include_str!("src/main.rs");
+        let src = include_str!("../src/main.rs");
         assert!(src.contains("agent_interrupt"), "Falta agent_interrupt en main.rs");
     }
 
@@ -981,8 +981,8 @@ mod test_file_integrity_tests {
 }
 
 // ============================================================================
-// TESTS DE REGRESIÓN DE BUGS VIEJOS (Verificación de código fuente)
-// Estos tests usan include_str! para verificar que los fixes en el código
+// TESTS DE REGRESION DE BUGS VIEJOS (Verificacion de codigo fuente)
+// Estos tests usan include_str! para verificar que los fixes en el codigo
 // fuente sigan presentes. Si un fix se revierte, el test falla.
 // ============================================================================
 
@@ -1058,7 +1058,7 @@ mod regression_bugs_tests {
     }
 
     // =========================================================================
-    // BUG-004: finalizar_tarea devuelve error "No se proporcionó URL"
+    // BUG-004: finalizar_tarea devuelve error "No se proporcionï¿½ URL"
     // =========================================================================
 
     #[test]
@@ -1145,7 +1145,7 @@ mod regression_bugs_tests {
     }
 
     // =========================================================================
-    // BUG: No se puede empezar una conversación (addMessage duplicada)
+    // BUG: No se puede empezar una conversaciï¿½n (addMessage duplicada)
     // =========================================================================
 
     #[test]
