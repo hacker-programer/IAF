@@ -715,20 +715,28 @@ async function selectChatSession(id) {
     if (res.status === 'ok') {
         const chatArea = document.getElementById('chatArea');
         chatArea.innerHTML = '';
+// Líneas 718-750 de 1021 en C:\Users\Fa\Desktop\IAF\public\app.js
+async function selectChatSession(id) {
+    currentSessionId = id;
+    loadChatHistory();
+    const res = await apiCall(`/api/chats/${id}`);
+    if (res.status === 'ok') {
+        const chatArea = document.getElementById('chatArea');
+        chatArea.innerHTML = '';
         res.session.messages.forEach(m => addMessage(m.role, m.content));
         if (res.session.project_name) {
             activeProject = res.session.project_name;
             document.getElementById('activeProjectName').innerText = activeProject;
             loadProjects();
         }
+        // BUG-015 FIX: Cargar steps de auditoría desde la sesión y mostrarlos
+        if (res.session.steps && Array.isArray(res.session.steps)) {
+            renderConsoleSteps(res.session.steps);
+        }
+        // BUG-014 FIX: Iniciar monitoreo del agente al entrar a un chat existente
+        startAgentMonitoring();
     }
 }
-
-document.getElementById('newChatBtn').onclick = () => {
-    currentSessionId = null;
-    document.getElementById('chatArea').innerHTML = '<div class="message system-msg"><strong>Sistema:</strong> Nuevo chat iniciado.</div>';
-    loadChatHistory();
-};
 
 // ---- Send Message ----
 const SEND_DEBOUNCE_MS = 500;
