@@ -681,8 +681,6 @@ async function loadChatHistory() {
             list.innerHTML = '<div style="color:var(--text-muted);font-size:12px;">Sin historial</div>';
         }
     } catch(e) {}
-}
-
 async function loadChat(sessionId) {
     try {
         const res = await apiCall('/api/chats/' + sessionId);
@@ -692,10 +690,12 @@ async function loadChat(sessionId) {
             area.innerHTML = '';
             (res.session.messages || []).forEach(m => addMessage(m.role, m.content));
             loadChatHistory();
+            // BUG-024 FIX: Iniciar monitoreo al cargar un chat existente
+            // para recibir mensajes en tiempo real si el agente está corriendo
+            startAgentMonitoring();
         }
     } catch(e) {}
 }
-
 document.getElementById('newChatBtn').onclick = () => {
     currentSessionId = null;
     document.getElementById('chatArea').innerHTML = '<div class="message system-msg"><strong>Sistema:</strong> Nuevo chat iniciado.</div>';
