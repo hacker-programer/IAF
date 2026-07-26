@@ -215,13 +215,13 @@ mod sanitize_filename_tests {
     }
 
     #[test]
+    #[test]
     fn sanitiza_caracteres_no_ascii() {
-        let result = sanitize_filename("AnÃ¡lisis del cÃ³digo");
+        let result = sanitize_filename("Análisis del código");
         assert!(result.chars().all(|c| c.is_ascii()));
-        assert!(!result.contains('Ã¡'));
-        assert!(!result.contains('Ã³'));
+        assert!(!result.contains("á"));
+        assert!(!result.contains("ó"));
     }
-
     #[test]
     fn sanitiza_trunca_a_40_caracteres() {
         let long_name = "a".repeat(100);
