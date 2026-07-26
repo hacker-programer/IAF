@@ -236,8 +236,10 @@ function showApp() {
     loadProjects();
     loadPrompts();
     loadChatHistory();
+    // BUG-024 FIX: Iniciar monitoreo al cargar la app para capturar
+    // mensajes en tiempo real si el agente ya está corriendo
+    startAgentMonitoring();
 }
-
 // ---- Logout ----
 document.getElementById('logoutBtn').onclick = async () => {
     if (authToken && authToken !== 'admin_local') {
