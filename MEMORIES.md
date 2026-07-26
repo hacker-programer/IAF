@@ -2,6 +2,13 @@
 
 ## Bugs Corregidos (Sesión 2025-2026)
 
+### BUG-005: Unclosed delimiter en exhaustive_tests.rs impide compilación
+- **Causa real**: `mod regression_new_bugs {` (línea 974) nunca tenía `}` de cierre. Los 7 módulos posteriores (`user_requested_test_names`, `additional_regression_tests`, dos `stress_tests`, dos `fault_injection_tests`, `additional_edge_case_tests`, `e2e_tests`, `regression_historical`) estaban anidados dentro de `regression_new_bugs` sin que este se cerrara.
+- **Fix aplicado**: Insertar `}` después de la línea 1099 (después de `agent_rs_local_prompt_overridea_global`, el último test de `regression_new_bugs`).
+- **Por qué no fue detectado**: El error estaba EN el archivo de tests. Los tests usan `include_str!` para verificar archivos fuente, pero si el archivo de tests no compila, ningún test se ejecuta. Los tests no pueden verificar su propio archivo.
+- **Solución de prevención**: Se agregó `mod test_file_integrity_tests` en `integration_tests.rs` (archivo separado) que usa `include_str!("exhaustive_tests.rs")` para verificar balance de llaves, paréntesis y corchetes en todos los archivos fuente y de tests. Si hay un unclosed delimiter, este test falla ANTES de que se intente compilar el archivo problemático.
+- **Verificación**: Tests `exhaustive_tests_rs_tiene_llaves_balanceadas`, `integration_tests_rs_tiene_llaves_balanceadas`, `archivos_fuente_principales_tienen_llaves_balanceadas`, `app_js_tiene_delimitadores_balanceados` en `tests/integration_tests.rs`.
+
 ### BUG-001: No puede analizar PDFs ni .docx
 - **Causa real**: El `read_file` handler en `agent.rs` solo usaba `fs::read_to_string()`. No detectaba extensiones `.pdf` ni `.docx`.
 - **Fix aplicado**: 
@@ -43,6 +50,11 @@
 
 ## Por qué estos bugs no fueron detectados por tests (Lección 2025-2026)
 
+### BUG-005 (unclosed delimiter)
+- **El error estaba en el propio archivo de tests. Si el archivo no compila, ningún test se ejecuta.**
+- Los tests de verificación de código fuente (`include_str!`) verifican archivos fuente, no el archivo de tests mismo.
+- **Solución**: Se agregaron tests de integridad en `integration_tests.rs` (archivo separado) que usan `include_str!` para leer `exhaustive_tests.rs` como texto y verificar balance de llaves. Como `integration_tests.rs` es un archivo independiente, compila aunque `exhaustive_tests.rs` tenga errores.
+
 ### BUG-001 (PDF/DOCX)
 - **Los tests existentes solo probaban extensiones `.txt`, `.rs`, `.md`.**
 - No había tests que verificaran que `read_file` detectara extensiones `.pdf` o `.docx`.
@@ -82,20 +94,21 @@
 - `GET /api/agent/steps` devuelve pasos de auditoría
 - `GET /api/agent/summary` devuelve resumen textual
 - `Path::extension()` para `.gitignore` devuelve `None` (el `.` inicial es parte del stem, no extensión)
-- `Path::extension()` para `.gitignore` devuelve `None` (el `.` inicial es parte del stem, no extensión)
 
-## Cambios estructurales (v2.6)
+## Cambios estructurales (v2.7)
 - `lib.rs` ahora expone: `pub mod utils; pub mod state; pub mod auth; pub mod study; pub mod desktop; pub mod sync;`
 - `state.rs`: `ActiveAgentStatus` tiene `info_messages: Vec<String>`, `finished: bool`, `final_message: Option<String>`
 - `agent.rs`: `extract_text_from_docx()` para DOCX nativo, `pdf_extract::extract_text()` para PDF nativo, `finalizar_tarea` refactorizado a multi-línea
 - `app.js`: `startAgentMonitoring()` consume `info_messages` SIEMPRE, sin importar `running`/`finished`. `addMessage` sin duplicados.
+- `tests/integration_tests.rs`: Nuevo módulo `test_file_integrity_tests` con tests de balance de llaves en todos los archivos fuente y de tests.
+- `tests/exhaustive_tests.rs`: `mod regression_new_bugs` correctamente cerrado (BUG-005).
 
 ## Dependencias agregadas
 - `pdf-extract = "0.7"` — extracción de texto de PDFs
 - `zip = "0.6"` — lectura de archivos DOCX (formato ZIP con XML interno)
 - `quick-xml = "0.31"` — parseo rápido del XML dentro de DOCX
 
-## Archivos de tests (v2.6)
+## Archivos de tests (v2.7)
 - `tests/exhaustive_tests.rs` — Tests de verificación de código fuente (include_str!), regresión, integración, estrés, inyección de fallos, casos límite, smoke tests, y tests de nuevos bugs descubiertos
-- `tests/integration_tests.rs` — Tests reales: StudyEngine con disco, UserStore con contraseñas, sanitize_filename, ActiveAgentStatus, DOCX, CiclePhase, ChatSession, contrato API
+- `tests/integration_tests.rs` — Tests reales: StudyEngine con disco, UserStore con contraseñas, sanitize_filename, ActiveAgentStatus, DOCX, CiclePhase, ChatSession, contrato API, Y tests de integridad de archivos (balance de llaves)
 - `tests/frontend_regression_tests.js` — Tests de regresión del frontend (JS, ejecutar con Node)
