@@ -1,4 +1,4 @@
-#![allow(dead_code, unused_imports, unused_variables)]
+﻿#![allow(dead_code, unused_imports, unused_variables)]
 use serde_json::{json, Value};
 use std::error::Error;
 use std::process::Command;
@@ -1419,7 +1419,8 @@ pub async fn run_agent_loop(
                         final_message = Some(final_msg);
                         "Tarea finalizada correctamente.".to_string()
                     }
-                    "image_fetch" => {
+                    "image_fetch" => {                        let url = args["url"].as_str().unwrap_or("");
+                        if url.is_empty() {
                             json!({"error": "No se proporcionÃƒÆ’Ã‚Â³ URL"}).to_string()
                         } else {
                             let fetch_client = reqwest::Client::builder()
