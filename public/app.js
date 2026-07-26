@@ -1,4 +1,4 @@
-// ============================================================================
+﻿// ============================================================================
 // IAF — app.js — Cliente Web con Autenticación
 // ============================================================================
 
@@ -236,9 +236,9 @@ function showApp() {
     loadProjects();
     loadPrompts();
     loadChatHistory();
-    // Iniciar monitoreo para recibir mensajes en tiempo real si el agente ya está corriendo
-    startAgentMonitoring();
 }
+
+// ---- Logout ----
 document.getElementById('logoutBtn').onclick = async () => {
     if (authToken && authToken !== 'admin_local') {
         await apiCall('/api/auth/logout', 'POST', { token: authToken });
@@ -994,7 +994,7 @@ async function startAgentMonitoring() {
                 renderConsoleSteps(stepsRes.steps);
             }
 
-            // Mostrar pregunta del agente como BANNER INLINE (no modal full-screen)
+            // Mostrar pregunta del agente al usuario
             if (statusRes.esperando_respuesta_usuario && statusRes.pregunta_usuario && !agentQuestionShown) {
                 agentQuestionShown = true;
                 document.getElementById('agentQuestionPrompt').textContent = statusRes.pregunta_usuario;
@@ -1013,10 +1013,10 @@ async function startAgentMonitoring() {
             if (statusRes.captcha_pending) {
                 document.getElementById('captchaAlert').classList.remove('hidden');
             }
-            // Si el agente ya no está esperando respuesta, resetear flag y ocultar banner
+
+            // Si el agente ya no está esperando respuesta, resetear flag
             if (!statusRes.esperando_respuesta_usuario) {
                 agentQuestionShown = false;
-                document.getElementById('agentQuestionBanner').classList.add('hidden');
             }
             if (!statusRes.esperando_aprobacion_plan) {
                 agentPlanShown = false;
@@ -1026,8 +1026,8 @@ async function startAgentMonitoring() {
             document.getElementById('interruptBtn').classList.add('hidden');
             agentQuestionShown = false;
             agentPlanShown = false;
-            document.getElementById('agentQuestionBanner').classList.add('hidden');
         }
+    }, 1000); // BUG-021: reducido de 1500ms a 1000ms para mejor tiempo real
 }
 
 function renderConsoleSteps(steps) {
@@ -1096,7 +1096,7 @@ document.getElementById('closeCaptchaBtn').onclick = () => {
     document.getElementById('captchaModal').classList.add('hidden');
 };
 
-// ---- Agent Question Banner (inline) ----
+// ---- Agent Question Modal ----
 document.getElementById('submitAgentResponseBtn').onclick = async () => {
     const respuesta = document.getElementById('agentQuestionResponse').value.trim();
     if (!respuesta) return;
@@ -1105,6 +1105,7 @@ document.getElementById('submitAgentResponseBtn').onclick = async () => {
     document.getElementById('agentQuestionBanner').classList.add('hidden');
     agentQuestionShown = false;
 };
+
 // ---- Agent Plan Modal ----
 document.getElementById('approvePlanBtn').onclick = async () => {
     await apiCall('/api/agent/aprobar_plan', 'POST', { aprobado: true });
