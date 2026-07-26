@@ -2,6 +2,44 @@
 
 ## Bugs Corregidos (Sesión 2025-2026)
 
+### BUG-018: Study mode — obsesión con escribir archivos .md en vez de enseñar
+- **Causa real**: El `study_system_prompt.txt` tenía reglas contra escribir archivos, pero no eran lo suficientemente prominentes. El `default_system_prompt.txt` contiene "DOCUMENTACIÓN INTERNA Y EXTERNA OBLIGATORIA" que entraba en conflicto. Además, el prompt de estudio no mencionaba la transparencia de razonamiento ni el testing de métodos de aprendizaje.
+- **Fix aplicado**: `study_system_prompt.txt` completamente reescrito:
+  1. **REGLA DE ORO #1** (la primera, más prominente): PROHIBIDO ABSOLUTAMENTE crear archivos .md, guías, tutoriales, READMEs, o documentos de estudio. Solo se permite crear juegos educativos interactivos (.html, .rs, .py).
+  2. **REGLA DE ORO #3**: TRANSPARENCIA DE RAZONAMIENTO — si el alumno pregunta cómo razona el agente, DEBE mostrar su <thinking>.
+  3. Instrucciones explícitas sobre testing de métodos de aprendizaje (exploración vs explotación).
+  4. "ENSEÑA EN EL CHAT, NO EN ARCHIVOS" repetido múltiples veces.
+- **Lección**: Las reglas más importantes deben estar PRIMERO en el prompt y ser reforzadas con ejemplos negativos concretos.
+
+### BUG-017: Study mode — ignoraba preguntas sobre formato de razonamiento y métodos
+- **Causa real**: El prompt de estudio no mencionaba en absoluto que el alumno puede preguntar sobre el formato de razonamiento (<thinking>) ni sobre los métodos de aprendizaje (exploración/explotación).
+- **Fix aplicado**: Agregada REGLA DE ORO #3 (transparencia) y sección específica sobre fases de aprendizaje.
+- **Lección**: Todas las funcionalidades del sistema deben estar documentadas en el prompt para que el agente las conozca y las explique.
+
+### BUG-016: Respuesta a pregunta del agente no se guardaba en el chat
+- **Causa real**: 
+  1. Frontend: `submitAgentResponseBtn.onclick` no llamaba a `addMessage('user', respuesta)` → la respuesta no aparecía en el chat.
+  2. Backend: `agent_responder` solo seteaba `respuesta_usuario` y `esperando_respuesta_usuario = false`, pero NUNCA guardaba la respuesta en el archivo de sesión JSON.
+- **Fix aplicado**:
+  1. Frontend: `addMessage('user', respuesta)` antes de enviar al backend.
+  2. Backend: `agent_responder` ahora busca el archivo de chat por `session_id`, agrega la pregunta del agente (si no estaba guardada) y la respuesta del usuario, y persiste.
+  3. Se creó `find_chat_file_by_session_id_inner()` en main.rs (duplicada de `agent.rs` porque la original es privada).
+- **Lección**: Cuando el frontend y backend manejan el mismo dato, ambos deben persistirlo. No confiar en que uno solo lo haga.
+
+### BUG-015: No mostraba la auditoría al recargar la página y entrar a un chat
+- **Causa real**: `selectChatSession()` cargaba los mensajes del chat pero NO:
+  1. Cargaba `session.steps` desde la sesión para mostrarlos en el panel de auditoría.
+  2. Llamaba a `startAgentMonitoring()` para iniciar el polling.
+- **Fix aplicado**: `selectChatSession()` ahora:
+  1. Si `res.session.steps` existe, llama a `renderConsoleSteps(res.session.steps)`.
+  2. Llama a `startAgentMonitoring()` al final.
+- **Lección**: Cada vez que se agrega una nueva funcionalidad (auditoría, monitoreo), hay que verificar TODOS los puntos de entrada del frontend (nuevo chat, chat existente, recarga).
+
+### BUG-014: Mensajes en tiempo real no se mostraban sin recargar la página
+- **Causa real**: `startAgentMonitoring()` solo se llamaba después de `sendMessageToAgent()` (enviar un mensaje nuevo). Si el usuario recargaba la página y entraba a un chat existente mediante `selectChatSession()`, el monitoreo NUNCA se iniciaba.
+- **Fix aplicado**: `selectChatSession()` ahora llama a `startAgentMonitoring()`.
+- **Lección**: El monitoreo debe iniciarse desde TODOS los puntos de entrada: nuevo mensaje Y selección de chat existente.
+
 ### BUG-013: Métodos `get_user_projects` y `build_study_system_prompt` perdidos de study.rs
 - **Causa real**: Al aplicar el fix de BUG-012 con `write_file_with_commit`, el contenido de `study.rs` se truncó en memoria (el `read_file` devolvió contenido incompleto por el tamaño del archivo). Esto eliminó dos métodos públicos que `main.rs` necesitaba: `get_user_projects` y `build_study_system_prompt`. El error solo se detectó al ejecutar `cargo test` (no al compilar `study.rs` solo, ya que los métodos estaban en `impl StudyEngine` y el archivo cerraba correctamente).
 - **Fix aplicado**: Restaurar ambos métodos desde el commit `7b9a273`:
@@ -34,6 +72,18 @@
 ### BUG-004: finalizar_tarea URL — `"required": ["mensaje_final"]`. Verificado.
 
 ## Por qué estos bugs no fueron detectados por tests
+
+### BUG-018/017 (study mode)
+- Tests de integración no incluyen pruebas del system prompt porque el prompt es texto libre.
+- **Solución**: Agregar test que verifique que el prompt de estudio contiene las reglas clave (prohibición .md, transparencia).
+
+### BUG-016 (respuesta no guardada)
+- No había test que simulara el flujo completo: agente pregunta → usuario responde → verificar que la respuesta aparece en la sesión.
+- **Solución**: Agregar test de integración para el flujo `notificar_usuario(pregunta) → agent_responder`.
+
+### BUG-015/014 (monitoreo al recargar)
+- Los tests de frontend no cubren el escenario "recargar página y seleccionar chat existente".
+- **Solución**: Agregar test de regresión que verifique `selectChatSession` llama a `startAgentMonitoring`.
 
 ### BUG-013 (métodos perdidos)
 - `cargo check` de `study.rs` no detecta métodos faltantes porque `impl StudyEngine` cerraba correctamente.
@@ -70,14 +120,17 @@
 - `cargo test` ejecuta tests en paralelo por defecto
 - `write_file_with_commit` con archivos grandes puede truncar el contenido
 - Verificar métodos cross-file después de cada edición
+- `node --check` valida sintaxis JS sin ejecutar
 
-## Cambios estructurales (v3.4)
+## Cambios estructurales (v3.5)
 - `src/study.rs`: 973 líneas. `get_user_projects` (L583), `build_study_system_prompt` (L515), `test_engine()` con `AtomicU32`.
+- `src/main.rs`: 2260 líneas. Agregada `find_chat_file_by_session_id_inner()` para BUG-016.
 - `tests/exhaustive_tests.rs`: 1835 líneas, 15 módulos, 123 tests.
 - `tests/integration_tests.rs`: 1197 líneas, 10 módulos, 24 tests de regresión.
-- `app.js`: Balanceado.
+- `public/app.js`: 1021 líneas. `selectChatSession` ahora inicia monitoreo + carga steps; `submitAgentResponseBtn` agrega `addMessage`.
+- `prompts/study_system_prompt.txt`: Reescrito — 3 reglas de oro, anti-.md, transparencia, testing de métodos.
 
-## Archivos de tests (v3.4)
+## Archivos de tests (v3.5)
 - `tests/exhaustive_tests.rs` (1835 líneas) — 15 módulos, 123 tests
 - `tests/integration_tests.rs` (1197 líneas) — 10 módulos
 - `tests/frontend_regression_tests.js` — Tests de regresión del frontend
