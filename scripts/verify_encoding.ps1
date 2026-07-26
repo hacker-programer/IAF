@@ -5,6 +5,7 @@ param([switch]$Fix, [string]$Path = "")
 if ($Path -eq "") { $Path = Split-Path -Parent $PSScriptRoot }
 $root = Resolve-Path $Path
 $ErrorActionPreference = "Continue"
+$utf8NoBom = New-Object System.Text.UTF8Encoding($false)
 
 Write-Host "============================================"
 Write-Host " VERIFICADOR UTF-8 - $root"
@@ -83,7 +84,8 @@ foreach ($ext in $extensions) {
                     if ($Fix) {
                         $enc = if ($bytes[0] -eq 0xFF) { [Text.Encoding]::Unicode } else { [Text.Encoding]::BigEndianUnicode }
                         $text = [IO.File]::ReadAllText($f.FullName, $enc)
-                        [IO.File]::WriteAllText($f.FullName, $text, [Text.Encoding]::UTF8)
+                        $cleanBytes = $utf8NoBom.GetBytes($text)
+                        [IO.File]::WriteAllBytes($f.FullName, $cleanBytes)
                         Write-Host "  -> CORREGIDO"
                         $fixedCount++
                     }
@@ -99,7 +101,8 @@ foreach ($ext in $extensions) {
                 if ($Fix) {
                     try {
                         $text = [Text.Encoding]::GetEncoding(28591).GetString($bytes)
-                        [IO.File]::WriteAllText($f.FullName, $text, [Text.Encoding]::UTF8)
+                        $cleanBytes = $utf8NoBom.GetBytes($text)
+                        [IO.File]::WriteAllBytes($f.FullName, $cleanBytes)
                         Write-Host "  -> CORREGIDO (Latin-1 asumido)"
                         $fixedCount++
                     } catch {
