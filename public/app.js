@@ -495,24 +495,53 @@ document.getElementById('createUserBtn').onclick = async () => {
     try {
         const res = await apiCall('/api/admin/users', 'POST', payload);
         if (res.status === 'ok') {
-            alert('Usuario creado correctamente.');
-            // Clear form fields
             document.getElementById('newUsername').value = '';
             document.getElementById('newPassword').value = '';
             document.getElementById('newPasswordConfirm').value = '';
             document.getElementById('newPublicKey').value = '';
-            document.getElementById('keygenPublic').value = '';
-            document.getElementById('keygenPrivate').value = '';
-            document.getElementById('keygenModal').classList.add('hidden');
-            document.getElementById('newIsAdmin').checked = false;
             await refreshUsersTable();
         } else {
-            alert('Error: ' + (res.message || 'Error desconocido'));
+            alert('Error: ' + (res.message || 'No se pudo crear el usuario.'));
         }
-    } catch(e) { alert('Error de conexión.'); }
+    } catch(e) {
+        alert('Error de conexión al crear usuario.');
+    }
 };
 
-// ---- PEM File Upload ----
+// ============================================================================
+// KEY GENERATION
+// ============================================================================
+
+let currentServerKey = null;
+
+// ---- Generate Keys locally ----
+document.getElementById('generateKeysBtn').onclick = async () => {
+    const btn = document.getElementById('generateKeysBtn');
+    btn.disabled = true;
+    btn.textContent = 'Generando...';
+    try {
+        const res = await apiCall('/api/auth/generate-keypair', 'GET');
+        if (res.status === 'ok') {
+            document.getElementById('newPublicKey').value = res.public_key;
+            // Create blob and download private key
+            const blob = new Blob([res.private_key], { type: 'application/x-pem-file' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'admin_private.pem';
+            a.click();
+            URL.revokeObjectURL(url);
+        } else {
+            alert('Error: ' + res.message);
+        }
+    } catch(e) {
+        alert('Error al generar claves.');
+    }
+    btn.disabled = false;
+    btn.textContent = '🔑 Generar Par de Claves';
+};
+
+// ---- Upload PEM file ----
 document.getElementById('uploadPemBtn').onclick = () => {
     document.getElementById('pemFileInput').click();
 };
@@ -520,167 +549,110 @@ document.getElementById('uploadPemBtn').onclick = () => {
 document.getElementById('pemFileInput').onchange = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
+    const text = await file.text();
     try {
-        const text = await file.text();
-        const match = text.match(/-----BEGIN IAF ED25519 (?:PRIVATE|PUBLIC) KEY-----\s*([a-fA-F0-9]{64})\s*-----END/);
-        if (match) {
-            document.getElementById('newPublicKey').value = match[1].toLowerCase();
-        } else {
-            const hexMatch = text.match(/^([a-fA-F0-9]{64})$/m);
-            if (hexMatch) {
-                document.getElementById('newPublicKey').value = hexMatch[1].toLowerCase();
-            } else {
-                alert('Formato .pem inválido. Debe contener una clave ED25519 de 64 caracteres hex.');
-            }
-        }
-    } catch(err) { alert('Error leyendo el archivo .pem'); }
-};
-
-// ---- Generate Keys ----
-document.getElementById('generateKeysBtn').onclick = async () => {
-    try {
-        const res = await apiCall('/api/auth/keygen');
+        const res = await apiCall('/api/auth/upload-public-key', 'POST', { pem_content: text });
         if (res.status === 'ok') {
-            document.getElementById('keygenPublic').value = res.public_key;
-            document.getElementById('keygenPrivate').value = res.private_key;
             document.getElementById('newPublicKey').value = res.public_key;
-            document.getElementById('keygenModal').classList.remove('hidden');
         } else {
-            alert('Error generando claves: ' + res.message);
+            alert('Error: ' + res.message);
         }
-    } catch(e) { alert('Error de conexión al generar claves.'); }
+    } catch(e) {
+        alert('Error al procesar el archivo PEM.');
+    }
 };
 
-document.getElementById('closeKeygenBtn').onclick = () => {
-    document.getElementById('keygenModal').classList.add('hidden');
-};
+// ============================================================================
+// PROJECTS
+// ============================================================================
 
-// ---- Download PEM ----
-function downloadPem(type, hexKey) {
-    if (!hexKey) return alert('No hay clave para descargar.');
-    const label = type === 'private' ? 'PRIVATE' : 'PUBLIC';
-    const content = `-----BEGIN IAF ED25519 ${label} KEY-----\n${hexKey}\n-----END IAF ED25519 ${label} KEY-----\n`;
-    const blob = new Blob([content], { type: 'application/x-pem-file' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `iaf_admin_${type}.pem`;
-    a.click();
-    URL.revokeObjectURL(url);
-}
-
-// ---- Download Script ----
-async function downloadScript(name) {
-    try {
-        const headers = {};
-        if (authToken && authToken !== 'admin_local') headers['Authorization'] = 'Bearer ' + authToken;
-        const res = await fetch('/api/scripts/' + name, { headers });
-        if (!res.ok) {
-            const err = await res.json().catch(() => ({}));
-            return alert('Error: ' + (err.message || 'Script no encontrado.'));
-        }
-        const blob = await res.blob();
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = name + '.ps1';
-        a.click();
-        URL.revokeObjectURL(url);
-    } catch(e) { alert('Error descargando script: ' + e.message); }
-}
-
-// ---- Study Profile ----
-async function loadStudyProfile() {
-    try {
-        const res = await apiCall('/api/study/profile');
-        if (res.status === 'ok') {
-            const p = res.profile;
-            document.getElementById('profileAge').value = p.age || '';
-            document.getElementById('profileGames').value = (p.favorite_games || []).join(', ');
-            document.getElementById('profileHobbies').value = (p.hobbies || []).join(', ');
-            document.getElementById('profileNeuro').value = (p.neurological_conditions || []).join(', ');
-            document.getElementById('studyPhase').textContent = 'Fase: ' + (p.phase || 'Exploration') + ' | Engagement: ' + ((res.engagement || 0) * 100).toFixed(0) + '%';
-        }
-    } catch(e) {}
-}
-
-document.getElementById('saveProfileBtn').onclick = async () => {
-    const profile = {
-        age: parseInt(document.getElementById('profileAge').value) || null,
-        favorite_games: document.getElementById('profileGames').value.split(',').map(s => s.trim()).filter(Boolean),
-        hobbies: document.getElementById('profileHobbies').value.split(',').map(s => s.trim()).filter(Boolean),
-        neurological_conditions: document.getElementById('profileNeuro').value.split(',').map(s => s.trim()).filter(Boolean),
-    };
-    await apiCall('/api/study/profile', 'POST', profile);
-    alert('Perfil guardado.');
-};
-
-// ---- Projects ----
 async function loadProjects() {
     try {
-        const projects = await apiCall('/api/projects');
+        const res = await apiCall('/api/projects');
         const list = document.getElementById('projectList');
-        if (Array.isArray(projects)) {
-            list.innerHTML = projects.map(p => `
+        if (res.projects && Array.isArray(res.projects)) {
+            list.innerHTML = res.projects.map(p => `
                 <div class="project-item ${activeProject === p.name ? 'active' : ''}" onclick="selectProject('${p.name}')">${p.name}</div>
             `).join('');
         }
     } catch(e) {}
 }
 
-async function selectProject(name) {
+function selectProject(name) {
     activeProject = name;
     document.getElementById('activeProjectName').innerText = name;
     loadProjects();
-    const prompts = await apiCall('/api/prompts');
-    document.getElementById('localPrompt').value = (prompts.projects && prompts.projects[name]) || '';
 }
 
-// ---- Prompts ----
+// ============================================================================
+// PROMPTS
+// ============================================================================
+
 async function loadPrompts() {
     try {
         const prompts = await apiCall('/api/prompts');
-        document.getElementById('globalPrompt').value = prompts.global_current || '';
-        if (activeProject) document.getElementById('localPrompt').value = (prompts.projects && prompts.projects[activeProject]) || '';
+        if (prompts.status === 'ok') {
+            document.getElementById('globalPromptText').value = prompts.global || '';
+            if (activeProject && prompts.projects && prompts.projects[activeProject]) {
+                document.getElementById('localPromptText').value = prompts.projects[activeProject];
+            } else {
+                document.getElementById('localPromptText').value = '';
+            }
+        }
     } catch(e) {}
 }
 
-document.getElementById('savePromptsBtn').onclick = async () => {
-    const global = document.getElementById('globalPrompt').value;
-    const payload = { global };
-    if (activeProject) payload.project_prompts = { [activeProject]: document.getElementById('localPrompt').value };
-    await apiCall('/api/prompts', 'POST', payload);
-    alert('Prompts guardados.');
+document.getElementById('saveGlobalPromptBtn').onclick = async () => {
+    const content = document.getElementById('globalPromptText').value;
+    const res = await apiCall('/api/prompts/global', 'PUT', { content });
+    if (res.status === 'ok') {
+        alert('System prompt global guardado.');
+    } else {
+        alert('Error: ' + res.message);
+    }
 };
 
-document.getElementById('resetPromptBtn').onclick = async () => {
-    await apiCall('/api/prompts/reset', 'POST');
-    loadPrompts();
-    alert('Prompt global restaurado.');
+document.getElementById('saveLocalPromptBtn').onclick = async () => {
+    if (!activeProject) return alert('Seleccioná un proyecto primero.');
+    const content = document.getElementById('localPromptText').value;
+    const res = await apiCall(`/api/prompts/projects/${activeProject}`, 'PUT', { content });
+    if (res.status === 'ok') {
+        alert('System prompt local guardado para ' + activeProject + '.');
+    } else {
+        alert('Error: ' + res.message);
+    }
 };
 
-// ---- Fork & Clone ----
-document.getElementById('forkBtn').onclick = async () => {
-    const url = document.getElementById('repoUrl').value.trim();
-    if (!url) return alert('Especifica la URL del repo.');
-    const btn = document.getElementById('forkBtn');
-    btn.innerText = 'Forking...'; btn.disabled = true;
-    const res = await apiCall('/api/projects/fork', 'POST', { repo_url: url });
-    btn.innerText = 'Fork & Clone'; btn.disabled = false;
-    if (res.status === 'ok') { alert('Clonado correctamente.'); loadProjects(); }
-    else alert('Error: ' + res.message);
+document.getElementById('resetGlobalPromptBtn').onclick = async () => {
+    if (!confirm('¿Restaurar el system prompt global al valor por defecto?')) return;
+    const res = await apiCall('/api/prompts/global/reset', 'POST');
+    if (res.status === 'ok') {
+        document.getElementById('globalPromptText').value = res.content;
+        alert('System prompt global restaurado.');
+    } else {
+        alert('Error: ' + res.message);
+    }
 };
 
-document.getElementById('addLocalBtn').onclick = async () => {
-    const name = document.getElementById('localProjName').value.trim();
-    const path = document.getElementById('localProjPath').value.trim();
-    if (!name || !path) return alert('Nombre y ruta requeridos.');
-    const res = await apiCall('/api/projects/local', 'POST', { name, path });
-    if (res.status === 'ok') { alert('Proyecto local agregado.'); loadProjects(); }
-    else alert('Error: ' + res.message);
-};
+// ============================================================================
+// STUDY PROFILE
+// ============================================================================
 
-// ---- Chat History ----
+async function loadStudyProfile() {
+    try {
+        const res = await apiCall('/api/study/profile');
+        if (res.status === 'ok' && res.profile) {
+            document.getElementById('studyProfileInfo').innerHTML =
+                '<b>Perfil:</b> ' + (res.profile.learning_style || 'No definido') +
+                ' | <b>Fase:</b> ' + (res.profile.phase || 'exploracion');
+        }
+    } catch(e) {}
+}
+
+// ============================================================================
+// CHAT HISTORY
+// ============================================================================
+
 async function loadChatHistory() {
     try {
         const res = await apiCall('/api/chats');
@@ -718,9 +690,24 @@ async function selectChatSession(id) {
     }
 }
 
+// BUG-019 FIX: Al crear un nuevo chat, limpiar TODO el estado anterior:
+// - Detener el monitoreo del agente
+// - Limpiar la consola de auditoría
+// - Ocultar el botón de interrumpir
+// - Resetear flags de pregunta y plan pendientes
 document.getElementById('newChatBtn').onclick = () => {
     currentSessionId = null;
     document.getElementById('chatArea').innerHTML = '<div class="message system-msg"><strong>Sistema:</strong> Nuevo chat iniciado.</div>';
+    // BUG-019: Detener monitoreo y limpiar auditoría
+    if (agentMonitorInterval) {
+        clearInterval(agentMonitorInterval);
+        agentMonitorInterval = null;
+    }
+    document.getElementById('interruptBtn').classList.add('hidden');
+    const consoleArea = document.getElementById('consoleArea');
+    if (consoleArea) consoleArea.innerHTML = '';
+    agentQuestionShown = false;
+    agentPlanShown = false;
     loadChatHistory();
 };
 
