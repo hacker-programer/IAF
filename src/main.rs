@@ -1587,7 +1587,8 @@ async fn agent_summary(
 }
 
 // ============================================================================
-// Legacy Endpoints ÔÇö Agente
+// Líneas 1590-1655 de 2168 en C:\Users\Fa\Desktop\IAF\src\main.rs
+// Legacy Endpoints — Agente
 // ============================================================================
 
 #[derive(Deserialize)]
@@ -1600,18 +1601,84 @@ async fn agent_responder(
     headers: HeaderMap,
     Json(payload): Json<AgentResponderRequest>,
 ) -> impl IntoResponse {
-    let _username = match require_auth(&state, &headers).await {
+    let username = match require_auth(&state, &headers).await {
         Ok(u) => u,
         Err(e) => return (e.0, Json(json!({ "status": "error", "message": e.1 }))).into_response(),
     };
 
     let mut agent = state.active_agent.lock().unwrap();
-    agent.respuesta_usuario = Some(payload.respuesta);
+    let pregunta = agent.pregunta_usuario.clone();
+    let session_id = agent.current_session_id.clone();
+    agent.respuesta_usuario = Some(payload.respuesta.clone());
     agent.esperando_respuesta_usuario = false;
+    drop(agent); // Liberar el lock antes de operaciones de I/O
+
+    // BUG-016 FIX: Guardar la respuesta del usuario y la pregunta del agente en la sesión de chat
+    if let Some(ref sid) = session_id {
+        if let Some(chat_file) = find_chat_file_by_session_id_inner(&state.base_workspace, sid) {
+            if let Ok(content) = fs::read_to_string(&chat_file) {
+                if let Ok(mut session) = serde_json::from_str::<ChatSession>(&content) {
+                    // Guardar la pregunta del agente si no está ya guardada
+                    if let Some(ref q) = pregunta {
+                        let already_saved = session.messages.iter().any(|m| m.role == "agent" && m.content == *q);
+                        if !already_saved {
+                            session.messages.push(ChatMessage {
+                                role: "agent".to_string(),
+                                content: q.clone(),
+                                timestamp: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs(),
+                            });
+                        }
+                    }
+                    // Guardar la respuesta del usuario
+                    session.messages.push(ChatMessage {
+                        role: "user".to_string(),
+                        content: payload.respuesta.clone(),
+                        timestamp: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs(),
+                    });
+                    if let Some(parent) = chat_file.parent() { let _ = fs::create_dir_all(parent); }
+                    let _ = fs::write(&chat_file, serde_json::to_string_pretty(&session).unwrap());
+                }
+            }
+        }
+    }
 
     Json(json!({ "status": "ok" })).into_response()
 }
 
+/// Busca un archivo de chat por session_id. Duplica la lógica de agent.rs porque
+/// find_chat_file_by_session_id es privada allí y necesitamos acceder desde main.rs.
+fn find_chat_file_by_session_id_inner(base_workspace: &std::path::Path, session_id: &str) -> Option<std::path::PathBuf> {
+    let chats_dir = base_workspace.join(".config").join("chats");
+    if !chats_dir.exists() { return None; }
+    if let Ok(entries) = std::fs::read_dir(&chats_dir) {
+        for entry in entries.filter_map(|e| e.ok()) {
+            let path = entry.path();
+            if path.is_dir() {
+                if let Ok(sub_entries) = std::fs::read_dir(&path) {
+                    for sub_entry in sub_entries.filter_map(|e| e.ok()) {
+                        let sub_path = sub_entry.path();
+                        if sub_path.is_file() {
+                            if let Some(fname) = sub_path.file_stem().and_then(|s| s.to_str()) {
+                                if fname.contains(session_id) && sub_path.extension().and_then(|e| e.to_str()) == Some("json") {
+                                    return Some(sub_path);
+                                }
+                            }
+                        }
+                    }
+                }
+            } else if path.is_file() {
+                if let Some(fname) = path.file_stem().and_then(|s| s.to_str()) {
+                    if fname.contains(session_id) && path.extension().and_then(|e| e.to_str()) == Some("json") {
+                        return Some(path);
+                    }
+                }
+            }
+        }
+    }
+    let old_format = chats_dir.join(format!("{}.json", session_id));
+    if old_format.exists() { return Some(old_format); }
+    None
+}
 #[derive(Deserialize)]
 struct AgentApprovePlanRequest {
     aprobado: bool,
