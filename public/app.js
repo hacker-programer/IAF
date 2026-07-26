@@ -1013,10 +1013,10 @@ async function startAgentMonitoring() {
             if (statusRes.captcha_pending) {
                 document.getElementById('captchaAlert').classList.remove('hidden');
             }
-
-            // Si el agente ya no está esperando respuesta, resetear flag
+            // Si el agente ya no está esperando respuesta, resetear flag y ocultar banner
             if (!statusRes.esperando_respuesta_usuario) {
                 agentQuestionShown = false;
+                document.getElementById('agentQuestionBanner').classList.add('hidden');
             }
             if (!statusRes.esperando_aprobacion_plan) {
                 agentPlanShown = false;
@@ -1026,8 +1026,8 @@ async function startAgentMonitoring() {
             document.getElementById('interruptBtn').classList.add('hidden');
             agentQuestionShown = false;
             agentPlanShown = false;
+            document.getElementById('agentQuestionBanner').classList.add('hidden');
         }
-    }, 1000); // BUG-021: reducido de 1500ms a 1000ms para mejor tiempo real
 }
 
 function renderConsoleSteps(steps) {
