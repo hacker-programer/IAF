@@ -928,6 +928,20 @@ async function sendMessageToAgent(text, mode) {
     }
 }
 
+
+// ============================================================================
+// RENDERIZADO DE MENSAJES CON MARKDOWN + LATEX
+// ============================================================================
+
+function renderMarkdown(text) {
+    try {
+        if (typeof marked !== "undefined" && marked.parse) {
+            return marked.parse(text);
+        }
+    } catch(e) { console.warn("marked.parse error:", e); }
+    return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\n/g, "<br>");
+}
+
 function addMessage(role, text, extraClass) {
     const div = document.createElement('div');
     var cssClass = 'message ' + role + '-msg';
