@@ -512,6 +512,36 @@ impl StudyEngine {
         now_secs() - profile.message_timestamps.last().unwrap().unix_timestamp > 900
     }
 
+
+    // ========================================================================
+    // Build Study System Prompt
+    // ========================================================================
+
+    pub fn build_study_system_prompt(&self, username: &str, base_prompt: &str) -> String {
+        let profile = self.get_or_create_profile(username);
+        let kb = self.get_or_create_knowledge(username);
+        let mut prompt = base_prompt.to_string();
+        prompt.push_str(&format!("\\n\\n## PERFIL DEL ESTUDIANTE: {}", username));
+        if let Some(age) = profile.age {
+            prompt.push_str(&format!("\\nEdad: {}", age));
+        }
+        if !profile.favorite_games.is_empty() {
+            prompt.push_str(&format!("\\nJuegos favoritos: {}", profile.favorite_games.join(", ")));
+        }
+        if !profile.hobbies.is_empty() {
+            prompt.push_str(&format!("\\nHobbies: {}", profile.hobbies.join(", ")));
+        }
+        if !profile.neurological_conditions.is_empty() {
+            prompt.push_str(&format!("\\nCondiciones: {}", profile.neurological_conditions.join(", ")));
+        }
+        prompt.push_str(&format!("\\nFase: {:?}", profile.phase));
+        prompt.push_str(&format!("\\nEngagement: {:.2}", self.calculate_engagement(username)));
+        if !kb.learning_summary.is_empty() {
+            prompt.push_str(&format!("\\nResumen de aprendizaje: {}", kb.learning_summary));
+        }
+        prompt
+    }
+
     // ========================================================================
     // Study Projects
     // ========================================================================
@@ -578,6 +608,17 @@ impl StudyEngine {
             .values()
             .filter(|p| p.members.contains(&username.to_string()))
             .map(|p| p.id.clone())
+            .collect()
+    }
+
+    /// Devuelve los proyectos completos (no solo IDs) en los que el usuario es miembro
+    pub fn get_user_projects(&self, username: &str) -> Vec<StudyProject> {
+        self.projects
+            .lock()
+            .unwrap()
+            .values()
+            .filter(|p| p.members.contains(&username.to_string()))
+            .cloned()
             .collect()
     }
 
