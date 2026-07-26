@@ -1055,9 +1055,58 @@ document.getElementById('interruptBtn').onclick = async () => {
 };
 
 document.getElementById('summarizeStepsBtn').onclick = async () => {
-    const res = await apiCall('/api/agent/summary');
-    if (res.status === 'ok') {
-        const area = document.getElementById('consoleArea');
+// ---- Helper: Download script ----
+function downloadScript(name) {
+    var url = '/api/scripts/' + name;
+    fetch(url)
+        .then(function(r) { return r.blob(); })
+        .then(function(blob) {
+            var a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = name + '.ps1';
+            a.click();
+            URL.revokeObjectURL(a.href);
+        })
+        .catch(function() { alert('Error al descargar el script.'); });
+}
+
+// ---- Helper: Download PEM ----
+function downloadPem(type, content) {
+    var blob = new Blob([content], { type: 'application/x-pem-file' });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = type === 'private' ? 'admin_private.pem' : 'admin_public.pem';
+    a.click();
+    URL.revokeObjectURL(a.href);
+}
+
+// ---- Toggle Admin Create Mode ----
+function toggleAdminCreateMode() {
+    var isAdmin = document.getElementById('newIsAdmin').checked;
+    document.getElementById('newPassword').parentElement.parentElement.style.display = isAdmin ? 'none' : '';
+    document.getElementById('newPasswordConfirm').parentElement.parentElement.style.display = isAdmin ? 'none' : '';
+    document.getElementById('newPublicKeyContainer').classList.toggle('hidden', !isAdmin);
+    document.getElementById('uploadPemBtn').classList.toggle('hidden', !isAdmin);
+    document.getElementById('generateKeysBtn').classList.toggle('hidden', !isAdmin);
+    if (isAdmin) {
+        document.getElementById('newStudyAccess').checked = true;
+        document.getElementById('newProgAccess').checked = true;
+        document.getElementById('newEditGlobalPrompt').checked = true;
+        document.getElementById('newEditLocalPrompt').checked = true;
+        document.getElementById('newCanFork').checked = true;
+        document.getElementById('newCanExecPS').checked = true;
+        document.getElementById('newCanWrite').checked = true;
+        document.getElementById('newCanSearchGoogle').checked = true;
+    }
+}
+
+// ---- Close Keygen Modal ----
+document.getElementById('closeKeygenBtn').onclick = function() {
+    document.getElementById('keygenModal').classList.add('hidden');
+};
+
+// ---- Init ----
+init();
         area.innerHTML = `<div class="console-step"><div class="console-step-title">📋 Resumen</div><div class="console-step-detail">${res.summary}</div></div>`;
     }
 };
