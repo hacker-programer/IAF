@@ -671,6 +671,8 @@ async function loadChatHistory() {
         const list = document.getElementById('chatHistoryList');
         if (res.status === 'ok' && res.chats && res.chats.length > 0) {
             list.innerHTML = res.chats.map(c => `
+        if (res.status === 'ok' && res.chats && res.chats.length > 0) {
+            list.innerHTML = res.chats.map(c => `
                 <div class="project-item ${c.id === currentSessionId ? 'active' : ''}" 
                      onclick="loadChat('${c.id}')">
                     <strong>${c.title || 'Sin título'}</strong><br>
@@ -678,15 +680,12 @@ async function loadChatHistory() {
                 </div>
             `).join('');
         } else {
-        } else {
             list.innerHTML = '<div style="color:var(--text-muted);font-size:12px;">Sin historial</div>';
         }
     } catch(e) {}
 }
 
 async function loadChat(sessionId) {
-    try {
-        const res = await apiCall('/api/chats/' + sessionId);
         if (res.status === 'ok' && res.session) {
             currentSessionId = sessionId;
             const area = document.getElementById('chatArea');
