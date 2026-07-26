@@ -994,12 +994,12 @@ async function startAgentMonitoring() {
                 renderConsoleSteps(stepsRes.steps);
             }
 
-            // Mostrar pregunta del agente al usuario
+            // Mostrar pregunta del agente como BANNER INLINE (no modal full-screen)
             if (statusRes.esperando_respuesta_usuario && statusRes.pregunta_usuario && !agentQuestionShown) {
                 agentQuestionShown = true;
                 document.getElementById('agentQuestionPrompt').textContent = statusRes.pregunta_usuario;
                 document.getElementById('agentQuestionResponse').value = '';
-                document.getElementById('agentQuestionModal').classList.remove('hidden');
+                document.getElementById('agentQuestionBanner').classList.remove('hidden');
             }
 
             // Mostrar plan de cambios propuesto
