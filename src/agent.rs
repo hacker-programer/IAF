@@ -1,4 +1,4 @@
-﻿#![allow(dead_code, unused_imports, unused_variables)]
+#![allow(dead_code, unused_imports, unused_variables)]
 use serde_json::{json, Value};
 use std::error::Error;
 use std::process::Command;

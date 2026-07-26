@@ -1531,7 +1531,7 @@ async fn captcha_solve(
 
 async fn get_projects(State(state): State<AppState>) -> impl IntoResponse {
     let projs = state.projects.lock().unwrap().clone();
-    Json(projs)
+    Json(json!({ "projects": projs }))
 }
 
 async fn get_agent_status(State(state): State<AppState>) -> impl IntoResponse {

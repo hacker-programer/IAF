@@ -1,4 +1,4 @@
-﻿cargo : warning: unexpected `cfg` condition value: `integration`
+cargo : warning: unexpected `cfg` condition value: `integration`
 En línea: 1 Carácter: 102
 + ... o-target" ; cargo test --test integration_tests -- --nocapture 2>&1 | ...
 +                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

@@ -1,4 +1,4 @@
-﻿cargo :    Compiling iaf v0.1.0 (C:\Users\Fa\Desktop\IAF)
+cargo :    Compiling iaf v0.1.0 (C:\Users\Fa\Desktop\IAF)
 En línea: 1 Carácter: 102
 + ... o-target" ; cargo test --test integration_tests regression_tests -- - ...
 +                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
