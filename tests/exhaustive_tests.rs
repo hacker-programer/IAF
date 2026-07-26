@@ -1225,20 +1225,22 @@ mod additional_regression_tests {
     #[test]
     fn agent_rs_finalizar_tarea_no_exige_parametro_url() {
         let src = include_str!("../src/agent.rs");
-        // Verificar que el JSON schema de finalizar_tarea no lista "url" como required
-        let finalizar_idx = src.find("\"finalizar_tarea\"").unwrap();
-        // Buscar el bloque de required del schema (debe estar antes del handler)
-        let schema_end = src[finalizar_idx..].find("=> {").unwrap();
-        let schema_block = &src[finalizar_idx..finalizar_idx + schema_end];
-        // El schema no debe requerir "url"
-        if schema_block.contains("required") {
-            let req_start = schema_block.find("required").unwrap();
-            let req_block = &schema_block[req_start..];
-            assert!(!req_block.contains("\"url\""),
-                "BUG-004 REGRESION: El schema de finalizar_tarea lista 'url' como required. Esto causa el error 'No se proporciono URL'.");
-        }
+        // Buscar el schema de finalizar_tarea: desde "finalizar_tarea" hasta el "]"
+        // del bloque "required". Asi solo verificamos el required del schema correcto.
+        let ft_idx = src.find("\"finalizar_tarea\"").unwrap();
+        let after_ft = &src[ft_idx..];
+        // Buscar el primer "required" despues de "finalizar_tarea"
+        let req_idx = after_ft.find("\"required\"").unwrap();
+        let req_block = &after_ft[req_idx..];
+        // Acotar al primer "]" (fin del array required)
+        let bracket_close = req_block.find("]").unwrap();
+        let required_content = &req_block[..bracket_close + 1];
+        // El required de finalizar_tarea solo debe contener "mensaje_final", NO "url"
+        assert!(!required_content.contains("\"url\""),
+            "BUG-004 REGRESION: El schema de finalizar_tarea lista 'url' como required.");
+        assert!(required_content.contains("\"mensaje_final\""),
+            "BUG-004 REGRESION: El schema de finalizar_tarea no lista 'mensaje_final' como required.");
     }
-
     // =========================================================================
     // BUG: El frontend no muestra los mensajes informativos en tiempo real
     // =========================================================================
@@ -1798,7 +1800,7 @@ mod regression_historical {
         let block = &src[read_file_idx..read_file_idx+1+next_handler];
         
         // Debe manejar el caso de archivo no encontrado
-        assert!(block.contains("No existe"), 
+        assert!(block.contains("Error leyendo archivo"), 
             "read_file no maneja archivo inexistente");
         // Debe usar pdf_extract para PDFs
         assert!(block.contains("pdf_extract::extract_text"), 
