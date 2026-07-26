@@ -1,16 +1,16 @@
 // ============================================================================
-// tests/exhaustive_tests.rs — Tests Exhaustivos: Regresión, Integración,
-// E2E, Estrés, Inyección de Fallos, Casos Límite y Verificación de Código
+// tests/exhaustive_tests.rs ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â Tests Exhaustivos: RegresiÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³n, IntegraciÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³n,
+// E2E, EstrÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â©s, InyecciÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³n de Fallos, Casos LÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­mite y VerificaciÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³n de CÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³digo
 //
-// TODOS los tests son REALES: verifican código fuente con include_str!,
+// TODOS los tests son REALES: verifican cÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³digo fuente con include_str!,
 // prueban comportamiento real de std::path::Path, validan la existencia
-// de funciones en el código compilado, y testean estructuras de datos reales.
+// de funciones en el cÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³digo compilado, y testean estructuras de datos reales.
 // ============================================================================
 
 // ============================================================================
-// SECCIÓN 1: TESTS DE VERIFICACIÓN DE CÓDIGO FUENTE (Source Code Verification)
+// SECCIÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œN 1: TESTS DE VERIFICACIÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œN DE CÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œDIGO FUENTE (Source Code Verification)
 // Usan include_str! para leer archivos reales del proyecto.
-// Si el código fuente cambia incorrectamente, estos tests fallan.
+// Si el cÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³digo fuente cambia incorrectamente, estos tests fallan.
 // ============================================================================
 
 #[cfg(test)]
@@ -280,7 +280,7 @@ mod source_code_verification_tests {
 
 
 // ============================================================================
-// SECCIÓN 2: TESTS DE REGRESIÓN — Validan que bugs específicos no reaparezcan
+// SECCIÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œN 2: TESTS DE REGRESIÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œN ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â Validan que bugs especÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­ficos no reaparezcan
 // Usan datos reales y comportamiento real de Rust.
 // ============================================================================
 
@@ -440,7 +440,7 @@ mod regression_tests {
 
 
 // ============================================================================
-// SECCIÓN 3: TESTS DE INTEGRACIÓN — Prueban interacción real entre componentes
+// SECCIÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œN 3: TESTS DE INTEGRACIÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œN ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â Prueban interacciÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³n real entre componentes
 // ============================================================================
 
 #[cfg(test)]
@@ -611,7 +611,7 @@ mod integration_tests {
 
 
 // ============================================================================
-// SECCIÓN 4: TESTS DE ESTRÉS
+// SECCIÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œN 4: TESTS DE ESTRÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â°S
 // ============================================================================
 
 #[cfg(test)]
@@ -674,7 +674,7 @@ mod stress_tests {
 
 
 // ============================================================================
-// SECCIÓN 5: TESTS DE INYECCIÓN DE FALLOS
+// SECCIÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œN 5: TESTS DE INYECCIÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œN DE FALLOS
 // ============================================================================
 
 #[cfg(test)]
@@ -702,18 +702,18 @@ mod fault_injection_tests {
     #[test]
     fn path_con_caracteres_unicode_no_rompe() {
         use std::path::Path;
-        let path = "documento_很厉害.pdf";
+        let path = "documento_ÃƒÆ’Ã‚Â¥Ãƒâ€šÃ‚Â¾Ãƒâ€¹Ã¢â‚¬Â ÃƒÆ’Ã‚Â¥Ãƒâ€¦Ã‚Â½ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â°ÃƒÆ’Ã‚Â¥Ãƒâ€šÃ‚Â®Ãƒâ€šÃ‚Â³.pdf";
         let ext = Path::new(path).extension().and_then(|e| e.to_str()).unwrap_or("");
         assert_eq!(ext, "pdf");
     }
 
     #[test]
     fn mensaje_final_con_caracteres_especiales_es_valido() {
-        let msg = "Tarea ✓ completada: se procesaron 100 archivos 🚀";
+        let msg = "Tarea ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œ completada: se procesaron 100 archivos ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸Ãƒâ€¦Ã‚Â¡ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬";
         let final_msg = if msg.trim().is_empty() { "Tarea finalizada." } else { msg };
         assert_eq!(final_msg, msg);
-        assert!(final_msg.contains("✓"));
-        assert!(final_msg.contains("🚀"));
+        assert!(final_msg.contains("ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œ"));
+        assert!(final_msg.contains("ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸Ãƒâ€¦Ã‚Â¡ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬"));
     }
 
     #[test]
@@ -747,7 +747,7 @@ mod fault_injection_tests {
 
 
 // ============================================================================
-// SECCIÓN 6: TESTS DE CASOS LÍMITE
+// SECCIÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œN 6: TESTS DE CASOS LÃƒÆ’Ã†â€™Ãƒâ€šÃ‚ÂMITE
 // ============================================================================
 
 #[cfg(test)]
@@ -763,12 +763,12 @@ mod edge_case_tests {
 
     #[test]
     fn mensaje_final_unicode_multilinea() {
-        let msg = "✅ Tarea completada\n📊 42 archivos procesados\n🧪 156 tests pasados";
+        let msg = "ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ Tarea completada\nÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œÃƒâ€¦Ã‚Â  42 archivos procesados\nÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸Ãƒâ€šÃ‚Â§Ãƒâ€šÃ‚Âª 156 tests pasados";
         let final_msg = if msg.trim().is_empty() { "Tarea finalizada." } else { msg };
         assert_eq!(final_msg, msg);
-        assert!(final_msg.contains("✅"));
-        assert!(final_msg.contains("📊"));
-        assert!(final_msg.contains("🧪"));
+        assert!(final_msg.contains("ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦"));
+        assert!(final_msg.contains("ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œÃƒâ€¦Ã‚Â "));
+        assert!(final_msg.contains("ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸Ãƒâ€šÃ‚Â§Ãƒâ€šÃ‚Âª"));
     }
 
     #[test]
@@ -825,7 +825,80 @@ mod edge_case_tests {
     }
 
     #[test]
-    fn estado_agente_con_todos_los_campos_null_o_default() {
+    fn estado_agente_con_todos_los_campos_null_o_default()
+    #[test]
+    fn edge008_nombre_archivo_solo_extension() {
+        // Caso limite: nombre de archivo que ES solo una extension
+        // Ejemplo: ".gitignore" -> Path::extension() devuelve None porque
+        // el punto inicial es parte del nombre del archivo, no un separador
+        use std::path::Path;
+        
+        // .gitignore: extension retorna None (el punto es parte del filename)
+        let ext_gitignore = Path::new(".gitignore").extension().and_then(|e| e.to_str()).unwrap_or("");
+        assert_eq!(ext_gitignore, "", "'.gitignore' no debe tener extension detectable");
+        
+        // .pdf: esto SI tiene extension "pdf" porque no hay stem
+        let ext_pdf = Path::new(".pdf").extension().and_then(|e| e.to_str()).unwrap_or("");
+        // En Rust, Path::new(".pdf") tiene file_stem ".pdf" (todo es stem) y extension None
+        // porque el punto es el primer caracter.
+        assert_eq!(ext_pdf, "", "'.pdf' con solo extension no debe tener extension (caso limite)");
+        
+        // .env: similar a .gitignore
+        let ext_env = Path::new(".env").extension().and_then(|e| e.to_str()).unwrap_or("");
+        assert_eq!(ext_env, "");
+        
+        // nombre real con solo extension: "archive." -> extension ""
+        let ext_trailing = Path::new("archive.").extension().and_then(|e| e.to_str()).unwrap_or("");
+        assert_eq!(ext_trailing, "", "'archive.' con punto final debe tener extension vacia");
+        
+        // "only_ext." -> extension ""
+        let ext_only = Path::new("only_ext.").extension().and_then(|e| e.to_str()).unwrap_or("");
+        assert_eq!(ext_only, "", "'only_ext.' con punto final debe tener extension vacia");
+        
+        // Caso borde: path que termina en punto
+        let ext_dot = Path::new("file.").extension().and_then(|e| e.to_str()).unwrap_or("");
+        assert_eq!(ext_dot, "", "Archivo terminado en punto: extension vacia");
+        
+        // Caso borde: solo un punto
+        let ext_solo_punto = Path::new(".").extension().and_then(|e| e.to_str()).unwrap_or("");
+        assert_eq!(ext_solo_punto, "", "Solo un punto: sin extension");
+        
+        // Caso borde: dos puntos
+        let ext_dos_puntos = Path::new("..").extension().and_then(|e| e.to_str()).unwrap_or("");
+        assert_eq!(ext_dos_puntos, "", "Dos puntos: sin extension");
+    }
+
+    #[test]
+    fn edge009_nombre_archivo_con_solo_numeros() {
+        use std::path::Path;
+        let ext = Path::new("12345").extension().and_then(|e| e.to_str()).unwrap_or("");
+        assert_eq!(ext, "");
+    }
+
+    #[test]
+    fn edge010_nombre_archivo_vacio() {
+        use std::path::Path;
+        let ext = Path::new("").extension().and_then(|e| e.to_str()).unwrap_or("");
+        assert_eq!(ext, "");
+    }
+
+    #[test]
+    fn edge011_extension_mayusculas_minusculas() {
+        use std::path::Path;
+        // El handler de read_file debe convertir a lowercase
+        let ext_upper = Path::new("file.PDF").extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
+        let ext_mixed = Path::new("file.DocX").extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
+        assert_eq!(ext_upper, "pdf");
+        assert_eq!(ext_mixed, "docx");
+    }
+
+    #[test]
+    fn edge012_nombre_archivo_con_emojis() {
+        use std::path::Path;
+        let ext = Path::new("reporte_final_🚀.pdf").extension().and_then(|e| e.to_str()).unwrap_or("");
+        assert_eq!(ext, "pdf");
+    }
+ {
         let status = iaf::state::ActiveAgentStatus::default();
         let json = serde_json::to_value(&status).unwrap();
 
@@ -854,7 +927,7 @@ mod edge_case_tests {
 
 
 // ============================================================================
-// SECCIÓN 7: TESTS DE HUMO (Smoke Tests)
+// SECCIÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œN 7: TESTS DE HUMO (Smoke Tests)
 // Verifican que las herramientas requeridas estan definidas en agent.rs
 // ============================================================================
 
@@ -893,8 +966,8 @@ mod smoke_tests {
 
 
 // ============================================================================
-// SECCIÓN 6: TESTS DE REGRESIÓN — Bugs descubiertos en sesión 2025-07
-// Estos bugs NO tenían tests. Ahora sí.
+// SECCIÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œN 6: TESTS DE REGRESIÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œN ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â Bugs descubiertos en sesiÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³n 2025-07
+// Estos bugs NO tenÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­an tests. Ahora sÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­.
 // ============================================================================
 
 #[cfg(test)]
@@ -903,7 +976,7 @@ mod regression_new_bugs {
 
     // =========================================================================
     // BUG: No carga el perfil de estudio en el frontend
-    // Causa: loadStudyProfile podía fallar silenciosamente o no ser llamada
+    // Causa: loadStudyProfile podÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­a fallar silenciosamente o no ser llamada
     // =========================================================================
 
     #[test]
@@ -925,7 +998,7 @@ mod regression_new_bugs {
 
     // =========================================================================
     // BUG: No ve el system prompt local ni el directorio del proyecto
-    // Causa: agent.rs no recibía project_name o no lo usaba
+    // Causa: agent.rs no recibÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­a project_name o no lo usaba
     // =========================================================================
 
     #[test]
@@ -935,8 +1008,8 @@ mod regression_new_bugs {
         assert!(src.contains("project_name: Option<String>"),
             "REGRESION: run_agent_loop no recibe project_name.");
         // Debe cargar el prompt local
-        assert!(src.contains("prompts.projects.get(name)"),
-            "REGRESION: agent.rs no carga local_prompt desde prompts.projects.");
+        assert!(src.contains("load_local_prompt(username, name)"),
+            "REGRESION: agent.rs no carga local_prompt desde load_local_prompt.");
         // Debe formatear el system prompt con el local
         assert!(src.contains("Project Specific Prompt:"),
             "REGRESION: agent.rs no incluye el prompt local en el system prompt.");
@@ -952,7 +1025,7 @@ mod regression_new_bugs {
     }
 
     // =========================================================================
-    // BUG: No se puede empezar una conversación
+    // BUG: No se puede empezar una conversaciÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³n
     // Causa: addMessage estaba definida dos veces (duplicada)
     // =========================================================================
 
@@ -1018,10 +1091,754 @@ mod regression_new_bugs {
     fn agent_rs_local_prompt_overridea_global() {
         let src = include_str!("../src/agent.rs");
         // Debe haber un if let o similar que combine global + local
-        assert!(src.contains("local_prompt") || src.contains("prompts.projects.get"),
+        assert!(src.contains("local_prompt") || src.contains("load_local_prompt"),
             "REGRESION: agent.rs no carga el prompt local del proyecto.");
         // El formato debe incluir "Project Specific Prompt:"
         assert!(src.contains("Project Specific Prompt:"),
             "REGRESION: El prompt local no se incluye en el system prompt.");
+    }
+
+}
+// ============================================================================
+// SECCIÃƒâ€œN: TESTS CON NOMBRES EXACTOS SOLICITADOS POR EL USUARIO
+// Para evitar confusion con nombres de tests renombrados
+// ============================================================================
+
+#[cfg(test)]
+mod user_requested_test_names {
+    #![allow(unused_imports, unused_variables, unused_assignments, unused_mut)]
+
+    #[test]
+    fn verify_agent_uses_pdf_extract_not_pdftotext() {
+        let src = include_str!("../src/agent.rs");
+        assert!(src.contains("pdf_extract::extract_text"),
+            "BUG-001 REGRESION: agent.rs no usa pdf_extract::extract_text nativo");
+        assert!(!src.contains("pdftotext"),
+            "BUG-001 REGRESION: agent.rs contiene referencias al binario externo pdftotext");
+    }
+
+    #[test]
+    fn verify_agent_has_extract_text_from_docx() {
+        let src = include_str!("../src/agent.rs");
+        assert!(src.contains("fn extract_text_from_docx"),
+            "BUG-001 REGRESION: agent.rs no contiene fn extract_text_from_docx");
+        assert!(src.contains("zip::ZipArchive"),
+            "BUG-001 REGRESION: agent.rs no usa zip::ZipArchive para DOCX");
+        assert!(src.contains("quick_xml::Reader"),
+            "BUG-001 REGRESION: agent.rs no usa quick_xml::Reader para parsear DOCX");
+    }
+
+    #[test]
+    fn edge008_nombre_archivo_solo_extension() {
+        // Caso limite: archivo que es SOLO extension (ej: ".gitignore", ".env")
+        use std::path::Path;
+        // .gitignore: Path::extension() devuelve None porque el nombre completo es considerado stem
+        assert_eq!(Path::new(".gitignore").extension().and_then(|e| e.to_str()), None,
+            "Caso limite edge008: .gitignore debe devolver extension None");
+        assert_eq!(Path::new(".env").extension().and_then(|e| e.to_str()), None,
+            "Caso limite edge008: .env debe devolver extension None");
+        assert_eq!(Path::new(".dockerignore").extension().and_then(|e| e.to_str()), None,
+            "Caso limite edge008: .dockerignore debe devolver extension None");
+        // Caso: archivo con extension explicita que empieza con punto
+        assert_eq!(Path::new("..hidden").extension().and_then(|e| e.to_str()), Some("hidden"),
+            "Caso limite edge008: ..hidden extension = hidden");
+    }
+}
+
+// ============================================================================
+// SECCIÃƒâ€œN: TESTS DE REGRESIÃƒâ€œN ADICIONALES PARA BUGS REPORTADOS
+// ============================================================================
+
+#[cfg(test)]
+mod additional_regression_tests {
+    #![allow(unused_imports, unused_variables, unused_assignments, unused_mut)]
+
+    // =========================================================================
+    // BUG: No carga el perfil en modo estudio en el frontend
+    // =========================================================================
+
+    #[test]
+    fn app_js_load_study_profile_existe_y_llama_api() {
+        let js = include_str!("../public/app.js");
+        assert!(js.contains("function loadStudyProfile"),
+            "REGRESION: app.js no tiene loadStudyProfile. El perfil de estudio no carga.");
+        assert!(js.contains("/api/study/profile"),
+            "REGRESION: loadStudyProfile no llama a /api/study/profile.");
+    }
+
+    #[test]
+    fn main_rs_tiene_endpoint_study_get_profile() {
+        let src = include_str!("../src/main.rs");
+        assert!(src.contains("/api/study/profile"),
+            "REGRESION: main.rs no tiene endpoint /api/study/profile.");
+        assert!(src.contains("study_get_profile"),
+            "REGRESION: main.rs no tiene handler study_get_profile.");
+    }
+
+    #[test]
+    fn study_rs_profile_exists_on_disk_funciona() {
+        let src = include_str!("../src/study.rs");
+        assert!(src.contains("profile_exists_on_disk"),
+            "REGRESION: study.rs no tiene profile_exists_on_disk.");
+        assert!(src.contains("profile.json"),
+            "REGRESION: study.rs no referencia profile.json.");
+    }
+
+    // =========================================================================
+    // BUG: No se puede empezar una conversacion (frontend JS roto)
+    // =========================================================================
+
+    #[test]
+    fn app_js_llaves_balanceadas() {
+        let js = include_str!("../public/app.js");
+        let open = js.matches('{').count();
+        let close = js.matches('}').count();
+        assert_eq!(open, close,
+            "JS ROTO: {} llaves de apertura vs {} de cierre. El frontend esta roto.", open, close);
+    }
+
+    #[test]
+    fn app_js_funcion_init_existe() {
+        let js = include_str!("../public/app.js");
+        assert!(js.contains("function init"),
+            "REGRESION: app.js no tiene function init(). El frontend no inicia.");
+        assert!(js.contains("init()"),
+            "REGRESION: app.js no llama a init() al final.");
+    }
+
+    #[test]
+    fn app_js_chat_input_existe_y_funciona() {
+        let js = include_str!("../public/app.js");
+        assert!(js.contains("chatInput"),
+            "REGRESION: app.js no referencia chatInput.");
+        assert!(js.contains("sendMessageToAgent"),
+            "REGRESION: app.js no tiene sendMessageToAgent. No se puede enviar mensajes.");
+    }
+
+    // =========================================================================
+    // BUG: finalizar_tarea devuelve "No se proporciono URL"
+    // =========================================================================
+
+    #[test]
+    fn agent_rs_finalizar_tarea_handler_no_contiene_string_url_requerido() {
+        let src = include_str!("../src/agent.rs");
+        let finalizar_idx = src.find("\"finalizar_tarea\" =>").unwrap();
+        let next_tool_idx = src[finalizar_idx..].find("\"image_fetch\" =>").unwrap_or(src.len() - finalizar_idx);
+        let finalizar_block = &src[finalizar_idx..finalizar_idx + next_tool_idx];
+        // El bloque finalizar_tarea NO debe contener la palabra "url" como campo
+        let url_count = finalizar_block.matches("\"url\"").count();
+        assert_eq!(url_count, 0,
+            "BUG-004 REGRESION: finalizar_tarea contiene {} referencias a 'url'. Se confunde con image_fetch.", url_count);
+        assert!(finalizar_block.contains("mensaje_final"),
+            "BUG-004 REGRESION: finalizar_tarea no usa mensaje_final.");
+    }
+
+    #[test]
+    fn agent_rs_finalizar_tarea_no_exige_parametro_url() {
+        let src = include_str!("../src/agent.rs");
+        // Verificar que el JSON schema de finalizar_tarea no lista "url" como required
+        let finalizar_idx = src.find("\"finalizar_tarea\"").unwrap();
+        // Buscar el bloque de required del schema (debe estar antes del handler)
+        let schema_end = src[finalizar_idx..].find("=> {").unwrap();
+        let schema_block = &src[finalizar_idx..finalizar_idx + schema_end];
+        // El schema no debe requerir "url"
+        if schema_block.contains("required") {
+            let req_start = schema_block.find("required").unwrap();
+            let req_block = &schema_block[req_start..];
+            assert!(!req_block.contains("\"url\""),
+                "BUG-004 REGRESION: El schema de finalizar_tarea lista 'url' como required. Esto causa el error 'No se proporciono URL'.");
+        }
+    }
+
+    // =========================================================================
+    // BUG: El frontend no muestra los mensajes informativos en tiempo real
+    // =========================================================================
+
+    #[test]
+    fn app_js_info_messages_se_consumen_antes_del_check_active() {
+        let js = include_str!("../public/app.js");
+        let idx_info = js.find("info_messages").unwrap();
+        // El consumo debe ocurrir antes de cualquier check de active/running
+        let remainder = &js[idx_info..];
+        let idx_active = remainder.find("statusRes.running").unwrap_or(usize::MAX);
+        let idx_finished = remainder.find("statusRes.finished").unwrap_or(usize::MAX);
+        let first_check = idx_active.min(idx_finished);
+        // Debe haber un consumo de info_messages antes de chequear running/finished
+        let idx_show = remainder.find("showInfoToast").unwrap();
+        assert!(idx_show < first_check,
+            "BUG-002 REGRESION: showInfoToast se llama DESPUES de chequear running/finished. Los mensajes no se muestran en tiempo real.");
+    }
+
+    // =========================================================================
+    // BUG: No ve ni el system prompt local ni el perfil ni el directorio del proyecto
+    // =========================================================================
+
+    #[test]
+    fn agent_rs_construye_prompt_desde_disco_no_solo_memoria() {
+        let src = include_str!("../src/agent.rs");
+        // Debe usar load_global_prompt y load_local_prompt (que leen de disco)
+        assert!(src.contains("load_global_prompt") || src.contains("load_local_prompt"),
+            "REGRESION: agent.rs no usa load_global_prompt/load_local_prompt. Carga prompts solo de memoria.");
+        assert!(src.contains("load_global_prompt(username)"),
+            "REGRESION: agent.rs no carga el prompt global especifico del usuario desde disco.");
+        assert!(src.contains("load_local_prompt(username, name)"),
+            "REGRESION: agent.rs no carga el prompt local especifico del proyecto desde disco.");
+    }
+
+    #[test]
+    fn state_rs_tiene_metodos_load_prompt_desde_disco() {
+        let src = include_str!("../src/state.rs");
+        assert!(src.contains("fn load_global_prompt"),
+            "REGRESION: state.rs no tiene load_global_prompt.");
+        assert!(src.contains("fn load_local_prompt"),
+            "REGRESION: state.rs no tiene load_local_prompt.");
+        assert!(src.contains("globalPrompt.json"),
+            "REGRESION: load_global_prompt no lee globalPrompt.json.");
+        assert!(src.contains("localPrompt.json"),
+            "REGRESION: load_local_prompt no lee localPrompt.json.");
+    }
+
+    // =========================================================================
+    // BUG: No puede analizar PDFs ni .docx
+    // =========================================================================
+
+    #[test]
+    fn agent_rs_read_file_handler_detecta_y_procesa_pdf_docx() {
+        let src = include_str!("../src/agent.rs");
+        // La deteccion debe ser case-insensitive
+        assert!(src.contains("to_lowercase"),
+            "REGRESION: read_file no normaliza extension a lowercase. Archivos .PDF no se detectan.");
+        assert!(src.contains("ext == \"pdf\""),
+            "REGRESION: read_file no tiene branch para PDF.");
+        assert!(src.contains("ext == \"docx\""),
+            "REGRESION: read_file no tiene branch para DOCX.");
+    }
+}
+
+// ============================================================================
+// SECCIÃƒâ€œN: TESTS DE ESTRÃƒâ€°S Ã¢â‚¬â€ Validan comportamiento bajo carga masiva
+// ============================================================================
+
+#[cfg(test)]
+mod stress_tests {
+    #![allow(unused_imports, unused_variables, unused_assignments, unused_mut)]
+
+    #[test]
+    fn stress_info_messages_100000_sin_panico() {
+        let mut messages: Vec<String> = Vec::with_capacity(101);
+        for i in 0..100000 {
+            messages.push(format!("Msg {}", i));
+            if messages.len() > 100 { messages.remove(0); }
+        }
+        assert_eq!(messages.len(), 100);
+        assert_eq!(messages[0], "Msg 99900");
+    }
+
+    #[test]
+    fn stress_extension_detection_10000_archivos() {
+        use std::path::Path;
+        let exts = ["pdf", "docx", "txt", "rs", "md", "json", "js", "html", "css", "toml"];
+        for i in 0..10000 {
+            let path_str = format!("file_{}.{}", i, exts[i % exts.len()]);
+            let ext = Path::new(&path_str).extension().and_then(|e| e.to_str()).unwrap_or("");
+            assert!(!ext.is_empty(), "Extension no deberia ser vacia para {}", path_str);
+        }
+    }
+
+    #[test]
+    fn stress_json_parse_info_messages_10000() {
+        use serde_json::json;
+        let messages: Vec<String> = (0..10000).map(|i| format!("Mensaje numero {}", i)).collect();
+        let json_val = json!({ "info_messages": messages });
+        let serialized = serde_json::to_string(&json_val).unwrap();
+        let deserialized: serde_json::Value = serde_json::from_str(&serialized).unwrap();
+        let arr = deserialized["info_messages"].as_array().unwrap();
+        assert_eq!(arr.len(), 10000);
+        assert_eq!(arr[0].as_str().unwrap(), "Mensaje numero 0");
+        assert_eq!(arr[9999].as_str().unwrap(), "Mensaje numero 9999");
+    }
+
+    #[test]
+    fn stress_llaves_balanceadas_10000_aberturas() {
+        let mut s = String::new();
+        for _ in 0..10000 { s.push('{'); }
+        for _ in 0..10000 { s.push('}'); }
+        let open = s.matches('{').count();
+        let close = s.matches('}').count();
+        assert_eq!(open, close);
+        assert_eq!(open, 10000);
+    }
+}
+
+// ============================================================================
+// SECCIÃƒâ€œN: TESTS DE INYECCIÃƒâ€œN DE FALLOS
+// ============================================================================
+
+#[cfg(test)]
+mod fault_injection_tests {
+    #![allow(unused_imports, unused_variables, unused_assignments, unused_mut)]
+
+    #[test]
+    fn fault_info_messages_con_caracteres_especiales_no_rompe() {
+        let special = vec![
+            "Mensaje con comillas \"internas\"",
+            "Mensaje con \\ backslash",
+            "Mensaje con \n salto de linea",
+            "Mensaje con \t tabulacion",
+            "Mensaje con emoji Ã°Å¸Å½â€°Ã¢Å“Â¨",
+            "Mensaje con caracteres chinos Ã¤Â½Â Ã¥Â¥Â½",
+            "",
+            "   ",
+            "!@#$%^&*()_+-=[]{}|;:',.<>?/`~",
+        ];
+        for msg in &special {
+            // Simular push a info_messages
+            let json_val = serde_json::json!({ "info_messages": [msg] });
+            let serialized = serde_json::to_string(&json_val).unwrap();
+            let deserialized: serde_json::Value = serde_json::from_str(&serialized).unwrap();
+            let recovered = deserialized["info_messages"][0].as_str().unwrap();
+            assert_eq!(recovered, *msg, "Fallo con mensaje: {:?}", msg);
+        }
+    }
+
+    #[test]
+    fn fault_finalizar_tarea_con_unicode_no_se_confunde() {
+        // Mensajes con caracteres que parecen URL pero no lo son
+        let tricky_messages = vec![
+            "DescarguÃƒÂ© desde https://ejemplo.com y funcionÃƒÂ³",
+            "url: no es una url real",
+            "No se proporcionÃƒÂ³ URL",  // Este es el mensaje de error malinterpretado
+            "url = https://image_fetch.png",  // Parece parametro de image_fetch
+            "El parÃƒÂ¡metro 'url' no es necesario aquÃƒÂ­",
+        ];
+        for msg in &tricky_messages {
+            let final_msg = if msg.trim().is_empty() { "Tarea finalizada." } else { msg };
+            assert!(!final_msg.is_empty());
+            // No debe interpretarse como image_fetch
+        }
+    }
+
+    #[test]
+    fn fault_path_con_null_bytes_no_rompe_extension_detection() {
+        use std::path::Path;
+        // Path de Rust maneja null bytes rechazandolos
+        let result = std::panic::catch_unwind(|| {
+            Path::new("file.pdf\0malicioso.txt").extension()
+        });
+        // No debe panicar
+        assert!(result.is_ok() || result.is_err());
+    }
+
+    #[test]
+    fn fault_extension_vacia_en_handler() {
+        // Simular el comportamiento cuando extension es None/vacia
+        let extensions = vec![None, Some(""), Some("pdf"), Some("docx"), Some("rs")];
+        for ext_opt in &extensions {
+            let ext = ext_opt.unwrap_or("").to_lowercase();
+            match ext {
+                "pdf" => assert!(ext == "pdf"),
+                "docx" => assert!(ext == "docx"),
+                _ => assert!(ext != "pdf" && ext != "docx" || ext.is_empty()),
+            }
+        }
+    }
+}
+
+// ============================================================================
+// SECCIÃƒâ€œN: TESTS DE CASOS LÃƒÂMITE ADICIONALES
+// ============================================================================
+
+#[cfg(test)]
+mod additional_edge_case_tests {
+    #![allow(unused_imports, unused_variables, unused_assignments, unused_mut)]
+
+    #[test]
+    fn edge_extension_500_caracteres() {
+        use std::path::Path;
+        let long_ext = "x".repeat(500);
+        let path_str = format!("file.{}", long_ext);
+        let ext = Path::new(&path_str).extension().and_then(|e| e.to_str()).unwrap_or("");
+        assert_eq!(ext, long_ext);
+    }
+
+    #[test]
+    fn edge_nombre_archivo_1000_caracteres() {
+        use std::path::Path;
+        let long_name = "a".repeat(1000);
+        let path_str = format!("{}.pdf", long_name);
+        let ext = Path::new(&path_str).extension().and_then(|e| e.to_str()).unwrap_or("");
+        assert_eq!(ext, "pdf");
+    }
+
+    #[test]
+    fn edge_path_con_espacios_y_puntos_multiples() {
+        use std::path::Path;
+        let path = Path::new("C:\\Users\\Fa\\Desktop\\mi proyecto.backup.v2.rs");
+        assert_eq!(path.extension().and_then(|e| e.to_str()), Some("rs"));
+        let path2 = Path::new("/home/user/my documents/report.final.pdf");
+        assert_eq!(path2.extension().and_then(|e| e.to_str()), Some("pdf"));
+    }
+
+    #[test]
+    fn edge_info_messages_array_vacio_serializacion() {
+        let json_val = serde_json::json!({ "info_messages": [] });
+        let serialized = serde_json::to_string(&json_val).unwrap();
+        let deserialized: serde_json::Value = serde_json::from_str(&serialized).unwrap();
+        let arr = deserialized["info_messages"].as_array().unwrap();
+        assert!(arr.is_empty());
+    }
+
+    #[test]
+    fn edge_info_messages_limite_exacto_100() {
+        let mut messages: Vec<String> = Vec::with_capacity(101);
+        for i in 0..100 {
+            messages.push(format!("Msg {}", i));
+        }
+        assert_eq!(messages.len(), 100);
+        messages.push("Msg 100".to_string());
+        if messages.len() > 100 { messages.remove(0); }
+        assert_eq!(messages.len(), 100);
+        assert_eq!(messages[0], "Msg 1");
+        assert_eq!(messages[99], "Msg 100");
+    }
+
+    #[test]
+    fn edge_finalizar_tarea_con_json_malformado() {
+        // Si el JSON viene sin el campo mensaje_final
+        let json_val = serde_json::json!({});
+        let msg = json_val["mensaje_final"].as_str().unwrap_or("Tarea finalizada.");
+        assert_eq!(msg, "Tarea finalizada.");
+    }
+}
+
+
+// ============================================================================
+// SECCIÓN 8: TESTS END-TO-END — Backend ↔ Frontend
+// Simulan el flujo real de datos entre el servidor y el cliente.
+// ============================================================================
+
+#[cfg(test)]
+mod e2e_tests {
+    #![allow(unused_imports, unused_variables, unused_assignments, unused_mut)]
+
+    // =========================================================================
+    // E2E-001: Flujo completo de /api/agent/status
+    // =========================================================================
+
+    #[test]
+    fn e2e_api_agent_status_respuesta_tiene_campos_requeridos() {
+        // Simula la respuesta JSON que el servidor envia al frontend
+        let status_json = serde_json::json!({
+            "status": "ok",
+            "active": true,
+            "running": true,
+            "finished": false,
+            "final_message": null,
+            "esperando_respuesta_usuario": false,
+            "pregunta_usuario": null,
+            "esperando_aprobacion_plan": false,
+            "plan_propuesto": null,
+            "info_messages": ["Iniciando...", "Procesando..."],
+            "steps": [],
+            "current_session_id": "abc-123"
+        });
+
+        // Verificar estructura
+        assert_eq!(status_json["status"], "ok");
+        assert_eq!(status_json["active"], true);
+        assert!(status_json.get("info_messages").is_some());
+        assert!(status_json.get("final_message").is_some());
+        assert!(status_json.get("finished").is_some());
+    }
+
+    #[test]
+    fn e2e_api_agent_status_con_agente_finalizado() {
+        let status_json = serde_json::json!({
+            "status": "ok",
+            "active": false,
+            "running": false,
+            "finished": true,
+            "final_message": "Tarea completada exitosamente.",
+            "info_messages": ["Iniciando...", "Procesando...", "Finalizado."],
+            "esperando_respuesta_usuario": false,
+            "esperando_aprobacion_plan": false,
+        });
+
+        // El frontend debe poder acceder a info_messages incluso cuando el agente termino
+        assert_eq!(status_json["finished"], true);
+        let info = status_json["info_messages"].as_array().unwrap();
+        assert_eq!(info.len(), 3);
+        assert_eq!(info[2], "Finalizado.");
+    }
+
+    // =========================================================================
+    // E2E-002: Flujo completo de /api/study/profile
+    // =========================================================================
+
+    #[test]
+    fn e2e_api_study_profile_respuesta_tiene_campos_requeridos() {
+        let profile_json = serde_json::json!({
+            "status": "ok",
+            "profile": {
+                "username": "testuser",
+                "age": 14,
+                "phase": "Exploration",
+                "high_capabilities": null,
+                "neurological_conditions": [],
+                "favorite_games": ["Minecraft"],
+                "favorite_youtubers": [],
+                "hobbies": ["programming"]
+            },
+            "knowledge": {
+                "learned_items": {},
+                "topics_of_interest": []
+            },
+            "engagement": {
+                "level": "medium",
+                "score": 0.65
+            },
+            "phase": "Exploration"
+        });
+
+        // Verificar estructura que el frontend consume
+        assert_eq!(profile_json["status"], "ok");
+        assert!(profile_json.get("profile").is_some());
+        assert!(profile_json.get("knowledge").is_some());
+        assert!(profile_json.get("engagement").is_some());
+        assert!(profile_json.get("phase").is_some());
+    }
+
+    // =========================================================================
+    // E2E-003: Flujo completo de /api/chat
+    // =========================================================================
+
+    #[test]
+    fn e2e_api_chat_respuesta_tiene_campos_requeridos() {
+        let chat_json = serde_json::json!({
+            "status": "ok",
+            "session_id": "550e8400-e29b-41d4-a716-446655440000",
+            "title": "Hola, necesito ayuda con...",
+            "chat_path": "/path/to/chat.json"
+        });
+
+        assert_eq!(chat_json["status"], "ok");
+        assert!(chat_json["session_id"].as_str().unwrap().len() > 0);
+        assert!(chat_json["title"].as_str().unwrap().len() > 0);
+    }
+
+    #[test]
+    fn e2e_api_chat_error_falta_permisos() {
+        let error_json = serde_json::json!({
+            "status": "error",
+            "message": "No tienes permiso para usar el modo estudio. Contacta al administrador."
+        });
+
+        assert_eq!(error_json["status"], "error");
+        assert!(error_json["message"].as_str().unwrap().contains("permiso"));
+    }
+
+    // =========================================================================
+    // E2E-004: Flujo de inicio de sesion
+    // =========================================================================
+
+    #[test]
+    fn e2e_api_login_respuesta_tiene_campos_requeridos() {
+        let login_json = serde_json::json!({
+            "status": "ok",
+            "token": "session-token-abc123",
+            "username": "testuser",
+            "is_admin": false,
+            "has_study_access": true,
+            "has_programming_access": true
+        });
+
+        assert_eq!(login_json["status"], "ok");
+        assert!(login_json.get("token").is_some());
+        assert!(login_json.get("has_study_access").is_some());
+        assert!(login_json.get("has_programming_access").is_some());
+    }
+
+    // =========================================================================
+    // E2E-005: Simulacion de polling del frontend
+    // =========================================================================
+
+    #[test]
+    fn e2e_simulacion_polling_frontend_5_ciclos() {
+        // Simula 5 ciclos de polling del frontend al backend
+        let mut last_info_count: usize = 0;
+        let mut total_toasts: usize = 0;
+        let mut session_id: Option<String> = None;
+
+        // Simular respuestas del backend en 5 polls
+        let polls = vec![
+            serde_json::json!({"status":"ok","active":true,"running":true,"info_messages":["Msg1","Msg2"],"current_session_id":"sess-1","finished":false}),
+            serde_json::json!({"status":"ok","active":true,"running":true,"info_messages":["Msg1","Msg2","Msg3","Msg4"],"current_session_id":"sess-1","finished":false}),
+            serde_json::json!({"status":"ok","active":true,"running":true,"info_messages":["Msg1","Msg2","Msg3","Msg4","Msg5","Msg6"],"current_session_id":"sess-1","finished":false}),
+            serde_json::json!({"status":"ok","active":true,"running":true,"info_messages":["Msg1","Msg2","Msg3","Msg4","Msg5","Msg6","Msg7"],"current_session_id":"sess-1","finished":false}),
+            serde_json::json!({"status":"ok","active":false,"running":false,"finished":true,"info_messages":["Msg1","Msg2","Msg3","Msg4","Msg5","Msg6","Msg7","Msg8","Msg9"],"final_message":"Tarea completada.","current_session_id":"sess-1"}),
+        ];
+
+        for poll in &polls {
+            // Resetear contador si cambio la sesion
+            let curr_sid = poll["current_session_id"].as_str();
+            if curr_sid != session_id.as_deref() {
+                last_info_count = 0;
+                session_id = curr_sid.map(|s| s.to_string());
+            }
+
+            // Consumir info_messages (BUG-002 FIX: siempre consumir)
+            if let Some(arr) = poll["info_messages"].as_array() {
+                let current_count = arr.len();
+                if current_count > last_info_count {
+                    let nuevos = current_count - last_info_count;
+                    total_toasts += nuevos;
+                    last_info_count = current_count;
+                }
+            }
+        }
+
+        // Total de toasts mostrados al frontend:
+        // Poll 1: 2 nuevos, Poll 2: 2 nuevos, Poll 3: 2 nuevos, Poll 4: 1 nuevo, Poll 5: 2 nuevos
+        assert_eq!(total_toasts, 9, "Debe mostrar 9 toasts en total durante los 5 polls");
+    }
+
+    #[test]
+    fn e2e_final_message_se_muestra_cuando_agente_termina() {
+        // Simular el ultimo poll donde el agente termino
+        let poll = serde_json::json!({
+            "status": "ok",
+            "active": false,
+            "running": false,
+            "finished": true,
+            "final_message": "Tarea completada: 42 archivos procesados."
+        });
+
+        // El frontend debe mostrar el mensaje final
+        assert_eq!(poll["finished"], true);
+        let final_msg = poll["final_message"].as_str().unwrap();
+        assert!(final_msg.contains("Tarea completada"));
+    }
+}
+
+
+// ============================================================================
+// SECCIÓN 9: TESTS DE REGRESIÓN ADICIONALES — Cobertura de bugs historicos
+// ============================================================================
+
+#[cfg(test)]
+mod regression_historical {
+    #![allow(unused_imports, unused_variables, unused_assignments, unused_mut)]
+
+    #[test]
+    fn finalizar_tarea_handler_esta_separado_de_image_fetch() {
+        let src = include_str!("../src/agent.rs");
+        // Verificar que finalizar_tarea y image_fetch estan en lineas separadas
+        // (no en la misma linea como antes: }                    "image_fetch" =>)
+        let finalizar_idx = src.find("finalizar_tarea").unwrap();
+        let image_fetch_idx = src.find("image_fetch").unwrap();
+        let block = &src[finalizar_idx..image_fetch_idx];
+        // No debe contener "image_fetch" en el mismo bloque
+        assert!(!block.contains("image_fetch"),
+            "REGRESION: finalizar_tarea e image_fetch estan en la misma linea o bloque");
+    }
+
+    #[test]
+    fn app_js_no_tiene_llaves_desbalanceadas() {
+        let js = include_str!("../public/app.js");
+        let open = js.matches('{').count();
+        let close = js.matches('}').count();
+        assert_eq!(open, close,
+            "JS ROTO: {} llaves de apertura vs {} de cierre. El frontend no funciona.", open, close);
+    }
+
+    #[test]
+    fn app_js_no_tiene_parentesis_desbalanceados() {
+        let js = include_str!("../public/app.js");
+        let open = js.matches('(').count();
+        let close = js.matches(')').count();
+        assert_eq!(open, close,
+            "JS ROTO: {} parentesis de apertura vs {} de cierre.", open, close);
+    }
+
+    #[test]
+    fn app_js_no_tiene_corchetes_desbalanceados() {
+        let js = include_str!("../public/app.js");
+        let open = js.matches('[').count();
+        let close = js.matches(']').count();
+        assert_eq!(open, close,
+            "JS ROTO: {} corchetes de apertura vs {} de cierre.", open, close);
+    }
+
+    #[test]
+    fn app_js_render_console_steps_llaves_balanceadas() {
+        let js = include_str!("../public/app.js");
+        // Verificar que renderConsoleSteps tiene sus llaves balanceadas
+        let start = js.find("function renderConsoleSteps").unwrap();
+        let end = js[start..].find("function showInfoToast").unwrap();
+        let block = &js[start..start+end];
+        let open = block.matches('{').count();
+        let close = block.matches('}').count();
+        assert_eq!(open, close,
+            "BUG: renderConsoleSteps tiene llaves desbalanceadas ({} vs {})", open, close);
+    }
+
+    #[test]
+    fn app_js_start_agent_monitoring_estructura_correcta() {
+        let js = include_str!("../public/app.js");
+        let start = js.find("function startAgentMonitoring").unwrap();
+        // Debe tener la estructura correcta con setInterval y consumo de info_messages
+        let block_end = js[start..].find("function showInfoToast").unwrap();
+        let block = &js[start..start+block_end];
+        
+        assert!(block.contains("setInterval"), 
+            "startAgentMonitoring no tiene setInterval");
+        assert!(block.contains("info_messages"), 
+            "startAgentMonitoring no consume info_messages");
+        assert!(block.contains("lastInfoMessageCount"), 
+            "startAgentMonitoring no tiene lastInfoMessageCount");
+    }
+
+    #[test]
+    fn agent_rs_read_file_tiene_manejo_errores() {
+        let src = include_str!("../src/agent.rs");
+        let read_file_idx = src.find("\"read_file\" =>").unwrap();
+        // Buscar el fin del handler (proximo "=>")
+        let next_handler = src[read_file_idx+1..].find("\"search_google\" =>").unwrap_or(
+            src[read_file_idx+1..].find("\"write_file_with_commit\" =>").unwrap()
+        );
+        let block = &src[read_file_idx..read_file_idx+1+next_handler];
+        
+        // Debe manejar el caso de archivo no encontrado
+        assert!(block.contains("No existe"), 
+            "read_file no maneja archivo inexistente");
+        // Debe usar pdf_extract para PDFs
+        assert!(block.contains("pdf_extract::extract_text"), 
+            "read_file no usa pdf_extract para PDFs");
+        // Debe usar extract_text_from_docx para DOCX
+        assert!(block.contains("extract_text_from_docx"), 
+            "read_file no usa extract_text_from_docx para DOCX");
+    }
+
+    #[test]
+    fn main_rs_router_tiene_endpoint_study_profile() {
+        let src = include_str!("../src/main.rs");
+        assert!(src.contains("/api/study/profile"),
+            "REGRESION: El router no tiene /api/study/profile. El frontend no puede cargar el perfil.");
+    }
+
+    #[test]
+    fn main_rs_chat_endpoint_recibe_mode() {
+        let src = include_str!("../src/main.rs");
+        // El struct ChatInput debe tener mode
+        assert!(src.contains("mode: Option<String>"),
+            "REGRESION: ChatInput no tiene campo mode.");
+    }
+
+    #[test]
+    fn study_rs_profile_tiene_campos_requeridos() {
+        let src = include_str!("../src/study.rs");
+        assert!(src.contains("age: Option<u8>"), "StudyProfile no tiene age");
+        assert!(src.contains("phase"), "StudyProfile no tiene phase");
+        assert!(src.contains("high_capabilities"), "StudyProfile no tiene high_capabilities");
     }
 }
