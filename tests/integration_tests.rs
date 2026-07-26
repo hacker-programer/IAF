@@ -748,3 +748,234 @@ mod api_contract_tests {
         assert!(!response["message"].as_str().unwrap().is_empty());
     }
 }
+
+
+
+// ============================================================================
+// TESTS DE INTEGRIDAD DE ARCHIVOS DE TESTS
+// Estos tests verifican que los archivos de tests no tengan errores de sintaxis
+// que impidan la compilacion. Usan include_str! que no compila el archivo,
+// solo lo lee como texto.
+// ============================================================================
+
+#[cfg(test)]
+mod test_file_integrity_tests {
+    #![allow(unused_imports, unused_variables, unused_assignments, unused_mut)]
+
+    /// Verifica que exhaustive_tests.rs tenga llaves balanceadas.
+    /// Si este test falla, hay un unclosed delimiter en exhaustive_tests.rs
+    /// que impedira que compile.
+    #[test]
+    fn exhaustive_tests_rs_tiene_llaves_balanceadas() {
+        let content = include_str!("exhaustive_tests.rs");
+        let mut open = 0usize;
+        let mut close = 0usize;
+        let mut in_string = false;
+        let mut in_line_comment = false;
+        let mut in_block_comment = false;
+        let chars: Vec<char> = content.chars().collect();
+        let len = chars.len();
+        let mut i = 0;
+        while i < len {
+            let c = chars[i];
+            let next = if i + 1 < len { chars[i + 1] } else { ' ' };
+
+            if c == '"' && !in_line_comment && !in_block_comment {
+                in_string = !in_string;
+            }
+            if c == '/' && next == '/' && !in_string && !in_block_comment {
+                in_line_comment = true;
+            }
+            if c == '/' && next == '*' && !in_string && !in_line_comment {
+                in_block_comment = true;
+            }
+            if c == '*' && next == '/' && in_block_comment {
+                in_block_comment = false;
+                i += 1;
+            }
+            if c == '\n' {
+                in_line_comment = false;
+            }
+
+            if !in_string && !in_line_comment && !in_block_comment {
+                if c == '{' { open += 1; }
+                if c == '}' { close += 1; }
+            }
+            i += 1;
+        }
+        assert_eq!(open, close,
+            "REGRESION: exhaustive_tests.rs tiene {} llaves de apertura y {} de cierre. Delta: {}. El archivo NO compilara.",
+            open, close, (open as i64 - close as i64).abs());
+    }
+
+    /// Verifica que integration_tests.rs (este archivo) tenga llaves balanceadas.
+    #[test]
+    fn integration_tests_rs_tiene_llaves_balanceadas() {
+        let content = include_str!("integration_tests.rs");
+        let mut open = 0usize;
+        let mut close = 0usize;
+        let mut in_string = false;
+        let mut in_line_comment = false;
+        let mut in_block_comment = false;
+        let chars: Vec<char> = content.chars().collect();
+        let len = chars.len();
+        let mut i = 0;
+        while i < len {
+            let c = chars[i];
+            let next = if i + 1 < len { chars[i + 1] } else { ' ' };
+
+            if c == '"' && !in_line_comment && !in_block_comment {
+                in_string = !in_string;
+            }
+            if c == '/' && next == '/' && !in_string && !in_block_comment {
+                in_line_comment = true;
+            }
+            if c == '/' && next == '*' && !in_string && !in_line_comment {
+                in_block_comment = true;
+            }
+            if c == '*' && next == '/' && in_block_comment {
+                in_block_comment = false;
+                i += 1;
+            }
+            if c == '\n' {
+                in_line_comment = false;
+            }
+
+            if !in_string && !in_line_comment && !in_block_comment {
+                if c == '{' { open += 1; }
+                if c == '}' { close += 1; }
+            }
+            i += 1;
+        }
+        assert_eq!(open, close,
+            "REGRESION: integration_tests.rs tiene {} llaves de apertura y {} de cierre. Delta: {}.",
+            open, close, (open as i64 - close as i64).abs());
+    }
+
+    /// Verifica que los archivos fuente principales tengan llaves balanceadas.
+    #[test]
+    fn archivos_fuente_principales_tienen_llaves_balanceadas() {
+        let files = vec![
+            "../src/main.rs",
+            "../src/agent.rs",
+            "../src/state.rs",
+            "../src/auth.rs",
+            "../src/study.rs",
+            "../src/validator.rs",
+            "../src/sub_agent.rs",
+            "../src/sync.rs",
+            "../src/scraper.rs",
+            "../src/desktop.rs",
+            "../src/client_protocol.rs",
+        ];
+
+        for file_path in &files {
+            let content = match std::fs::read_to_string(file_path) {
+                Ok(c) => c,
+                Err(_) => continue,
+            };
+            let mut open = 0usize;
+            let mut close = 0usize;
+            let mut in_string = false;
+            let mut in_line_comment = false;
+            let mut in_block_comment = false;
+            let chars: Vec<char> = content.chars().collect();
+            let len = chars.len();
+            let mut i = 0;
+            while i < len {
+                let c = chars[i];
+                let next = if i + 1 < len { chars[i + 1] } else { ' ' };
+
+                if c == '"' && !in_line_comment && !in_block_comment {
+                    in_string = !in_string;
+                }
+                if c == '/' && next == '/' && !in_string && !in_block_comment {
+                    in_line_comment = true;
+                }
+                if c == '/' && next == '*' && !in_string && !in_line_comment {
+                    in_block_comment = true;
+                }
+                if c == '*' && next == '/' && in_block_comment {
+                    in_block_comment = false;
+                    i += 1;
+                }
+                if c == '\n' {
+                    in_line_comment = false;
+                }
+
+                if !in_string && !in_line_comment && !in_block_comment {
+                    if c == '{' { open += 1; }
+                    if c == '}' { close += 1; }
+                }
+                i += 1;
+            }
+            assert_eq!(open, close,
+                "REGRESION: {} tiene {} llaves de apertura y {} de cierre. Delta: {}. El archivo NO compilara.",
+                file_path, open, close, (open as i64 - close as i64).abs());
+        }
+    }
+
+    /// Verifica que app.js tenga llaves, parentesis y corchetes balanceados.
+    #[test]
+    fn app_js_tiene_delimitadores_balanceados() {
+        let content = include_str!("../public/app.js");
+        let mut braces_open = 0usize;
+        let mut braces_close = 0usize;
+        let mut parens_open = 0usize;
+        let mut parens_close = 0usize;
+        let mut brackets_open = 0usize;
+        let mut brackets_close = 0usize;
+        let mut in_string = false;
+        let mut in_single_string = false;
+        let mut in_template = false;
+        let mut in_line_comment = false;
+        let mut in_block_comment = false;
+        let chars: Vec<char> = content.chars().collect();
+        let len = chars.len();
+        let mut i = 0;
+        while i < len {
+            let c = chars[i];
+            let next = if i + 1 < len { chars[i + 1] } else { ' ' };
+            let prev = if i > 0 { chars[i - 1] } else { ' ' };
+
+            if c == '"' && !in_single_string && !in_template && !in_line_comment && !in_block_comment {
+                in_string = !in_string;
+            }
+            if c == '\'' && !in_string && !in_template && !in_line_comment && !in_block_comment {
+                in_single_string = !in_single_string;
+            }
+            if c == '`' && !in_string && !in_single_string && !in_line_comment && !in_block_comment {
+                in_template = !in_template;
+            }
+            if c == '/' && next == '/' && !in_string && !in_single_string && !in_template && !in_block_comment {
+                in_line_comment = true;
+            }
+            if c == '/' && next == '*' && !in_string && !in_single_string && !in_template && !in_line_comment {
+                in_block_comment = true;
+            }
+            if c == '*' && next == '/' && in_block_comment {
+                in_block_comment = false;
+                i += 1;
+            }
+            if c == '\n' {
+                in_line_comment = false;
+            }
+
+            if !in_string && !in_single_string && !in_template && !in_line_comment && !in_block_comment {
+                if c == '{' { braces_open += 1; }
+                if c == '}' { braces_close += 1; }
+                if c == '(' { parens_open += 1; }
+                if c == ')' { parens_close += 1; }
+                if c == '[' { brackets_open += 1; }
+                if c == ']' { brackets_close += 1; }
+            }
+            i += 1;
+        }
+        assert_eq!(braces_open, braces_close,
+            "JS ROTO: app.js tiene {} llaves de apertura vs {} de cierre.", braces_open, braces_close);
+        assert_eq!(parens_open, parens_close,
+            "JS ROTO: app.js tiene {} parentesis de apertura vs {} de cierre.", parens_open, parens_close);
+        assert_eq!(brackets_open, brackets_close,
+            "JS ROTO: app.js tiene {} corchetes de apertura vs {} de cierre.", brackets_open, brackets_close);
+    }
+}
