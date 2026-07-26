@@ -762,15 +762,13 @@ mod api_contract_tests {
 mod test_file_integrity_tests {
     #![allow(unused_imports, unused_variables, unused_assignments, unused_mut)]
 
-    /// Verifica que exhaustive_tests.rs tenga llaves balanceadas.
-    /// Si este test falla, hay un unclosed delimiter en exhaustive_tests.rs
-    /// que impedira que compile.
-    #[test]
-    fn exhaustive_tests_rs_tiene_llaves_balanceadas() {
-        let content = include_str!("exhaustive_tests.rs");
-        let mut open = 0usize;
-        let mut close = 0usize;
+    /// Cuenta llaves { } excluyendo strings (con escapes \" y \\),
+    /// char literals 'x', y comentarios // y /* */.
+    fn count_real_braces(content: &str) -> (usize, usize) {
+        let mut open: usize = 0;
+        let mut close: usize = 0;
         let mut in_string = false;
+        let mut in_char = false;
         let mut in_line_comment = false;
         let mut in_block_comment = false;
         let chars: Vec<char> = content.chars().collect();
@@ -778,81 +776,71 @@ mod test_file_integrity_tests {
         let mut i = 0;
         while i < len {
             let c = chars[i];
+            let prev = if i > 0 { chars[i - 1] } else { ' ' };
+            let prev2 = if i > 1 { chars[i - 2] } else { ' ' };
             let next = if i + 1 < len { chars[i + 1] } else { ' ' };
 
-            if c == '"' && !in_line_comment && !in_block_comment {
-                in_string = !in_string;
-            }
-            if c == '/' && next == '/' && !in_string && !in_block_comment {
+            if c == '/' && next == '/' && !in_string && !in_char && !in_block_comment {
                 in_line_comment = true;
             }
-            if c == '/' && next == '*' && !in_string && !in_line_comment {
+            if c == '/' && next == '*' && !in_string && !in_char && !in_line_comment {
                 in_block_comment = true;
             }
             if c == '*' && next == '/' && in_block_comment {
                 in_block_comment = false;
-                i += 1;
+                i += 2;
+                continue;
             }
             if c == '\n' {
                 in_line_comment = false;
             }
 
-            if !in_string && !in_line_comment && !in_block_comment {
+            if !in_string && !in_char && !in_line_comment && !in_block_comment {
+                if c == '"' { in_string = true; i += 1; continue; }
+                if c == '\'' { in_char = true; i += 1; continue; }
                 if c == '{' { open += 1; }
                 if c == '}' { close += 1; }
+                i += 1;
+                continue;
             }
+
+            if in_string {
+                if c == '"' && prev != '\\' { in_string = false; }
+                else if c == '"' && prev == '\\' && prev2 == '\\' { in_string = false; }
+                i += 1;
+                continue;
+            }
+
+            if in_char {
+                if c == '\'' && prev != '\\' { in_char = false; }
+                else if c == '\'' && prev == '\\' && prev2 == '\\' { in_char = false; }
+                i += 1;
+                continue;
+            }
+
             i += 1;
         }
+        (open, close)
+    }
+
+    #[test]
+    fn exhaustive_tests_rs_tiene_llaves_balanceadas() {
+        let content = include_str!("exhaustive_tests.rs");
+        let (open, close) = count_real_braces(content);
         assert_eq!(open, close,
             "REGRESION: exhaustive_tests.rs tiene {} llaves de apertura y {} de cierre. Delta: {}. El archivo NO compilara.",
             open, close, (open as i64 - close as i64).abs());
     }
 
-    /// Verifica que integration_tests.rs (este archivo) tenga llaves balanceadas.
     #[test]
     fn integration_tests_rs_tiene_llaves_balanceadas() {
         let content = include_str!("integration_tests.rs");
-        let mut open = 0usize;
-        let mut close = 0usize;
-        let mut in_string = false;
-        let mut in_line_comment = false;
-        let mut in_block_comment = false;
-        let chars: Vec<char> = content.chars().collect();
-        let len = chars.len();
-        let mut i = 0;
-        while i < len {
-            let c = chars[i];
-            let next = if i + 1 < len { chars[i + 1] } else { ' ' };
-
-            if c == '"' && !in_line_comment && !in_block_comment {
-                in_string = !in_string;
-            }
-            if c == '/' && next == '/' && !in_string && !in_block_comment {
-                in_line_comment = true;
-            }
-            if c == '/' && next == '*' && !in_string && !in_line_comment {
-                in_block_comment = true;
-            }
-            if c == '*' && next == '/' && in_block_comment {
-                in_block_comment = false;
-                i += 1;
-            }
-            if c == '\n' {
-                in_line_comment = false;
-            }
-
-            if !in_string && !in_line_comment && !in_block_comment {
-                if c == '{' { open += 1; }
-                if c == '}' { close += 1; }
-            }
-            i += 1;
-        }
+        let (open, close) = count_real_braces(content);
         assert_eq!(open, close,
             "REGRESION: integration_tests.rs tiene {} llaves de apertura y {} de cierre. Delta: {}.",
             open, close, (open as i64 - close as i64).abs());
     }
 
-    /// Verifica que los archivos fuente principales tengan llaves balanceadas.
     #[test]
     fn archivos_fuente_principales_tienen_llaves_balanceadas() {
         let files = vec![
@@ -874,48 +862,13 @@ mod test_file_integrity_tests {
                 Ok(c) => c,
                 Err(_) => continue,
             };
-            let mut open = 0usize;
-            let mut close = 0usize;
-            let mut in_string = false;
-            let mut in_line_comment = false;
-            let mut in_block_comment = false;
-            let chars: Vec<char> = content.chars().collect();
-            let len = chars.len();
-            let mut i = 0;
-            while i < len {
-                let c = chars[i];
-                let next = if i + 1 < len { chars[i + 1] } else { ' ' };
-
-                if c == '"' && !in_line_comment && !in_block_comment {
-                    in_string = !in_string;
-                }
-                if c == '/' && next == '/' && !in_string && !in_block_comment {
-                    in_line_comment = true;
-                }
-                if c == '/' && next == '*' && !in_string && !in_line_comment {
-                    in_block_comment = true;
-                }
-                if c == '*' && next == '/' && in_block_comment {
-                    in_block_comment = false;
-                    i += 1;
-                }
-                if c == '\n' {
-                    in_line_comment = false;
-                }
-
-                if !in_string && !in_line_comment && !in_block_comment {
-                    if c == '{' { open += 1; }
-                    if c == '}' { close += 1; }
-                }
-                i += 1;
-            }
+            let (open, close) = count_real_braces(&content);
             assert_eq!(open, close,
                 "REGRESION: {} tiene {} llaves de apertura y {} de cierre. Delta: {}. El archivo NO compilara.",
                 file_path, open, close, (open as i64 - close as i64).abs());
         }
     }
 
-    /// Verifica que app.js tenga llaves, parentesis y corchetes balanceados.
     #[test]
     fn app_js_tiene_delimitadores_balanceados() {
         let content = include_str!("../public/app.js");
@@ -925,50 +878,42 @@ mod test_file_integrity_tests {
         let mut parens_close = 0usize;
         let mut brackets_open = 0usize;
         let mut brackets_close = 0usize;
-        let mut in_string = false;
-        let mut in_single_string = false;
+        let mut in_double = false;
+        let mut in_single = false;
         let mut in_template = false;
-        let mut in_line_comment = false;
-        let mut in_block_comment = false;
+        let mut in_line = false;
+        let mut in_block = false;
         let chars: Vec<char> = content.chars().collect();
         let len = chars.len();
         let mut i = 0;
         while i < len {
             let c = chars[i];
-            let next = if i + 1 < len { chars[i + 1] } else { ' ' };
             let prev = if i > 0 { chars[i - 1] } else { ' ' };
+            let next = if i + 1 < len { chars[i + 1] } else { ' ' };
+            let in_str = in_double || in_single || in_template;
 
-            if c == '"' && !in_single_string && !in_template && !in_line_comment && !in_block_comment {
-                in_string = !in_string;
-            }
-            if c == '\'' && !in_string && !in_template && !in_line_comment && !in_block_comment {
-                in_single_string = !in_single_string;
-            }
-            if c == '`' && !in_string && !in_single_string && !in_line_comment && !in_block_comment {
-                in_template = !in_template;
-            }
-            if c == '/' && next == '/' && !in_string && !in_single_string && !in_template && !in_block_comment {
-                in_line_comment = true;
-            }
-            if c == '/' && next == '*' && !in_string && !in_single_string && !in_template && !in_line_comment {
-                in_block_comment = true;
-            }
-            if c == '*' && next == '/' && in_block_comment {
-                in_block_comment = false;
-                i += 1;
-            }
-            if c == '\n' {
-                in_line_comment = false;
-            }
+            if c == '/' && next == '/' && !in_str && !in_block { in_line = true; }
+            if c == '/' && next == '*' && !in_str && !in_line { in_block = true; }
+            if c == '*' && next == '/' && in_block { in_block = false; i += 2; continue; }
+            if c == '\n' { in_line = false; }
 
-            if !in_string && !in_single_string && !in_template && !in_line_comment && !in_block_comment {
+            if !in_str && !in_line && !in_block {
+                if c == '"' { in_double = true; i += 1; continue; }
+                if c == '\'' { in_single = true; i += 1; continue; }
+                if c == '`' { in_template = true; i += 1; continue; }
                 if c == '{' { braces_open += 1; }
                 if c == '}' { braces_close += 1; }
                 if c == '(' { parens_open += 1; }
                 if c == ')' { parens_close += 1; }
                 if c == '[' { brackets_open += 1; }
                 if c == ']' { brackets_close += 1; }
+                i += 1;
+                continue;
             }
+
+            if in_double && c == '"' && prev != '\\' { in_double = false; }
+            if in_single && c == '\'' && prev != '\\' { in_single = false; }
+            if in_template && c == '`' && prev != '\\' { in_template = false; }
             i += 1;
         }
         assert_eq!(braces_open, braces_close,
