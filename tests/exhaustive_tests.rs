@@ -1309,7 +1309,7 @@ mod additional_regression_tests {
 // ============================================================================
 
 #[cfg(test)]
-mod stress_tests {
+mod stress_tests_extended {
     #![allow(unused_imports, unused_variables, unused_assignments, unused_mut)]
 
     #[test]
@@ -1364,7 +1364,7 @@ mod stress_tests {
 // ============================================================================
 
 #[cfg(test)]
-mod fault_injection_tests {
+mod fault_injection_tests_extended {
     #![allow(unused_imports, unused_variables, unused_assignments, unused_mut)]
 
     #[test]
@@ -1424,7 +1424,7 @@ mod fault_injection_tests {
         let extensions = vec![None, Some(""), Some("pdf"), Some("docx"), Some("rs")];
         for ext_opt in &extensions {
             let ext = ext_opt.unwrap_or("").to_lowercase();
-            match ext {
+            match ext.as_str() {
                 "pdf" => assert!(ext == "pdf"),
                 "docx" => assert!(ext == "docx"),
                 _ => assert!(ext != "pdf" && ext != "docx" || ext.is_empty()),
