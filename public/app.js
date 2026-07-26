@@ -585,49 +585,52 @@ function selectProject(name) {
 }
 
 // ============================================================================
-// PROMPTS
+// PROMPTS — alineado con IDs del HTML: globalPrompt, localPrompt,
+//           savePromptsBtn (guarda ambos), resetPromptBtn (restaura global)
 // ============================================================================
 
 async function loadPrompts() {
     try {
         const prompts = await apiCall('/api/prompts');
         if (prompts.status === 'ok') {
-            document.getElementById('globalPromptText').value = prompts.global || '';
+            document.getElementById('globalPrompt').value = prompts.global || '';
             if (activeProject && prompts.projects && prompts.projects[activeProject]) {
-                document.getElementById('localPromptText').value = prompts.projects[activeProject];
+                document.getElementById('localPrompt').value = prompts.projects[activeProject];
             } else {
-                document.getElementById('localPromptText').value = '';
+                document.getElementById('localPrompt').value = '';
             }
         }
     } catch(e) {}
 }
 
-document.getElementById('saveGlobalPromptBtn').onclick = async () => {
-    const content = document.getElementById('globalPromptText').value;
-    const res = await apiCall('/api/prompts/global', 'PUT', { content });
-    if (res.status === 'ok') {
+// savePromptsBtn: guarda ambos prompts (global y local) en una sola acción
+document.getElementById('savePromptsBtn').onclick = async () => {
+    const globalContent = document.getElementById('globalPrompt').value;
+    const globalRes = await apiCall('/api/prompts/global', 'PUT', { content: globalContent });
+    if (globalRes.status !== 'ok') {
+        alert('Error al guardar prompt global: ' + globalRes.message);
+        return;
+    }
+
+    if (activeProject) {
+        const localContent = document.getElementById('localPrompt').value;
+        const localRes = await apiCall(`/api/prompts/projects/${activeProject}`, 'PUT', { content: localContent });
+        if (localRes.status !== 'ok') {
+            alert('Error al guardar prompt local: ' + localRes.message);
+            return;
+        }
+        alert('System prompts global y local guardados para ' + activeProject + '.');
+    } else {
         alert('System prompt global guardado.');
-    } else {
-        alert('Error: ' + res.message);
     }
 };
 
-document.getElementById('saveLocalPromptBtn').onclick = async () => {
-    if (!activeProject) return alert('Seleccioná un proyecto primero.');
-    const content = document.getElementById('localPromptText').value;
-    const res = await apiCall(`/api/prompts/projects/${activeProject}`, 'PUT', { content });
-    if (res.status === 'ok') {
-        alert('System prompt local guardado para ' + activeProject + '.');
-    } else {
-        alert('Error: ' + res.message);
-    }
-};
-
-document.getElementById('resetGlobalPromptBtn').onclick = async () => {
+// resetPromptBtn: restaura el prompt global al valor por defecto
+document.getElementById('resetPromptBtn').onclick = async () => {
     if (!confirm('¿Restaurar el system prompt global al valor por defecto?')) return;
     const res = await apiCall('/api/prompts/global/reset', 'POST');
     if (res.status === 'ok') {
-        document.getElementById('globalPromptText').value = res.content;
+        document.getElementById('globalPrompt').value = res.content;
         alert('System prompt global restaurado.');
     } else {
         alert('Error: ' + res.message);
