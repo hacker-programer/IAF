@@ -671,8 +671,6 @@ async function loadChatHistory() {
         const list = document.getElementById('chatHistoryList');
         if (res.status === 'ok' && res.chats && res.chats.length > 0) {
             list.innerHTML = res.chats.map(c => `
-        if (res.status === 'ok' && res.chats && res.chats.length > 0) {
-            list.innerHTML = res.chats.map(c => `
                 <div class="project-item ${c.id === currentSessionId ? 'active' : ''}" 
                      onclick="loadChat('${c.id}')">
                     <strong>${c.title || 'Sin título'}</strong><br>
@@ -686,6 +684,8 @@ async function loadChatHistory() {
 }
 
 async function loadChat(sessionId) {
+    try {
+        const res = await apiCall('/api/chats/' + sessionId);
         if (res.status === 'ok' && res.session) {
             currentSessionId = sessionId;
             const area = document.getElementById('chatArea');
@@ -700,19 +700,11 @@ async function loadChat(sessionId) {
 }
 
 document.getElementById('newChatBtn').onclick = () => {
+    currentSessionId = null;
+    document.getElementById('chatArea').innerHTML = '<div class="message system-msg"><strong>Sistema:</strong> Nuevo chat iniciado.</div>';
+    document.getElementById('consoleArea').innerHTML = '<div class="console-empty">El agente está inactivo.</div>';
+    loadChatHistory();
 };
-
-// ============================================================================
-// SYSTEM PROMPTS
-// ============================================================================
-
-async function loadPrompts() {
-    try {
-        const res = await apiCall('/api/prompts');
-        if (res.status === 'ok') {
-            document.getElementById('globalPrompt').value = res.global_current || '';
-            document.getElementById('localPrompt').value = res.local_current || '';
-        }
     } catch(e) {}
 }
 
