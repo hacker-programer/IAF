@@ -1402,37 +1402,28 @@ pub async fn run_agent_loop(
                             if let Some(ref s_id) = session_id {
                                 save_chat_steps_to_disk(&state, &Some(s_id.clone()), &status.steps);
                             }
+                            // Renombrar el chat: el agente elige el titulo desde mensaje_final
+                            if let Some(ref chat_path) = status.current_chat_path {
+                                if let Ok(old_content) = std::fs::read_to_string(chat_path) {
+                                    if let Ok(mut session_json) = serde_json::from_str::<serde_json::Value>(&old_content) {
+                                        let new_title = final_msg.chars().take(60).collect::<String>();
+                                        let trimmed_title = new_title.trim().to_string();
+                                        if !trimmed_title.is_empty() {
+                                            session_json["title"] = serde_json::Value::String(trimmed_title);
+                                            let _ = std::fs::write(chat_path, serde_json::to_string_pretty(&session_json).unwrap_or(old_content));
+                                        }
+                                    }
+                                }
+                            }
                         }
                         final_message = Some(final_msg);
                         "Tarea finalizada correctamente.".to_string()
-                    }                    "image_fetch" => {
+                    }
+                    "image_fetch" => {
                         let url = args["url"].as_str().unwrap_or("");
                         if url.is_empty() {
-                            json!({"error": "No se proporcionÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³ URL"}).to_string()
+                            json!({"error": "No se proporcionó URL"}).to_string()
                         } else {
-                            let fetch_client = reqwest::Client::builder()
-                                .user_agent("Mozilla/5.0")
-                                .timeout(std::time::Duration::from_secs(30))
-                                .build();
-                            match fetch_client {
-                                Ok(c) => {
-                                    match c.get(url).send().await {
-                                        Ok(resp) => {
-                                            match resp.bytes().await {
-                                                Ok(bytes) => {
-                                                    let id = Uuid::new_v4().to_string();
-                                                    // Determinar nombre del archivo desde la URL
-                                                    let filename = reqwest::Url::parse(url)
-                                                        .ok()
-                                                        .and_then(|u| u.path_segments()
-                                                            .and_then(|s| s.last().map(|s| s.to_string())))
-                                                        .unwrap_or_else(|| "image.bin".to_string());
-                                                    let safe_name = format!("{}_{}", &id[..8], filename);
-                                                    let assets_dir = if let Some(ref proj_name) = project_name {
-                                                        let proj_path = get_project_path(&state, proj_name);
-                                                        Path::new(&proj_path).join("src").join("assets").join("images")
-                                                    } else {
-                                                        state.base_workspace.join("assets").join("images")
                                                     };
                                                     let _ = fs::create_dir_all(&assets_dir);
                                                     let full_path = assets_dir.join(&safe_name);
