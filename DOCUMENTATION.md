@@ -1,4 +1,4 @@
-# DOCUMENTATION.md — Mapa Técnico del Proyecto IAF v2.6
+# DOCUMENTATION.md — Mapa Técnico del Proyecto IAF v2.7
 
 > **IAF (Intelligent Agent Framework)** — Framework de agente autónomo + plataforma de enseñanza en Rust + Axum.
 > Servidor HTTP doble puerto (80 auto-admin, 8080 auth), autenticación dual (password + Ed25519),
@@ -10,11 +10,11 @@
 
 | Archivo | Líneas | Rol |
 |---------|--------|-----|
-| `src/main.rs` | ~2166 | Servidor HTTP doble puerto, endpoints REST, CAPTCHA, legacy routes, migración, scripts, system prompts, ciclos |
+| `src/main.rs` | ~2235 | Servidor HTTP doble puerto, endpoints REST, CAPTCHA, legacy routes, migración, scripts, system prompts, ciclos |
 | `src/agent.rs` | ~2442 | Bucle principal del agente, 26 herramientas, extract_text_from_docx(), soporte PDF/DOCX nativo |
 | `src/auth.rs` | ~947 | Auth dual: contraseñas (argon2) + nonce Ed25519, permisos booleanos, WeeklySchedule, UserLimits |
 | `src/state.rs` | ~575 | AppState, ActiveAgentStatus (con info_messages), CicleState/CiclePhase, CaptchaRequest, ToolResultStore, SubAgentManager, ProcessRegistry |
-| `src/study.rs` | ~570 | Motor de estudio: perfiles, knowledge base, hipótesis, engagement, persistencia en .config/data/ |
+| `src/study.rs` | ~973 | Motor de estudio: UserLearningProfile, UserKnowledgeBase, StudyEngine, persistencia en .config/data/ |
 | `src/sync.rs` | ~280 | Sincronización de proyectos (push/pull/conflictos) |
 | `src/client_protocol.rs` | ~180 | Protocolo cliente-servidor para ejecución remota |
 | `src/validator.rs` | ~508 | Validación post-escritura (líneas duplicadas, delimitadores, errores comunes Rust) |
@@ -25,41 +25,42 @@
 | `src/utils.rs` | ~72 | sanitize_filename() — sanitización de nombres de archivo |
 | `scripts/generate_keys.ps1` | ~105 | Genera par de claves Ed25519 via API y las guarda como .pem |
 | `scripts/sign_nonce.ps1` | ~110 | Firma un nonce con clave privada para autenticación admin |
-| `public/index.html` | ~298 | Frontend web con login dual, admin panel, gestión de usuarios |
-| `public/app.js` | ~1034 | Lógica del frontend: auth, admin, scripts, keygen, .pem upload, startAgentMonitoring con info_messages |
-| `public/style.css` | ~520 | Estilos completos: toasts, modales, consola, login, admin panel |
+| `public/index.html` | ~298 | Frontend web con login dual, admin panel, gestión de usuarios, perfil de estudio con IDs correctos |
+| `public/app.js` | ~1060 | Lógica del frontend: auth, admin, perfil de estudio, mensajes en tiempo real en chat |
+| `public/style.css` | ~893 | Estilos completos: .info-msg, .final-msg, .input-container, toasts, modales, consola |
 | `client/Cargo.toml` | 15 | Cliente binario independiente |
 | `client/src/main.rs` | ~350 | Ejecutor local (files, PowerShell, git, cargo) |
-| `tests/exhaustive_tests.rs` | ~510 | Tests exhaustivos: verificación código fuente (include_str!), regresión, integración, estrés, inyección fallos, casos límite, smoke tests |
-| `tests/integration_tests.rs` | ~470 | Tests reales: StudyEngine, UserStore, sanitize_filename, ActiveAgentStatus, DOCX real, CiclePhase, ChatSession, contrato API |
-| `tests/frontend_regression_tests.js` | ~230 | Tests de regresión del frontend (Node.js): copyNonceCmd, startAgentMonitoring, info_messages |
+| `tests/exhaustive_tests.rs` | ~510 | Tests exhaustivos: verificación código fuente (include_str!), regresión, integración, estrés |
+| `tests/integration_tests.rs` | ~470 | Tests reales: StudyEngine, UserStore, sanitize_filename, ActiveAgentStatus, DOCX real |
+| `tests/frontend_regression_tests.js` | ~230 | Tests de regresión del frontend (Node.js) |
 | `prompts/study_system_prompt.txt` | ~80 | System prompt para modo estudio (anti-resúmenes reforzado) |
 
 ---
 
-## 🔧 Cambios v2.6 (Tests Reales y Cero Warnings)
+## 🔧 Cambios v2.7 (Perfil de Estudio + Mensajes en Tiempo Real)
 
-### Tests completamente reescritos
-- **`exhaustive_tests.rs`**: 50+ tests REALES usando `include_str!` para verificar código fuente, `std::path::Path` para extensiones, serialización real con `serde_json`.
-- **`integration_tests.rs`**: Tests de integración REALES con `StudyEngine` (disco real), `UserStore` (contraseñas reales), `ActiveAgentStatus` (serialización), creación de DOCX real con `zip` + `quick-xml`.
-- **`frontend_regression_tests.js`**: Mantenido para tests de lógica JS del frontend.
-- **Eliminados**: `regression_tests.rs`, `reg_stu_tests.rs` (redundantes, reemplazados por los nuevos).
+### BUG-021: Mensajes informativos en el chat (tiempo real)
+- **`addMessage(role, text, extraClass)`** (app.js ~868): Ahora acepta tercer parámetro `extraClass` para inyectar clase CSS adicional.
+- **`startAgentMonitoring()`** (app.js ~883): Los `info_messages` del backend se muestran con `addMessage('agent', 'ℹ️ ' + msg, 'info-msg')`, apareciendo en el chat con estilo azul animado. El mensaje final se muestra con `addMessage('agent', '✅ ' + msg, 'final-msg')`.
+- **Polling reducido**: De 1500ms a 1000ms para respuesta en tiempo real.
+- **CSS `.info-msg`** (style.css ~377): Fondo azul semitransparente, animación `infoMsgFadeIn`.
+- **CSS `.final-msg`** (style.css ~396): Fondo verde semitransparente, animación `finalMsgPulse`.
 
-### Módulos expuestos en lib.rs
-- `pub mod utils` — `sanitize_filename()`
-- `pub mod state` — `ActiveAgentStatus`, `CiclePhase`, `CicleState`, `ChatSession`, `ChatMessage`
-- `pub mod auth` — `UserStore`, `UserLimits`
-- `pub mod study` — `StudyEngine`
-- `pub mod desktop` — `DesktopController`
-- `pub mod sync` — `SyncStore`
+### BUG-022: Perfil de estudio no cargaba en el frontend
+- **`loadStudyProfile()`** (app.js ~647): Ahora usa IDs correctos del HTML:
+  - `profileAge`, `profileGames`, `profileHobbies`, `profileNeuro` (inputs del formulario)
+  - `studyPhase` (div de estado, reemplaza al inexistente `studyProfileInfo`)
+  - Usa `learning_style_summary` (nombre correcto del campo, no `learning_style`)
+- **`switchMode('study')`** (app.js ~279): Muestra `#studyProfileSection` y llama a `loadStudyProfile()`.
+- **`saveProfileBtn`** (app.js ~699): Handler que POSTea a `/api/study/profile` con los datos del formulario y recarga el perfil.
 
-### Principio: CERO tests simulados
-Todos los tests ahora prueban comportamiento REAL:
-- `include_str!` verifica que el código fuente contiene las funciones requeridas
-- `std::path::Path::extension()` prueba el comportamiento real de detección de extensiones
-- `StudyEngine::new()` crea y lee archivos reales en disco
-- `UserStore` crea usuarios con contraseñas hasheadas reales (argon2)
-- `zip::ZipWriter` + `quick_xml::Reader` crean y parsean DOCX reales
+### BUG-023: CSS roto — regla `.input-container` huérfana
+- Se eliminó un comentario JavaScript `//` que quedó en medio del CSS.
+- Se restauró la regla `.input-container { display: flex; gap: 12px; align-items: flex-end; }` que había quedado rota (solo existía `.input-container textarea` sin el contenedor padre).
+- Se eliminaron propiedades huérfanas (`align-items: flex-end;` y `}` sueltos tras `.system-msg`).
+
+### Aclaración: Francisco González
+- "Francisco González" NO es un nombre inventado. Es el autor del material de estudio ("Colección de Handouts") que el usuario Facundo Efimenco descargó de internet. El directorio `.config/data/test/Colección de Handouts - Francisco González` fue eliminado por error en una iteración anterior al asumir que era un dato fabricado; no estaba en git y no se pudo recuperar.
 
 ---
 
@@ -110,28 +111,16 @@ pub struct ActiveAgentStatus {
 | `GET` | `/api/chats/:id` | `get_chat_session` | Obtener chat por ID |
 | `POST` | `/api/reportar-fallo` | `reportar_fallo` | Reportar bug/fallo al sistema |
 
----
-
-## 🧪 Tests (v2.6)
-
-### exhaustive_tests.rs (50+ tests)
-1. **Source Code Verification**: `include_str!` contra agent.rs, main.rs, app.js, style.css, Cargo.toml, state.rs, study.rs
-2. **Regresión**: finalizar_tarea (BUG-004), info_messages (BUG-002), read_file PDF/DOCX (BUG-001)
-3. **Integración**: flujo detección extensiones, transiciones estado agente, ActiveAgentStatus JSON
-4. **Estrés**: 10K info_messages, 5K consumo incremental, 1K extensiones
-5. **Inyección de Fallos**: archivos inexistentes, extensiones vacías, Unicode, null bytes, path traversal
-6. **Casos Límite**: mensajes vacíos, unicode multilínea, dotfiles (.gitignore), múltiples puntos, números en extensión
-7. **Smoke Tests**: todas las herramientas definidas en agent.rs
-
-### integration_tests.rs (40+ tests)
-1. **StudyEngine**: carga/save perfiles, knowledge base, teaching method, múltiples usuarios, directorios internos
-2. **sanitize_filename**: ASCII, espacios, especiales, no-ASCII, truncado, trim, guiones, underscores, vacío
-3. **ActiveAgentStatus**: default, serialización JSON, deserialización, info_messages vacío
-4. **DOCX**: creación real + quick-xml, documento vacío
-5. **UserStore**: crear usuario, verificar password, admin con public key, listar, has_study_access
-6. **CiclePhase**: transiciones completas, default
-7. **ChatSession**: serialización/deserialización
-8. **Contrato API**: estructura /api/agent/status, /api/chat, login, errores
+### Estudio
+| Método | Ruta | Handler | Descripción |
+|--------|------|---------|-------------|
+| `GET` | `/api/study/profile` | `study_get_profile` | Obtener perfil (UserLearningProfile) + knowledge + engagement |
+| `POST` | `/api/study/profile` | `study_save_profile` | Guardar campos del perfil (age, favorite_games, hobbies, neurological_conditions) |
+| `GET` | `/api/study/knowledge` | `study_get_knowledge` | Obtener UserKnowledgeBase |
+| `POST` | `/api/study/projects` | `study_create_project` | Crear proyecto de estudio |
+| `GET` | `/api/study/projects` | `study_get_projects` | Listar proyectos de estudio del usuario |
+| `POST` | `/api/study/projects/:id/members` | `study_add_member` | Agregar miembro a proyecto |
+| `POST` | `/api/study/build-prompt` | `study_build_prompt` | Construir system prompt personalizado con perfil |
 
 ---
 
