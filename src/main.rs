@@ -1,4 +1,4 @@
-#![allow(dead_code, unused_imports, unused_variables, unused_mut, unused_assignments, unused_must_use)]
+﻿#![allow(dead_code, unused_imports, unused_variables, unused_mut, unused_assignments, unused_must_use)]
 use axum::{
     extract::{State, Json, Path as AxumPath},
     response::IntoResponse,
@@ -1035,7 +1035,7 @@ async fn chat_endpoint(
         if let Ok(content) = fs::read_to_string(path) {
             serde_json::from_str::<ChatSession>(&content).unwrap_or_else(|_| ChatSession {
                 id: session_id.clone(),
-                title: "Nueva conversaciâ”œâ”‚n".to_string(),
+                title: "Nueva conversación".to_string(),
                 messages: Vec::new(),
                 project_name: payload.project_name.clone(),
                 steps: None,
@@ -1043,7 +1043,7 @@ async fn chat_endpoint(
         } else {
             ChatSession {
                 id: session_id.clone(),
-                title: "Nueva conversaciâ”œâ”‚n".to_string(),
+                title: "Nueva conversación".to_string(),
                 messages: Vec::new(),
                 project_name: payload.project_name.clone(),
                 steps: None,
