@@ -1420,6 +1420,7 @@ pub async fn run_agent_loop(
                         "Tarea finalizada correctamente.".to_string()
                     }
                     "image_fetch" => {
+                            json!({"error": "No se proporcionÃƒÆ’Ã‚Â³ URL"}).to_string()
                         } else {
                             let fetch_client = reqwest::Client::builder()
                                 .user_agent("Mozilla/5.0")
