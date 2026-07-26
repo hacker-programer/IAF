@@ -364,8 +364,6 @@ textarea {
     border-bottom-right-radius: 4px;
 }
 
-// Líneas 375-390 de 870 en public/style.css - agregando .info-msg y .final-msg
-
 .agent-msg {
     align-self: flex-start;
     background: rgba(255, 255, 255, 0.05);
@@ -415,6 +413,15 @@ textarea {
     font-size: 13px;
     text-align: center;
 }
+
+.footer {
+    padding: 24px;
+    border-top: 1px solid var(--border-color);
+}
+
+.input-container {
+    display: flex;
+    gap: 12px;
     align-items: flex-end;
 }
 
