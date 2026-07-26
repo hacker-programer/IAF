@@ -586,6 +586,58 @@ function selectProject(name) {
     loadProjects();
 }
 
+// ---- Fork & Clone ----
+document.getElementById('forkBtn').onclick = async () => {
+    const url = document.getElementById('repoUrl').value.trim();
+    if (!url) return alert('Ingresá una URL de GitHub o usuario/repo.');
+
+    const btn = document.getElementById('forkBtn');
+    btn.disabled = true;
+    btn.textContent = 'Forkeando...';
+
+    try {
+        const res = await apiCall('/api/projects/fork', 'POST', { repo_url: url });
+        if (res.status === 'ok') {
+            document.getElementById('repoUrl').value = '';
+            showInfoToast('✅ Repo forkeado y clonado: ' + (res.project ? res.project.name : url));
+            await loadProjects();
+        } else {
+            alert('Error: ' + (res.message || 'No se pudo forkear el repo.'));
+        }
+    } catch(e) {
+        alert('Error de conexión al forkear.');
+    }
+    btn.disabled = false;
+    btn.textContent = 'Fork & Clone';
+};
+
+// ---- Agregar Carpeta Local ----
+document.getElementById('addLocalBtn').onclick = async () => {
+    const name = document.getElementById('localProjName').value.trim();
+    const path = document.getElementById('localProjPath').value.trim();
+    if (!name) return alert('Ingresá un nombre para el proyecto.');
+    if (!path) return alert('Ingresá la ruta absoluta de la carpeta.');
+
+    const btn = document.getElementById('addLocalBtn');
+    btn.disabled = true;
+    btn.textContent = 'Agregando...';
+
+    try {
+        const res = await apiCall('/api/projects/local', 'POST', { name, path });
+        if (res.status === 'ok') {
+            document.getElementById('localProjName').value = '';
+            document.getElementById('localProjPath').value = '';
+            showInfoToast('✅ Proyecto local agregado: ' + name);
+            await loadProjects();
+        } else {
+            alert('Error: ' + (res.message || 'No se pudo agregar el proyecto.'));
+        }
+    } catch(e) {
+        alert('Error de conexión al agregar proyecto.');
+    }
+    btn.disabled = false;
+    btn.textContent = 'Agregar Carpeta';
+};
 // ============================================================================
 // PROMPTS — alineado con IDs del HTML: globalPrompt, localPrompt,
 //           savePromptsBtn (guarda ambos), resetPromptBtn (restaura global)
