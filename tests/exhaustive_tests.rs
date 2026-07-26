@@ -825,8 +825,6 @@ mod edge_case_tests {
     }
 
     #[test]
-    fn estado_agente_con_todos_los_campos_null_o_default()
-    #[test]
     fn edge008_nombre_archivo_solo_extension() {
         // Caso limite: nombre de archivo que ES solo una extension
         // Ejemplo: ".gitignore" -> Path::extension() devuelve None porque
