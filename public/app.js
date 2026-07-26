@@ -1096,16 +1096,15 @@ document.getElementById('closeCaptchaBtn').onclick = () => {
     document.getElementById('captchaModal').classList.add('hidden');
 };
 
-// ---- Agent Question Modal ----
+// ---- Agent Question Banner (inline) ----
 document.getElementById('submitAgentResponseBtn').onclick = async () => {
     const respuesta = document.getElementById('agentQuestionResponse').value.trim();
     if (!respuesta) return;
     addMessage('user', respuesta);
     await apiCall('/api/agent/responder', 'POST', { respuesta });
-    document.getElementById('agentQuestionModal').classList.add('hidden');
+    document.getElementById('agentQuestionBanner').classList.add('hidden');
     agentQuestionShown = false;
 };
-
 // ---- Agent Plan Modal ----
 document.getElementById('approvePlanBtn').onclick = async () => {
     await apiCall('/api/agent/aprobar_plan', 'POST', { aprobado: true });
