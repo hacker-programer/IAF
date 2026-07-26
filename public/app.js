@@ -282,7 +282,9 @@ function switchMode(mode) {
     document.getElementById(mode === 'study' ? 'modeStudy' : 'modeProgramming').classList.add('active');
     document.getElementById('activeMode').textContent = mode === 'study' ? '📚 Estudiar' : '💻 Programar';
     studyProfileSection.classList.toggle('hidden', mode !== 'study');
-    if (mode === 'study') loadStudyProfile();
+    if (mode === 'study') {
+        loadStudyProfile();
+    }
 }
 
 // ---- Admin Panel ----
@@ -638,19 +640,77 @@ document.getElementById('resetPromptBtn').onclick = async () => {
 };
 
 // ============================================================================
-// STUDY PROFILE
+// STUDY PROFILE — carga desde /api/study/profile y rellena el formulario
 // ============================================================================
 
 async function loadStudyProfile() {
     try {
         const res = await apiCall('/api/study/profile');
         if (res.status === 'ok' && res.profile) {
-            document.getElementById('studyProfileInfo').innerHTML =
-                '<b>Perfil:</b> ' + (res.profile.learning_style || 'No definido') +
-                ' | <b>Fase:</b> ' + (res.profile.phase || 'exploracion');
+            const p = res.profile;
+
+            // Rellenar campos del formulario de perfil
+            const ageEl = document.getElementById('profileAge');
+            const gamesEl = document.getElementById('profileGames');
+            const hobbiesEl = document.getElementById('profileHobbies');
+            const neuroEl = document.getElementById('profileNeuro');
+            const phaseEl = document.getElementById('studyPhase');
+
+            if (ageEl && p.age) ageEl.value = p.age;
+            if (gamesEl && p.favorite_games) gamesEl.value = p.favorite_games.join(', ');
+            if (hobbiesEl && p.hobbies) hobbiesEl.value = p.hobbies.join(', ');
+            if (neuroEl && p.neurological_conditions) neuroEl.value = p.neurological_conditions.join(', ');
+
+            // Mostrar info de la fase y resumen de aprendizaje
+            if (phaseEl) {
+                const phaseMap = { 'NotStarted': 'No iniciado', 'Exploration': '🔍 Exploración', 'Exploitation': '🎯 Explotación' };
+                const phaseName = phaseMap[p.phase] || p.phase || 'No definida';
+                const summary = p.learning_style_summary || '';
+                const engagement = res.engagement ? (' | Engagement: ' + Math.round(res.engagement * 100) + '%') : '';
+                phaseEl.innerHTML = '<b>Fase:</b> ' + phaseName + engagement +
+                    (summary ? '<br><b>Resumen:</b> ' + summary : '') +
+                    '<br><b>Usuario:</b> ' + (p.username || authUsername || '?');
+            }
+
+            // Mostrar en el chat que el perfil se cargó correctamente
+            console.log('[IAF] Perfil de estudio cargado:', p.username, 'fase:', p.phase);
+        } else {
+            // Perfil no encontrado, mostrar estado inicial
+            const phaseEl = document.getElementById('studyPhase');
+            if (phaseEl) phaseEl.innerHTML = '<b>Fase:</b> No iniciado — Completá el perfil y guardalo.';
         }
-    } catch(e) {}
+    } catch(e) {
+        console.error('[IAF] Error cargando perfil de estudio:', e);
+        const phaseEl = document.getElementById('studyPhase');
+        if (phaseEl) phaseEl.innerHTML = '<b>Error:</b> No se pudo cargar el perfil.';
+    }
 }
+
+// ---- Save Study Profile ----
+document.getElementById('saveProfileBtn').onclick = async () => {
+    const ageRaw = document.getElementById('profileAge').value.trim();
+    const gamesRaw = document.getElementById('profileGames').value.trim();
+    const hobbiesRaw = document.getElementById('profileHobbies').value.trim();
+    const neuroRaw = document.getElementById('profileNeuro').value.trim();
+
+    const payload = {};
+    if (ageRaw) payload.age = parseInt(ageRaw);
+    if (gamesRaw) payload.favorite_games = gamesRaw.split(',').map(s => s.trim()).filter(Boolean);
+    if (hobbiesRaw) payload.hobbies = hobbiesRaw.split(',').map(s => s.trim()).filter(Boolean);
+    if (neuroRaw) payload.neurological_conditions = neuroRaw.split(',').map(s => s.trim()).filter(Boolean);
+
+    try {
+        const res = await apiCall('/api/study/profile', 'POST', payload);
+        if (res.status === 'ok') {
+            showInfoToast('✅ Perfil de estudio guardado correctamente.');
+            loadStudyProfile(); // Recargar para mostrar datos actualizados
+        } else {
+            alert('Error al guardar perfil: ' + (res.message || 'Desconocido'));
+        }
+    } catch(e) {
+        alert('Error de conexión al guardar perfil.');
+    }
+};
 
 // ============================================================================
 // CHAT HISTORY
@@ -688,16 +748,11 @@ async function selectChatSession(id) {
             renderConsoleSteps(res.session.steps);
         }
         // BUG-014 FIX: Iniciar monitoreo del agente al entrar a un chat existente
-        // (sin esto, no se ven mensajes en tiempo real ni se actualiza la auditoría)
         startAgentMonitoring();
     }
 }
 
-// BUG-019 FIX: Al crear un nuevo chat, limpiar TODO el estado anterior:
-// - Detener el monitoreo del agente
-// - Limpiar la consola de auditoría
-// - Ocultar el botón de interrumpir
-// - Resetear flags de pregunta y plan pendientes
+// BUG-019 FIX: Al crear un nuevo chat, limpiar TODO el estado anterior
 document.getElementById('newChatBtn').onclick = () => {
     currentSessionId = null;
     document.getElementById('chatArea').innerHTML = '<div class="message system-msg"><strong>Sistema:</strong> Nuevo chat iniciado.</div>';
@@ -810,19 +865,19 @@ async function sendMessageToAgent(text, mode) {
     }
 }
 
-function addMessage(role, text) {
+function addMessage(role, text, extraClass) {
     const div = document.createElement('div');
-    div.className = `message ${role}-msg`;
-    div.innerHTML = `<strong>${role === 'user' ? 'Tú' : 'Agente'}:</strong> ${text.replace(/\n/g, '<br>')}`;
+    var cssClass = 'message ' + role + '-msg';
+    if (extraClass) cssClass += ' ' + extraClass;
+    div.className = cssClass;
+    div.innerHTML = '<strong>' + (role === 'user' ? 'Tú' : 'Agente') + ':</strong> ' + text.replace(/\n/g, '<br>');
     document.getElementById('chatArea').appendChild(div);
     document.getElementById('chatArea').scrollTop = document.getElementById('chatArea').scrollHeight;
 }
 
 // ---- Agent Monitoring (Console) ----
-// BUG-002 FIX: Reestructurado para que los mensajes informativos se consuman
-// SIEMPRE, incluso cuando el agente ya terminó. La lógica anterior solo
-// consultaba info_messages si (active || running), lo que causaba que los
-// mensajes se perdieran cuando el agente finalizaba entre polls.
+// BUG-021 FIX: Mensajes informativos se muestran EN EL CHAT en tiempo real
+// (no solo en la auditoría). Polling reducido a 1s para mejor respuesta.
 async function startAgentMonitoring() {
     if (agentMonitorInterval) clearInterval(agentMonitorInterval);
     document.getElementById('interruptBtn').classList.remove('hidden');
@@ -832,21 +887,23 @@ async function startAgentMonitoring() {
     agentMonitorInterval = setInterval(async () => {
         const statusRes = await apiCall('/api/agent/status');
 
-        // BUG-002 FIX: Reiniciar contador solo cuando cambia la sesión
+        // Reiniciar contador solo cuando cambia la sesión
         if (statusRes.current_session_id && statusRes.current_session_id !== lastSessionId) {
             lastSessionId = statusRes.current_session_id;
             lastInfoMessageCount = 0;
         }
 
-        // BUG-002 FIX: Consumir info_messages SIEMPRE, independientemente
-        // de si el agente está corriendo o ya terminó
+        // BUG-021 FIX: Consumir info_messages SIEMPRE y mostrarlos en el CHAT
+        // (antes solo aparecían en la consola de auditoría)
         if (statusRes.info_messages && Array.isArray(statusRes.info_messages)) {
             const currentCount = statusRes.info_messages.length;
             if (currentCount > lastInfoMessageCount && currentCount > 0) {
                 const newMessages = statusRes.info_messages.slice(lastInfoMessageCount);
                 newMessages.forEach(function(msg) {
+                    // Toast flotante (notificación visual inmediata)
                     showInfoToast(msg);
-                    addMessage('agent', '[i] ' + msg);
+                    // Mensaje en el chat con estilo distintivo (fondo azul semitransparente)
+                    addMessage('agent', 'ℹ️ ' + msg, 'info-msg');
                 });
                 lastInfoMessageCount = currentCount;
             }
@@ -854,7 +911,8 @@ async function startAgentMonitoring() {
 
         // Mostrar mensaje final si el agente terminó
         if (statusRes.finished && statusRes.final_message) {
-            showInfoToast('✓ ' + statusRes.final_message);
+            addMessage('agent', '✅ ' + statusRes.final_message, 'final-msg');
+            showInfoToast('✅ Tarea completada: ' + statusRes.final_message);
             // Limpiar el intervalo después de mostrar el mensaje final
             setTimeout(() => {
                 if (agentMonitorInterval) {
@@ -906,7 +964,7 @@ async function startAgentMonitoring() {
             agentQuestionShown = false;
             agentPlanShown = false;
         }
-    }, 1500);
+    }, 1000); // BUG-021: reducido de 1500ms a 1000ms para mejor tiempo real
 }
 
 function renderConsoleSteps(steps) {
@@ -976,14 +1034,9 @@ document.getElementById('closeCaptchaBtn').onclick = () => {
 };
 
 // ---- Agent Question Modal ----
-// NOTA: El modal se abre desde startAgentMonitoring cuando detecta
-// esperando_respuesta_usuario === true en el endpoint /api/agent/status.
-// BUG-016 FIX: Al responder, se guarda la respuesta en el chat visible
-// y también se persiste en el backend (agent_responder ahora guarda en sesión).
 document.getElementById('submitAgentResponseBtn').onclick = async () => {
     const respuesta = document.getElementById('agentQuestionResponse').value.trim();
     if (!respuesta) return;
-    // BUG-016 FIX: Mostrar la respuesta del usuario en el chat inmediatamente
     addMessage('user', respuesta);
     await apiCall('/api/agent/responder', 'POST', { respuesta });
     document.getElementById('agentQuestionModal').classList.add('hidden');
@@ -991,8 +1044,6 @@ document.getElementById('submitAgentResponseBtn').onclick = async () => {
 };
 
 // ---- Agent Plan Modal ----
-// NOTA: El modal se abre desde startAgentMonitoring cuando detecta
-// esperando_aprobacion_plan === true en el endpoint /api/agent/status.
 document.getElementById('approvePlanBtn').onclick = async () => {
     await apiCall('/api/agent/aprobar_plan', 'POST', { aprobado: true });
     document.getElementById('agentPlanModal').classList.add('hidden');
