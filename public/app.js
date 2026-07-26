@@ -678,9 +678,12 @@ async function loadChatHistory() {
                 </div>
             `).join('');
         } else {
+        } else {
             list.innerHTML = '<div style="color:var(--text-muted);font-size:12px;">Sin historial</div>';
         }
     } catch(e) {}
+}
+
 async function loadChat(sessionId) {
     try {
         const res = await apiCall('/api/chats/' + sessionId);
@@ -696,11 +699,8 @@ async function loadChat(sessionId) {
         }
     } catch(e) {}
 }
+
 document.getElementById('newChatBtn').onclick = () => {
-    currentSessionId = null;
-    document.getElementById('chatArea').innerHTML = '<div class="message system-msg"><strong>Sistema:</strong> Nuevo chat iniciado.</div>';
-    document.getElementById('consoleArea').innerHTML = '<div class="console-empty">El agente está inactivo.</div>';
-    loadChatHistory();
 };
 
 // ============================================================================
