@@ -2,12 +2,24 @@
 
 ## Bugs Corregidos (Sesión 2025-2026)
 
+### BUG-007: Rutas incorrectas en integration_tests.rs (../src/ en lugar de src/)
+- **Causa real**: `std::fs::read_to_string("../src/main.rs")` usa el CWD (raíz del proyecto) como base, no el directorio del archivo fuente. `../src/` desde la raíz del proyecto apunta a `C:\Users\Fa\Desktop\Auto IAF\src\` que NO existe.
+- **Fix aplicado**: Reemplazar `"../src/` por `"src/` en las 11 rutas del test `archivos_fuente_principales_tienen_llaves_balanceadas`.
+- **Diferencia clave**: `include_str!("../src/agent.rs")` es relativo al archivo fuente (correcto). `std::fs::read_to_string("../src/agent.rs")` es relativo al CWD (incorrecto; debe ser `src/agent.rs`).
+- **Verificación**: Test `archivos_fuente_principales_tienen_llaves_balanceadas` en `integration_tests.rs`.
+
+### BUG-006: Función sin cuerpo en exhaustive_tests.rs (línea 828)
+- **Causa real**: `fn estado_agente_con_todos_los_campos_null_o_default()` estaba declarada en línea 828 sin bloque `{ }`. El compilador interpretaba el siguiente `#[test]` como parte de la función.
+- **Fix aplicado**: Eliminar las líneas 827-828 (`#[test]` + declaración de función sin cuerpo).
+- **Por qué no fue detectado**: El archivo ya tenía BUG-005 (unclosed delimiter), por lo que nunca compiló. Al arreglar BUG-005, el compilador encontró BUG-006.
+- **Verificación**: El archivo ahora tiene 1842 líneas (2 menos). La transición entre `extension_con_numeros` y `edge008_nombre_archivo_solo_extension` es limpia.
+
 ### BUG-005: Unclosed delimiter en exhaustive_tests.rs impide compilación
-- **Causa real**: `mod regression_new_bugs {` (línea 974) nunca tenía `}` de cierre. Los 7 módulos posteriores (`user_requested_test_names`, `additional_regression_tests`, dos `stress_tests`, dos `fault_injection_tests`, `additional_edge_case_tests`, `e2e_tests`, `regression_historical`) estaban anidados dentro de `regression_new_bugs` sin que este se cerrara.
+- **Causa real**: `mod regression_new_bugs {` (línea 974) nunca tenía `}` de cierre. Los 7 módulos posteriores estaban anidados dentro de `regression_new_bugs` sin que este se cerrara.
 - **Fix aplicado**: Insertar `}` después de la línea 1099 (después de `agent_rs_local_prompt_overridea_global`, el último test de `regression_new_bugs`).
-- **Por qué no fue detectado**: El error estaba EN el archivo de tests. Los tests usan `include_str!` para verificar archivos fuente, pero si el archivo de tests no compila, ningún test se ejecuta. Los tests no pueden verificar su propio archivo.
-- **Solución de prevención**: Se agregó `mod test_file_integrity_tests` en `integration_tests.rs` (archivo separado) que usa `include_str!("exhaustive_tests.rs")` para verificar balance de llaves, paréntesis y corchetes en todos los archivos fuente y de tests. Si hay un unclosed delimiter, este test falla ANTES de que se intente compilar el archivo problemático.
-- **Verificación**: Tests `exhaustive_tests_rs_tiene_llaves_balanceadas`, `integration_tests_rs_tiene_llaves_balanceadas`, `archivos_fuente_principales_tienen_llaves_balanceadas`, `app_js_tiene_delimitadores_balanceados` en `tests/integration_tests.rs`.
+- **Por qué no fue detectado**: El error estaba EN el archivo de tests. Si el archivo no compila, ningún test se ejecuta.
+- **Solución de prevención**: Se agregó `mod test_file_integrity_tests` en `integration_tests.rs` (archivo separado) que usa `include_str!("exhaustive_tests.rs")` para verificar balance de llaves.
+- **Verificación**: Tests en `tests/integration_tests.rs`.
 
 ### BUG-001: No puede analizar PDFs ni .docx
 - **Causa real**: El `read_file` handler en `agent.rs` solo usaba `fs::read_to_string()`. No detectaba extensiones `.pdf` ni `.docx`.
@@ -15,7 +27,7 @@
   1. Se agregó `fn extract_text_from_docx()` que usa `zip::ZipArchive` + `quick_xml::Reader` para parsear DOCX nativamente.
   2. Se agregó detección de extensión en `read_file`: si es `.pdf` → `pdf_extract::extract_text()`, si es `.docx` → `extract_text_from_docx()`.
   3. Dependencias agregadas en Cargo.toml: `pdf-extract = "0.7"`, `zip = "0.6"`, `quick-xml = "0.31"`.
-- **Verificación**: Tests `agent_rs_contiene_extract_text_from_docx`, `agent_rs_usa_pdf_extract_nativo_no_pdftotext`, `agent_rs_read_file_detecta_extension_pdf_docx` en `exhaustive_tests.rs`.
+- **Verificación**: Tests en `exhaustive_tests.rs` y `integration_tests.rs` (módulo `regression_bugs_tests`).
 
 ### BUG-002: El frontend no muestra los mensajes informativos en tiempo real
 - **Causa real**: 
@@ -23,60 +35,46 @@
   2. Cuando el agente terminaba (`running=false`), el frontend iba al `else` y nunca veía los últimos mensajes.
   3. `finalizar_tarea` en `agent.rs` hacía `info_messages.clear()` borrando mensajes pendientes.
 - **Fix aplicado**:
-  1. `app.js`: El consumo de `info_messages` se mueve ANTES del chequeo `active || running`, para que se consuman SIEMPRE.
-  2. `agent.rs`: `finalizar_tarea` YA NO hace `info_messages.clear()`. Los mensajes persisten para que el frontend los consuma.
+  1. `app.js`: El consumo de `info_messages` se mueve ANTES del chequeo `active || running`.
+  2. `agent.rs`: `finalizar_tarea` YA NO hace `info_messages.clear()`.
   3. `state.rs`: `ActiveAgentStatus` tiene campo `info_messages: Vec<String>`.
   4. `main.rs`: `get_agent_status` incluye `info_messages` y `final_message` en la respuesta JSON.
-- **Verificación**: Tests `app_js_muestra_info_messages_incluso_con_agente_terminado`, `agent_rs_notificar_usuario_push_info_messages`, `agent_rs_finalizar_tarea_no_limpia_info_messages` en `exhaustive_tests.rs`.
+- **Verificación**: Tests en `exhaustive_tests.rs` y `integration_tests.rs`.
 
 ### BUG-004: finalizar_tarea devuelve error "No se proporcionó URL"
-- **Causa real**: El handler de `finalizar_tarea` estaba en una sola línea (ilegible), y el agente a veces confundía el error de `image_fetch` ("No se proporcionó URL") con `finalizar_tarea`.
-- **Fix aplicado**: `finalizar_tarea` refactorizado a múltiples líneas, con validación de `mensaje_final` vacío, y sin referencia a `url`. Ahora limpia correctamente flags (`esperando_respuesta_usuario`, `esperando_aprobacion_plan`) y NO limpia `info_messages` (BUG-002).
-- **Verificación**: Tests `agent_rs_finalizar_tarea_refactorizado_multilinea`, `agent_rs_finalizar_tarea_usa_mensaje_final_no_url`, `finalizar_tarea_mensaje_vacio_usa_default` en `exhaustive_tests.rs`.
+- **Causa real**: El handler de `finalizar_tarea` estaba en una sola línea (ilegible), y el agente confundía el error de `image_fetch` con `finalizar_tarea`.
+- **Fix aplicado**: `finalizar_tarea` refactorizado a múltiples líneas, con validación de `mensaje_final` vacío, sin referencia a `url`.
+- **Verificación**: Tests en `exhaustive_tests.rs` y `integration_tests.rs`.
 
 ### BUG: addMessage duplicada en app.js (no se puede empezar conversación)
-- **Causa real**: La función `addMessage` estaba definida DOS VECES en `app.js` (líneas 829-830 y 831-837). La primera definición estaba incompleta (solo `const div = document.createElement('div');` sin cierre de llave ni cuerpo completo). Esto causaba error de sintaxis JS y rompía todo el flujo de chat.
-- **Fix**: Eliminadas las líneas duplicadas (829-830), dejando una sola definición completa de `addMessage`.
-- **Verificación**: Test `app_js_add_message_definida_una_sola_vez` en `exhaustive_tests.rs`.
+- **Causa real**: `addMessage` definida DOS VECES, la primera incompleta (solo `const div = document.createElement('div');` sin cuerpo).
+- **Fix**: Eliminadas líneas duplicadas, dejando una sola definición completa.
+- **Verificación**: Test `app_js_add_message_definida_una_sola_vez` y `addmessage_app_js_definida_una_sola_vez`.
 
-### BUG: No carga el perfil en modo estudio en el frontend (arreglado previamente)
+### BUG: No carga el perfil en modo estudio en el frontend
 - **Fix**: `StudyEngine` usa rutas correctas: `.config/data/<username>/profile.json`, `learnings.json`, `teachingMethod.json`.
-- **Verificación**: Tests en `integration_tests.rs` — `study_engine_nuevo_carga_perfiles_desde_disco`, `study_engine_save_profile_crea_archivo_en_disco`.
+- **Verificación**: Tests en `integration_tests.rs` y `exhaustive_tests.rs`.
 
-### BUG: No ve el system prompt local ni el perfil ni el directorio del proyecto (arreglado previamente)
-- **Fix**: `agent.rs` `run_agent_loop` carga `local_prompt` desde `state.prompts.projects` y `global_prompt` desde `state.prompts.global_current`.
-- El directorio del proyecto se obtiene con `get_project_path()`.
-- **Verificación**: Tests `agent_rs_recibe_project_name_y_local_prompt`, `agent_rs_usa_get_project_path`, `agent_rs_local_prompt_overridea_global` en `exhaustive_tests.rs`.
+### BUG: No ve el system prompt local ni el perfil ni el directorio del proyecto
+- **Fix**: `agent.rs` carga `local_prompt` desde `state.prompts.projects` y `global_prompt` desde `state.prompts.global_current`. Usa `get_project_path()` para el directorio.
+- **Verificación**: Tests en `exhaustive_tests.rs` y `integration_tests.rs`.
 
 ## Por qué estos bugs no fueron detectados por tests (Lección 2025-2026)
 
+### BUG-007 (rutas incorrectas)
+- `include_str!` usa rutas relativas al archivo fuente, pero `std::fs::read_to_string` usa el CWD.
+- **No hay forma de que el compilador detecte esto**: `std::fs::read_to_string` es runtime, no se evalúa en compilación.
+- **Solución**: Los tests ahora usan `include_str!` para archivos fuente conocidos y solo usan `std::fs::read_to_string` con rutas corregidas.
+
+### BUG-006 (función sin cuerpo)
+- **El archivo nunca compiló debido a BUG-005**, por lo que BUG-006 estaba oculto.
+- **Lección**: Los errores de sintaxis se encadenan. Arreglar uno revela el siguiente. Siempre verificar balance de llaves ANTES de intentar compilar.
+
 ### BUG-005 (unclosed delimiter)
 - **El error estaba en el propio archivo de tests. Si el archivo no compila, ningún test se ejecuta.**
-- Los tests de verificación de código fuente (`include_str!`) verifican archivos fuente, no el archivo de tests mismo.
-- **Solución**: Se agregaron tests de integridad en `integration_tests.rs` (archivo separado) que usan `include_str!` para leer `exhaustive_tests.rs` como texto y verificar balance de llaves. Como `integration_tests.rs` es un archivo independiente, compila aunque `exhaustive_tests.rs` tenga errores.
+- **Solución**: Tests de integridad en archivo separado (`integration_tests.rs`) que verifican `exhaustive_tests.rs` como texto.
 
-### BUG-001 (PDF/DOCX)
-- **Los tests existentes solo probaban extensiones `.txt`, `.rs`, `.md`.**
-- No había tests que verificaran que `read_file` detectara extensiones `.pdf` o `.docx`.
-- No había tests que verificaran que `fn extract_text_from_docx` existiera en el código.
-- **Solución**: Se agregaron tests de verificación de código fuente (`include_str!`) que validan la presencia de `fn extract_text_from_docx`, `pdf_extract::extract_text`, `zip::ZipArchive`, `quick_xml::Reader`.
-
-### BUG-002 (Mensajes informativos)
-- **No había tests que verificaran el contrato API frontend ↔ backend para `info_messages`.**
-- Los tests no simulaban el polling del frontend ni la race condition de agente terminado.
-- **Solución**: Se agregó test `app_js_muestra_info_messages_incluso_con_agente_terminado` que verifica que `info_messages` se consumen ANTES del chequeo `active || running`.
-
-### BUG-004 (finalizar_tarea URL)
-- **El código estaba en una sola línea, imposible de testear unitariamente.**
-- No había tests que verificaran el bloque de `finalizar_tarea` completo.
-- **Solución**: Se agregaron tests que verifican que `finalizar_tarea` tiene más de 10 líneas (refactorizado), que NO contiene `"url"`, y que maneja correctamente mensajes vacíos.
-
-### BUG: addMessage duplicada
-- **No había tests que contaran las definiciones de funciones en app.js.**
-- El validador detectaba "DEFINICIÓN DUPLICADA" pero se consideraba falso positivo.
-- **Solución**: Se agregó test `app_js_add_message_definida_una_sola_vez` que cuenta `matches("function addMessage")`.
-
-## Lección: Tests SIMULADOS vs REALES
+### Lección general: Tests SIMULADOS vs REALES
 - Los tests simulados (crear JSON y validar contra sí mismo) NO detectan bugs reales.
 - Los tests REALES deben usar:
   - `include_str!` para verificar código fuente
@@ -84,31 +82,40 @@
   - Verificación de posiciones relativas (`find()` / `rfind()`)
   - Serialización/deserialización real con `serde_json`
   - Creación de archivos reales en disco
-  - Llamadas a funciones reales del sistema
+
+## Verificación de bugs viejos (estado actual)
+
+| Bug | Estado | Evidencia en agent.rs |
+|-----|--------|-----------------------|
+| PDF/DOCX | ✅ Arreglado | `extract_text_from_docx()`, `pdf_extract::extract_text`, `zip::ZipArchive`, `quick_xml::Reader` |
+| finalizar_tarea URL | ✅ Arreglado | Refactorizado multi-línea, usa `mensaje_final`, sin campo `url` |
+| System prompt local | ✅ Arreglado | `load_local_prompt()`, `get_project_path()`, `Project Specific Prompt:` |
+| Mensajes en tiempo real | ✅ Arreglado | `showInfoToast` antes de `running`/`finished` en app.js, `info_messages` no se limpia |
+| addMessage duplicada | ✅ Arreglado | Exactamente 1 `function addMessage` en app.js |
+| Perfil estudio | ✅ Arreglado | `loadStudyProfile` en app.js, `/api/study/profile` en main.rs, `profile_exists_on_disk` en study.rs |
 
 ## APIs y comportamiento verificado
 - `POST /api/chat` spawnea el agente en `tokio::spawn` después de guardar el mensaje
 - `GET /api/agent/status` devuelve `{"status":"ok","active":bool,"finished":bool,"final_message":...,"info_messages":[...]}`
 - `POST /api/agent/responder` acepta `{"respuesta":"..."}` y limpia `esperando_respuesta_usuario`
 - `POST /api/agent/aprobar_plan` acepta `{"aprobar":bool}` y limpia `esperando_aprobacion_plan`
-- `GET /api/agent/steps` devuelve pasos de auditoría
-- `GET /api/agent/summary` devuelve resumen textual
 - `Path::extension()` para `.gitignore` devuelve `None` (el `.` inicial es parte del stem, no extensión)
+- `include_str!` es relativo al archivo fuente; `std::fs::read_to_string` es relativo al CWD
 
-## Cambios estructurales (v2.7)
-- `lib.rs` ahora expone: `pub mod utils; pub mod state; pub mod auth; pub mod study; pub mod desktop; pub mod sync;`
+## Cambios estructurales (v2.8)
+- `lib.rs`: `pub mod utils; pub mod state; pub mod auth; pub mod study; pub mod desktop; pub mod sync;`
 - `state.rs`: `ActiveAgentStatus` tiene `info_messages: Vec<String>`, `finished: bool`, `final_message: Option<String>`
-- `agent.rs`: `extract_text_from_docx()` para DOCX nativo, `pdf_extract::extract_text()` para PDF nativo, `finalizar_tarea` refactorizado a multi-línea
-- `app.js`: `startAgentMonitoring()` consume `info_messages` SIEMPRE, sin importar `running`/`finished`. `addMessage` sin duplicados.
-- `tests/integration_tests.rs`: Nuevo módulo `test_file_integrity_tests` con tests de balance de llaves en todos los archivos fuente y de tests.
-- `tests/exhaustive_tests.rs`: `mod regression_new_bugs` correctamente cerrado (BUG-005).
+- `agent.rs`: `extract_text_from_docx()`, `pdf_extract::extract_text()`, `finalizar_tarea` refactorizado, `load_local_prompt()`, `get_project_path()`
+- `app.js`: `startAgentMonitoring()` consume `info_messages` SIEMPRE. `addMessage` definida 1 vez. Balanceado: 252 `{}`, 745 `()`, 31 `[]`.
+- `tests/exhaustive_tests.rs`: BUG-005 y BUG-006 arreglados. 1842 líneas. Todos los módulos cerrados correctamente.
+- `tests/integration_tests.rs`: 1197 líneas. Módulos: `study_engine_tests`, `sanitize_filename_tests`, `active_agent_status_tests`, `docx_tests`, `user_store_tests`, `cicle_phase_tests`, `chat_session_tests`, `api_contract_tests`, `test_file_integrity_tests`, `regression_bugs_tests`.
 
 ## Dependencias agregadas
 - `pdf-extract = "0.7"` — extracción de texto de PDFs
-- `zip = "0.6"` — lectura de archivos DOCX (formato ZIP con XML interno)
-- `quick-xml = "0.31"` — parseo rápido del XML dentro de DOCX
+- `zip = "0.6"` — lectura de archivos DOCX
+- `quick-xml = "0.31"` — parseo rápido de XML en DOCX
 
-## Archivos de tests (v2.7)
-- `tests/exhaustive_tests.rs` — Tests de verificación de código fuente (include_str!), regresión, integración, estrés, inyección de fallos, casos límite, smoke tests, y tests de nuevos bugs descubiertos
-- `tests/integration_tests.rs` — Tests reales: StudyEngine con disco, UserStore con contraseñas, sanitize_filename, ActiveAgentStatus, DOCX, CiclePhase, ChatSession, contrato API, Y tests de integridad de archivos (balance de llaves)
-- `tests/frontend_regression_tests.js` — Tests de regresión del frontend (JS, ejecutar con Node)
+## Archivos de tests (v2.8)
+- `tests/exhaustive_tests.rs` (1842 líneas) — Source code verification, regresión, integración, estrés, inyección de fallos, casos límite, smoke tests
+- `tests/integration_tests.rs` (1197 líneas) — StudyEngine con disco, UserStore, sanitize_filename, ActiveAgentStatus, DOCX, CiclePhase, ChatSession, contrato API, integridad de archivos (balance de llaves), regresión de bugs viejos
+- `tests/frontend_regression_tests.js` — Tests de regresión del frontend (JS, Node)
