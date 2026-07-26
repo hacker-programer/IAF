@@ -979,3 +979,219 @@ mod test_file_integrity_tests {
             "JS ROTO: app.js tiene {} corchetes de apertura vs {} de cierre.", brackets_open, brackets_close);
     }
 }
+
+// ============================================================================
+// TESTS DE REGRESIÓN DE BUGS VIEJOS (Verificación de código fuente)
+// Estos tests usan include_str! para verificar que los fixes en el código
+// fuente sigan presentes. Si un fix se revierte, el test falla.
+// ============================================================================
+
+#[cfg(test)]
+mod regression_bugs_tests {
+    #![allow(unused_imports, unused_variables, unused_assignments, unused_mut)]
+
+    // =========================================================================
+    // BUG-001: No puede analizar PDFs ni .docx
+    // =========================================================================
+
+    #[test]
+    fn bug001_agent_rs_tiene_extract_text_from_docx() {
+        let src = include_str!("../src/agent.rs");
+        assert!(src.contains("fn extract_text_from_docx"),
+            "BUG-001 REGRESION: agent.rs no tiene fn extract_text_from_docx");
+        assert!(src.contains("zip::ZipArchive"),
+            "BUG-001 REGRESION: agent.rs no usa zip::ZipArchive");
+        assert!(src.contains("quick_xml::Reader"),
+            "BUG-001 REGRESION: agent.rs no usa quick_xml::Reader");
+    }
+
+    #[test]
+    fn bug001_agent_rs_usa_pdf_extract_nativo() {
+        let src = include_str!("../src/agent.rs");
+        assert!(src.contains("pdf_extract::extract_text"),
+            "BUG-001 REGRESION: agent.rs no usa pdf_extract::extract_text");
+        assert!(!src.contains("pdftotext"),
+            "BUG-001 REGRESION: agent.rs contiene pdftotext (debe usar pdf_extract nativo)");
+    }
+
+    #[test]
+    fn bug001_agent_rs_read_file_detecta_extensiones_pdf_docx() {
+        let src = include_str!("../src/agent.rs");
+        assert!(src.contains("ext == \"pdf\""),
+            "BUG-001 REGRESION: read_file no detecta extension .pdf");
+        assert!(src.contains("ext == \"docx\""),
+            "BUG-001 REGRESION: read_file no detecta extension .docx");
+    }
+
+    // =========================================================================
+    // BUG-002: El frontend no muestra mensajes informativos en tiempo real
+    // =========================================================================
+
+    #[test]
+    fn bug002_app_js_consume_info_messages_antes_de_check_active() {
+        let js = include_str!("../public/app.js");
+        let idx_info = js.find("info_messages").unwrap();
+        let remainder = &js[idx_info..];
+        let idx_active = remainder.find("statusRes.running").unwrap_or(usize::MAX);
+        let idx_finished = remainder.find("statusRes.finished").unwrap_or(usize::MAX);
+        let first_check = idx_active.min(idx_finished);
+        let idx_show = remainder.find("showInfoToast").unwrap();
+        assert!(idx_show < first_check,
+            "BUG-002 REGRESION: showInfoToast se llama DESPUES de chequear running/finished. Los mensajes no se muestran en tiempo real.");
+    }
+
+    #[test]
+    fn bug002_agent_rs_finalizar_tarea_no_limpia_info_messages() {
+        let src = include_str!("../src/agent.rs");
+        let finalizar_idx = src.find("\"finalizar_tarea\" =>").unwrap();
+        let next_tool = src[finalizar_idx..].find("\"image_fetch\" =>").unwrap_or(src.len() - finalizar_idx);
+        let block = &src[finalizar_idx..finalizar_idx + next_tool];
+        assert!(!block.contains("info_messages.clear()"),
+            "BUG-002 REGRESION: finalizar_tarea contiene info_messages.clear(). Los mensajes se pierden.");
+    }
+
+    #[test]
+    fn bug002_state_rs_active_agent_status_tiene_info_messages() {
+        let src = include_str!("../src/state.rs");
+        assert!(src.contains("info_messages: Vec<String>"),
+            "BUG-002 REGRESION: ActiveAgentStatus no tiene campo info_messages");
+    }
+
+    // =========================================================================
+    // BUG-004: finalizar_tarea devuelve error "No se proporcionó URL"
+    // =========================================================================
+
+    #[test]
+    fn bug004_agent_rs_finalizar_tarea_no_contiene_url() {
+        let src = include_str!("../src/agent.rs");
+        let finalizar_idx = src.find("\"finalizar_tarea\" =>").unwrap();
+        let next_tool = src[finalizar_idx..].find("\"image_fetch\" =>").unwrap_or(src.len() - finalizar_idx);
+        let block = &src[finalizar_idx..finalizar_idx + next_tool];
+        let url_count = block.matches("\"url\"").count();
+        assert_eq!(url_count, 0,
+            "BUG-004 REGRESION: finalizar_tarea contiene {} referencias a 'url'. Se confunde con image_fetch.", url_count);
+        assert!(block.contains("mensaje_final"),
+            "BUG-004 REGRESION: finalizar_tarea no usa mensaje_final.");
+    }
+
+    #[test]
+    fn bug004_agent_rs_finalizar_tarea_refactorizado_multilinea() {
+        let src = include_str!("../src/agent.rs");
+        let finalizar_idx = src.find("\"finalizar_tarea\" =>").unwrap();
+        let next_tool = src[finalizar_idx..].find("\"image_fetch\" =>").unwrap_or(src.len() - finalizar_idx);
+        let block = &src[finalizar_idx..finalizar_idx + next_tool];
+        let line_count = block.lines().count();
+        assert!(line_count > 10,
+            "BUG-004 REGRESION: finalizar_tarea solo tiene {} lineas. Debe estar refactorizado a multi-linea.", line_count);
+    }
+
+    // =========================================================================
+    // BUG: No carga el perfil en modo estudio en el frontend
+    // =========================================================================
+
+    #[test]
+    fn perfil_estudio_app_js_tiene_load_study_profile() {
+        let js = include_str!("../public/app.js");
+        assert!(js.contains("function loadStudyProfile"),
+            "REGRESION: app.js no tiene loadStudyProfile");
+        assert!(js.contains("/api/study/profile"),
+            "REGRESION: loadStudyProfile no llama a /api/study/profile");
+    }
+
+    #[test]
+    fn perfil_estudio_main_rs_tiene_endpoint_study_profile() {
+        let src = include_str!("../src/main.rs");
+        assert!(src.contains("/api/study/profile"),
+            "REGRESION: main.rs no tiene endpoint /api/study/profile");
+        assert!(src.contains("study_get_profile"),
+            "REGRESION: main.rs no tiene handler study_get_profile");
+    }
+
+    #[test]
+    fn perfil_estudio_study_rs_tiene_profile_exists_on_disk() {
+        let src = include_str!("../src/study.rs");
+        assert!(src.contains("profile_exists_on_disk"),
+            "REGRESION: study.rs no tiene profile_exists_on_disk");
+        assert!(src.contains("profile.json"),
+            "REGRESION: study.rs no referencia profile.json");
+    }
+
+    // =========================================================================
+    // BUG: No ve el system prompt local ni el perfil ni el directorio
+    // =========================================================================
+
+    #[test]
+    fn system_prompt_agent_rs_tiene_load_local_prompt() {
+        let src = include_str!("../src/agent.rs");
+        assert!(src.contains("load_local_prompt"),
+            "REGRESION: agent.rs no usa load_local_prompt");
+        assert!(src.contains("get_project_path"),
+            "REGRESION: agent.rs no usa get_project_path");
+        assert!(src.contains("Project Specific Prompt:"),
+            "REGRESION: agent.rs no incluye el prompt local en el system prompt");
+    }
+
+    #[test]
+    fn system_prompt_state_rs_tiene_metodos_load_prompt() {
+        let src = include_str!("../src/state.rs");
+        assert!(src.contains("fn load_global_prompt"),
+            "REGRESION: state.rs no tiene load_global_prompt");
+        assert!(src.contains("fn load_local_prompt"),
+            "REGRESION: state.rs no tiene load_local_prompt");
+        assert!(src.contains("globalPrompt.json"),
+            "REGRESION: load_global_prompt no lee globalPrompt.json");
+        assert!(src.contains("localPrompt.json"),
+            "REGRESION: load_local_prompt no lee localPrompt.json");
+    }
+
+    // =========================================================================
+    // BUG: No se puede empezar una conversación (addMessage duplicada)
+    // =========================================================================
+
+    #[test]
+    fn addmessage_app_js_definida_una_sola_vez() {
+        let js = include_str!("../public/app.js");
+        let count = js.matches("function addMessage").count();
+        assert_eq!(count, 1,
+            "REGRESION: addMessage definida {} veces. Debe ser exactamente 1.", count);
+    }
+
+    #[test]
+    fn addmessage_app_js_tiene_send_message_to_agent() {
+        let js = include_str!("../public/app.js");
+        assert!(js.contains("function sendMessageToAgent"),
+            "REGRESION: app.js no tiene sendMessageToAgent");
+        assert!(js.contains("/api/chat"),
+            "REGRESION: sendMessageToAgent no llama a /api/chat");
+    }
+
+    #[test]
+    fn addmessage_app_js_tiene_function_init() {
+        let js = include_str!("../public/app.js");
+        assert!(js.contains("function init"),
+            "REGRESION: app.js no tiene function init()");
+        assert!(js.contains("init()"),
+            "REGRESION: app.js no llama a init()");
+    }
+
+    // =========================================================================
+    // Tests de integridad de delimitadores en archivos fuente
+    // =========================================================================
+
+    #[test]
+    fn delimitadores_app_js_balanceados() {
+        let js = include_str!("../public/app.js");
+        let braces_open = js.matches('{').count();
+        let braces_close = js.matches('}').count();
+        assert_eq!(braces_open, braces_close,
+            "JS ROTO: {} llaves de apertura vs {} de cierre", braces_open, braces_close);
+        let parens_open = js.matches('(').count();
+        let parens_close = js.matches(')').count();
+        assert_eq!(parens_open, parens_close,
+            "JS ROTO: {} parentesis de apertura vs {} de cierre", parens_open, parens_close);
+        let brackets_open = js.matches('[').count();
+        let brackets_close = js.matches(']').count();
+        assert_eq!(brackets_open, brackets_close,
+            "JS ROTO: {} corchetes de apertura vs {} de cierre", brackets_open, brackets_close);
+    }
+}
