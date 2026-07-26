@@ -1403,9 +1403,24 @@ pub async fn run_agent_loop(
                                 save_chat_steps_to_disk(&state, &Some(s_id.clone()), &status.steps);
                             }
                         }
+                            // Renombrar el chat: el agente elige el titulo desde mensaje_final
+                            if let Some(ref chat_path) = status.current_chat_path {
+                                if let Ok(old_content) = std::fs::read_to_string(chat_path) {
+                                    if let Ok(mut session_json) = serde_json::from_str::<serde_json::Value>(&old_content) {
+                                        let new_title = final_msg.chars().take(60).collect::<String>();
+                                        let trimmed_title = new_title.trim().to_string();
+                                        if !trimmed_title.is_empty() {
+                                            session_json["title"] = serde_json::Value::String(trimmed_title);
+                                            let _ = std::fs::write(chat_path, serde_json::to_string_pretty(&session_json).unwrap_or(old_content));
+                                        }
+                                    }
+                                }
+                            }
+                        }
                         final_message = Some(final_msg);
                         "Tarea finalizada correctamente.".to_string()
-                    }                    "image_fetch" => {
+                    }
+                    "image_fetch" => {
                         let url = args["url"].as_str().unwrap_or("");
                         if url.is_empty() {
                             json!({"error": "No se proporcionÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³ URL"}).to_string()
