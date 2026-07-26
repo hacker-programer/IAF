@@ -1,4 +1,4 @@
-﻿#![allow(dead_code, unused_imports, unused_variables, unused_mut, unused_assignments, unused_must_use)]
+#![allow(dead_code, unused_imports, unused_variables, unused_mut, unused_assignments, unused_must_use)]
 use axum::{
     extract::{State, Json, Path as AxumPath},
     response::IntoResponse,
@@ -1050,7 +1050,7 @@ async fn chat_endpoint(
             }
         }
     } else {
-        let title = "Nueva conversaci\u00F3n".to_string();
+        let title = "Nueva conversación".to_string();
         ChatSession {
             id: session_id.clone(),
             title,
@@ -1075,6 +1075,7 @@ async fn chat_endpoint(
     // Iniciar agente en background (BUG #4 fix)
     {
         let mut agent = state.active_agent.lock().unwrap();
+        agent.current_chat_path = Some(save_path.to_string_lossy().to_string());
         if !agent.running {
             agent.running = true;
             agent.interrupted = false;
@@ -1093,11 +1094,6 @@ async fn chat_endpoint(
             agent.plan_propuesto = None;
             agent.pregunta_usuario = None;
             agent.current_session_id = Some(session_id.clone());
-
-            let state_bg = state.clone();
-            let session_bg = session.clone();
-            let sid_bg = session_id.clone();
-            let uname_bg = username.clone();
             let is_admin_bg = is_admin;
             let mode_bg = payload.mode.clone().unwrap_or_else(|| "programming".to_string());
             let dk = deepseek_key().to_string();
