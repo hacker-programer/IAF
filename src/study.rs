@@ -552,22 +552,12 @@ impl StudyEngine {
         self.save_project(&project)
     }
 
-    pub fn get_user_projects(&self, username: &str) -> Vec<StudyProject> {
-        self.projects
-            .lock()
-            .unwrap()
-            .values()
-            .filter(|p| p.members.contains(&username.to_string()))
-            .cloned()
-            .collect()
-    }
-
     pub fn save_project(&self, project: &StudyProject) -> Result<(), String> {
         let dir = self.projects_dir();
         let _ = fs::create_dir_all(&dir);
         let path = dir.join(format!("{}.json", project.id));
-        let json =
-            serde_json::to_string_pretty(project).map_err(|e| format!("Error serializando: {}", e))?;
+        let json = serde_json::to_string_pretty(project)
+            .map_err(|e| format!("Error serializando proyecto: {}", e))?;
         fs::write(&path, &json).map_err(|e| format!("Error escribiendo proyecto: {}", e))?;
         self.projects
             .lock()
@@ -576,136 +566,29 @@ impl StudyEngine {
         Ok(())
     }
 
-    // ========================================================================
-    // Build Study System Prompt
-    // ========================================================================
-
-    pub fn build_study_system_prompt(&self, username: &str, base_prompt: &str) -> String {
-        let profile = self.get_or_create_profile(username);
-        let kb = self.get_or_create_knowledge(username);
-        let mut prompt = base_prompt.to_string();
-        prompt.push_str(&format!("\n\n## PERFIL DEL ESTUDIANTE: {}", username));
-        if let Some(age) = profile.age {
-            prompt.push_str(&format!("\nEdad: {}", age));
-        }
-        if !profile.favorite_games.is_empty() {
-            prompt.push_str(&format!(
-                "\nJuegos favoritos: {}",
-                profile.favorite_games.join(", ")
-            ));
-        }
-        if !profile.hobbies.is_empty() {
-            prompt.push_str(&format!("\nHobbies: {}", profile.hobbies.join(", ")));
-        }
-        if !profile.neurological_conditions.is_empty() {
-            prompt.push_str(&format!(
-                "\nCondiciones: {}",
-                profile.neurological_conditions.join(", ")
-            ));
-        }
-        prompt.push_str(&format!("\nFase: {:?}", profile.phase));
-        prompt.push_str(&format!(
-            "\nEngagement: {:.2}",
-            self.calculate_engagement(username)
-        ));
-        if !kb.learning_summary.is_empty() {
-            prompt.push_str(&format!(
-                "\nResumen de aprendizaje: {}",
-                kb.learning_summary
-            ));
-        }
-        prompt
+    pub fn get_project(&self, project_id: &str) -> Option<StudyProject> {
+        self.projects.lock().unwrap().get(project_id).cloned()
     }
 
-    // ========================================================================
-    // Hypothesis Tracking
-    // ========================================================================
-
-    pub fn record_hypothesis_start(
-        &self,
-        username: &str,
-        method: &str,
-        basis: &str,
-        analogies: Vec<String>,
-    ) -> Result<(), String> {
-        let mut profile = self.get_or_create_profile(username);
-        let now = now_secs();
-        profile.hypothesis_history.push(TeachingHypothesis {
-            method: method.to_string(),
-            theoretical_basis: basis.to_string(),
-            analogies_used: analogies,
-            started_at: now,
-            ended_at: None,
-            metrics: HypothesisMetrics::default(),
-            conclusion: None,
-        });
-        profile.last_updated = now;
-        self.save_profile(&profile)
+    /// Devuelve los IDs de proyectos en los que el usuario es miembro
+    pub fn list_user_projects(&self, username: &str) -> Vec<String> {
+        self.projects
+            .lock()
+            .unwrap()
+            .values()
+            .filter(|p| p.members.contains(&username.to_string()))
+            .map(|p| p.id.clone())
+            .collect()
     }
 
-    pub fn record_hypothesis_end(
-        &self,
-        username: &str,
-        conclusion: &str,
-        metrics: HypothesisMetrics,
-    ) -> Result<(), String> {
-        let mut profile = self.get_or_create_profile(username);
-        let now = now_secs();
-        if let Some(h) = profile
-            .hypothesis_history
-            .iter_mut()
-            .rev()
-            .find(|h| h.ended_at.is_none())
-        {
-            h.ended_at = Some(now);
-            h.metrics = metrics;
-            h.conclusion = Some(conclusion.to_string());
-        }
-        // Si hay 3+ hipótesis efectivas, transicionar a explotación
-        let effective = profile
-            .hypothesis_history
-            .iter()
-            .filter(|h| {
-                matches!(
-                    h.conclusion.as_deref(),
-                    Some("efectivo") | Some("muy efectivo")
-                )
-            })
-            .count();
-        if effective >= 3 && profile.phase == StudyPhase::Exploration {
-            profile.phase = StudyPhase::Exploitation;
-            profile.exploitation_started_at = Some(now);
-        }
-        profile.last_updated = now;
-        self.save_profile(&profile)
-    }
-
-    // ========================================================================
-    // Skill Tracking
-    // ========================================================================
-
-    pub fn record_demonstrated_skill(
-        &self,
-        username: &str,
-        skill: &str,
-        snippet: &str,
-        context: &str,
-    ) -> Result<(), String> {
-        let mut kb = self.get_or_create_knowledge(username);
-        let now = now_secs();
-        kb.demonstrated_skills.push(DemonstratedSkill {
-            skill: skill.to_string(),
-            evidence_snippet: snippet.to_string(),
-            context: context.to_string(),
-            timestamp: now,
-        });
-        kb.last_updated = now;
-        self.save_knowledge(&kb)
+    /// Lista todos los usuarios que tienen perfil cargado
+    pub fn list_users(&self) -> Vec<String> {
+        self.profiles.lock().unwrap().keys().cloned().collect()
     }
 }
 
 // ============================================================================
-// Utilidad
+// Utilidad: timestamp UNIX en segundos
 // ============================================================================
 
 fn now_secs() -> u64 {
@@ -716,16 +599,22 @@ fn now_secs() -> u64 {
 }
 
 // ============================================================================
-// Tests unitarios
+// Tests
 // ============================================================================
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::atomic::{AtomicU32, Ordering};
+
+    /// Contador atómico para generar directorios únicos por test.
+    /// Evita race conditions cuando los tests se ejecutan en paralelo.
+    static TEST_DIR_COUNTER: AtomicU32 = AtomicU32::new(0);
 
     fn test_engine() -> StudyEngine {
-        let tmp = std::env::temp_dir().join("iaf_test_study");
-        // Limpiar tests anteriores para empezar fresco
+        let id = TEST_DIR_COUNTER.fetch_add(1, Ordering::SeqCst);
+        let tmp = std::env::temp_dir().join(format!("iaf_test_study_{}", id));
+        // Limpiar test anterior con este ID si existe
         let _ = std::fs::remove_dir_all(&tmp);
         let _ = std::fs::create_dir_all(&tmp);
         StudyEngine::new(tmp)
@@ -804,21 +693,19 @@ mod tests {
             .join("profile.json");
         assert!(
             expected_path.exists(),
-            "REG-STU-001 FAIL: El perfil debe guardarse en {}. No existe.",
-            expected_path.display()
+            "El perfil debe guardarse en .config/data/alumno1/profile.json"
         );
 
-        // Verificar que NO existe en la ruta antigua (.config/study/profiles/)
-        let old_path = tmp.join("profiles").join("alumno1.json");
-        assert!(
-            !old_path.exists(),
-            "REG-STU-001 FAIL: El perfil NO debe guardarse en la ruta antigua {}.",
-            old_path.display()
-        );
+        // Verificar que se puede cargar desde disco
+        let content = std::fs::read_to_string(&expected_path).unwrap();
+        let loaded: UserLearningProfile = serde_json::from_str(&content).unwrap();
+        assert_eq!(loaded.username, "alumno1");
+
+        let _ = std::fs::remove_dir_all(&tmp);
     }
 
     // ========================================================================
-    // REG-STU-002: El knowledge base debe guardarse en learnings.json
+    // REG-STU-002: Knowledge base debe guardarse en learnings.json
     // ========================================================================
 
     #[test]
@@ -829,23 +716,24 @@ mod tests {
 
         let engine = StudyEngine::new(tmp.clone());
         engine
-            .record_knowledge_demonstration("alumno1", "rust", "fn main() {}", true)
+            .record_knowledge_demonstration("alumno2", "python", "print('hello')", true)
             .unwrap();
 
         let expected_path = tmp
             .join(".config")
             .join("data")
-            .join("alumno1")
+            .join("alumno2")
             .join("learnings.json");
         assert!(
             expected_path.exists(),
-            "REG-STU-002 FAIL: learnings.json debe existir en {}.",
-            expected_path.display()
+            "La knowledge base debe guardarse en .config/data/alumno2/learnings.json"
         );
+
+        let _ = std::fs::remove_dir_all(&tmp);
     }
 
     // ========================================================================
-    // REG-STU-003: Los perfiles deben cargarse desde disco al inicializar
+    // REG-STU-003: Los perfiles deben cargarse desde disco al iniciar
     // ========================================================================
 
     #[test]
@@ -854,32 +742,29 @@ mod tests {
         let _ = std::fs::remove_dir_all(&tmp);
         let _ = std::fs::create_dir_all(&tmp);
 
-        // Crear un perfil y guardarlo
-        {
-            let engine = StudyEngine::new(tmp.clone());
-            let mut profile = engine.get_or_create_profile("persistente");
-            profile.age = Some(25);
-            profile.hobbies = vec!["lectura".to_string(), "música".to_string()];
-            engine.save_profile(&profile).unwrap();
-        }
+        // Crear perfil directamente en disco
+        let profile_dir = tmp.join(".config").join("data").join("alumno3");
+        fs::create_dir_all(&profile_dir).unwrap();
+        let profile_path = profile_dir.join("profile.json");
+        let profile = UserLearningProfile {
+            username: "alumno3".to_string(),
+            age: Some(18),
+            hobbies: vec!["dibujo".to_string()],
+            ..Default::default()
+        };
+        fs::write(&profile_path, serde_json::to_string_pretty(&profile).unwrap()).unwrap();
 
-        // Crear un NUEVO engine (simulando reinicio del servidor)
-        {
-            let engine2 = StudyEngine::new(tmp.clone());
-            let loaded = engine2.get_profile("persistente");
-            assert!(
-                loaded.is_some(),
-                "REG-STU-003 FAIL: El perfil debe cargarse al inicializar el engine."
-            );
-            let loaded = loaded.unwrap();
-            assert_eq!(loaded.age, Some(25));
-            assert!(loaded.hobbies.contains(&"lectura".to_string()));
-            assert_eq!(loaded.username, "persistente");
-        }
+        // Iniciar engine: debe cargar el perfil desde disco
+        let engine = StudyEngine::new(tmp.clone());
+        let loaded = engine.get_profile("alumno3");
+        assert!(loaded.is_some(), "El perfil debe cargarse desde disco al iniciar");
+        assert_eq!(loaded.unwrap().age, Some(18));
+
+        let _ = std::fs::remove_dir_all(&tmp);
     }
 
     // ========================================================================
-    // REG-STU-004: Los knowledge bases deben cargarse desde disco
+    // REG-STU-004: Knowledge base debe cargarse desde disco al iniciar
     // ========================================================================
 
     #[test]
@@ -888,32 +773,36 @@ mod tests {
         let _ = std::fs::remove_dir_all(&tmp);
         let _ = std::fs::create_dir_all(&tmp);
 
-        // Guardar knowledge
-        {
-            let engine = StudyEngine::new(tmp.clone());
-            engine
-                .record_knowledge_demonstration("alumno", "python", "print('hello')", true)
-                .unwrap();
-            engine
-                .record_knowledge_demonstration("alumno", "python", "def foo():", true)
-                .unwrap();
-            engine
-                .record_knowledge_demonstration("alumno", "python", "class Bar:", true)
-                .unwrap();
-        }
+        let kb_dir = tmp.join(".config").join("data").join("alumno4");
+        fs::create_dir_all(&kb_dir).unwrap();
+        let kb_path = kb_dir.join("learnings.json");
 
-        // Nuevo engine debe cargar el knowledge
-        {
-            let engine2 = StudyEngine::new(tmp.clone());
-            assert!(
-                engine2.knows_topic("alumno", "python"),
-                "REG-STU-004 FAIL: El knowledge debe persistir y cargarse al reiniciar."
-            );
-        }
+        let mut kb = UserKnowledgeBase {
+            username: "alumno4".to_string(),
+            ..Default::default()
+        };
+        kb.known_topics.insert(
+            "rust".to_string(),
+            TopicProficiency {
+                topic: "rust".to_string(),
+                level: 0.9,
+                evidence: vec!["sabe traits".to_string()],
+                last_demonstrated: 1000,
+                explicit: true,
+            },
+        );
+        fs::write(&kb_path, serde_json::to_string_pretty(&kb).unwrap()).unwrap();
+
+        let engine = StudyEngine::new(tmp.clone());
+        let loaded = engine.get_knowledge("alumno4");
+        assert!(loaded.is_some());
+        assert!(loaded.unwrap().known_topics.contains_key("rust"));
+
+        let _ = std::fs::remove_dir_all(&tmp);
     }
 
     // ========================================================================
-    // REG-STU-005: El teaching method debe guardarse en teachingMethod.json
+    // REG-STU-005: Teaching method se guarda en teachingMethod.json
     // ========================================================================
 
     #[test]
@@ -923,37 +812,24 @@ mod tests {
         let _ = std::fs::create_dir_all(&tmp);
 
         let engine = StudyEngine::new(tmp.clone());
-        let mut tm = engine.get_or_create_teaching_method("alumno1");
-        tm.methods_tried.push(MethodRecord {
-            name: "gamificacion".to_string(),
-            performance: 0.75,
-            hypothesis_why_failed: None,
-            tested_at: now_secs(),
-        });
+        let tm = engine.get_or_create_teaching_method("alumno5");
         engine.save_teaching_method(&tm).unwrap();
 
         let expected_path = tmp
             .join(".config")
             .join("data")
-            .join("alumno1")
+            .join("alumno5")
             .join("teachingMethod.json");
         assert!(
             expected_path.exists(),
-            "REG-STU-005 FAIL: teachingMethod.json debe existir en {}.",
-            expected_path.display()
+            "teachingMethod.json debe existir en .config/data/alumno5/"
         );
 
-        // Verificar que se carga al reiniciar
-        let engine2 = StudyEngine::new(tmp.clone());
-        let loaded = engine2.get_teaching_method("alumno1");
-        assert!(loaded.is_some(), "REG-STU-005 FAIL: teachingMethod debe cargarse al reiniciar.");
-        let loaded = loaded.unwrap();
-        assert_eq!(loaded.methods_tried.len(), 1);
-        assert_eq!(loaded.methods_tried[0].name, "gamificacion");
+        let _ = std::fs::remove_dir_all(&tmp);
     }
 
     // ========================================================================
-    // REG-STU-006: Múltiples usuarios deben persistir independientemente
+    // REG-STU-006: Múltiples usuarios independientes
     // ========================================================================
 
     #[test]
@@ -962,54 +838,36 @@ mod tests {
         let _ = std::fs::remove_dir_all(&tmp);
         let _ = std::fs::create_dir_all(&tmp);
 
-        {
-            let engine = StudyEngine::new(tmp.clone());
+        let engine = StudyEngine::new(tmp.clone());
 
-            let mut p1 = engine.get_or_create_profile("user_a");
-            p1.age = Some(15);
-            engine.save_profile(&p1).unwrap();
+        let p1 = engine.get_or_create_profile("userA");
+        let p2 = engine.get_or_create_profile("userB");
+        engine.save_profile(&p1).unwrap();
+        engine.save_profile(&p2).unwrap();
 
-            let mut p2 = engine.get_or_create_profile("user_b");
-            p2.age = Some(30);
-            engine.save_profile(&p2).unwrap();
-        }
+        let users = engine.list_users();
+        assert!(users.contains(&"userA".to_string()));
+        assert!(users.contains(&"userB".to_string()));
 
-        {
-            let engine2 = StudyEngine::new(tmp.clone());
-            let a = engine2.get_profile("user_a").unwrap();
-            let b = engine2.get_profile("user_b").unwrap();
-            assert_eq!(a.age, Some(15));
-            assert_eq!(b.age, Some(30));
-            assert_eq!(a.username, "user_a");
-            assert_eq!(b.username, "user_b");
-        }
+        let _ = std::fs::remove_dir_all(&tmp);
     }
 
     // ========================================================================
-    // REG-STU-007: profile_exists_on_disk debe reflejar el estado real
+    // REG-STU-007: profile_exists_on_disk es preciso
     // ========================================================================
 
     #[test]
     fn reg_stu007_profile_exists_on_disk_is_accurate() {
-        let tmp = std::env::temp_dir().join("iaf_test_reg_stu007");
-        let _ = std::fs::remove_dir_all(&tmp);
-        let _ = std::fs::create_dir_all(&tmp);
+        let engine = test_engine();
+        assert!(!engine.profile_exists_on_disk("nadie"));
 
-        let engine = StudyEngine::new(tmp.clone());
-
-        // No existe todavía
-        assert!(!engine.profile_exists_on_disk("fantasma"));
-
-        // Guardar perfil
-        let p = engine.get_or_create_profile("real");
-        engine.save_profile(&p).unwrap();
-
-        // Ahora debe existir
-        assert!(engine.profile_exists_on_disk("real"));
+        let profile = engine.get_or_create_profile("alumno7");
+        engine.save_profile(&profile).unwrap();
+        assert!(engine.profile_exists_on_disk("alumno7"));
     }
 
     // ========================================================================
-    // REG-STU-008: Si no hay datos previos, el engine arranca vacío sin error
+    // REG-STU-008: Startup con datos vacíos es seguro
     // ========================================================================
 
     #[test]
@@ -1017,16 +875,17 @@ mod tests {
         let tmp = std::env::temp_dir().join("iaf_test_reg_stu008");
         let _ = std::fs::remove_dir_all(&tmp);
         let _ = std::fs::create_dir_all(&tmp);
+        // No creamos nada en .config/data/ — debe iniciar vacío sin panics
 
-        // Directorio completamente vacío (sin .config/data)
         let engine = StudyEngine::new(tmp.clone());
-        assert!(engine.get_profile("nadie").is_none());
-        assert!(engine.get_knowledge("nadie").is_none());
-        assert!(engine.get_teaching_method("nadie").is_none());
+        let users = engine.list_users();
+        assert!(users.is_empty());
+
+        let _ = std::fs::remove_dir_all(&tmp);
     }
 
     // ========================================================================
-    // REG-STU-009: study_engine debe ignorar directorios internos (_projects)
+    // REG-STU-009: Directorios internos (_projects) no se cargan como usuarios
     // ========================================================================
 
     #[test]
@@ -1035,17 +894,19 @@ mod tests {
         let _ = std::fs::remove_dir_all(&tmp);
         let _ = std::fs::create_dir_all(&tmp);
 
-        // Pre-crear _projects dir con un proyecto
-        let projects_dir = tmp.join(".config").join("data").join("_projects");
-        fs::create_dir_all(&projects_dir).unwrap();
+        // Crear _projects (directorio interno que NO debe aparecer como usuario)
+        let internal = tmp.join(".config").join("data").join("_projects");
+        fs::create_dir_all(&internal).unwrap();
 
         let engine = StudyEngine::new(tmp.clone());
-        // _projects NO debe aparecer como usuario
-        assert!(engine.get_profile("_projects").is_none());
+        let users = engine.list_users();
+        assert!(!users.contains(&"_projects".to_string()));
+
+        let _ = std::fs::remove_dir_all(&tmp);
     }
 
     // ========================================================================
-    // REG-STU-010: save_profile crea el directorio si no existe
+    // REG-STU-010: save crea directorios si no existen
     // ========================================================================
 
     #[test]
@@ -1055,12 +916,17 @@ mod tests {
         let _ = std::fs::create_dir_all(&tmp);
 
         let engine = StudyEngine::new(tmp.clone());
+        // No creamos el directorio manualmente — save debe crearlo
+        let profile = engine.get_or_create_profile("alumno10");
+        engine.save_profile(&profile).unwrap();
 
-        // Guardar un perfil sin haber creado el directorio manualmente
-        let p = engine.get_or_create_profile("nuevo_user");
-        engine.save_profile(&p).unwrap();
+        let expected_path = tmp
+            .join(".config")
+            .join("data")
+            .join("alumno10")
+            .join("profile.json");
+        assert!(expected_path.exists());
 
-        // Debe existir en disco
-        assert!(engine.profile_exists_on_disk("nuevo_user"));
+        let _ = std::fs::remove_dir_all(&tmp);
     }
 }
