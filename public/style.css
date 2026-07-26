@@ -649,6 +649,25 @@ body {
     to { opacity: 1; transform: translateY(0); }
 }
 
+/* Toast de notificación flotante (usado por showInfoToast en app.js) */
+.info-toast {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    background: linear-gradient(135deg, #1a1a2e, #16213e);
+    color: #e0e0e0;
+    padding: 12px 20px;
+    border-radius: 8px;
+    border: 1px solid var(--accent);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+    z-index: 10000;
+    max-width: 400px;
+    font-size: 13px;
+    animation: slideIn 0.3s ease-out;
+    cursor: pointer;
+    word-break: break-word;
+}
+
 /* ===== User Badge ===== */
 .user-badge {
     font-size: 12px;
