@@ -676,7 +676,7 @@ mod api_contract_tests {
 
     #[test]
     fn api_agent_status_tiene_todos_los_campos() {
-        let src = include_str!("../src/main.rs");
+        let src = include_str!("src/main.rs");
         assert!(src.contains("get_agent_status"), "Falta get_agent_status en main.rs");
         assert!(src.contains("info_messages"), "get_agent_status no incluye info_messages");
         assert!(src.contains("final_message"), "get_agent_status no incluye final_message");
@@ -686,26 +686,26 @@ mod api_contract_tests {
 
     #[test]
     fn api_chat_endpoint_acepta_mode() {
-        let src = include_str!("../src/main.rs");
+        let src = include_str!("src/main.rs");
         assert!(src.contains("chat_endpoint"), "Falta chat_endpoint en main.rs");
         assert!(src.contains("payload.mode"), "chat_endpoint no procesa mode");
     }
 
     #[test]
     fn api_agent_responder_existe() {
-        let src = include_str!("../src/main.rs");
+        let src = include_str!("src/main.rs");
         assert!(src.contains("agent_responder"), "Falta agent_responder en main.rs");
     }
 
     #[test]
     fn api_agent_aprobar_plan_existe() {
-        let src = include_str!("../src/main.rs");
+        let src = include_str!("src/main.rs");
         assert!(src.contains("agent_approve_plan"), "Falta agent_approve_plan en main.rs");
     }
 
     #[test]
     fn api_agent_interrupt_existe() {
-        let src = include_str!("../src/main.rs");
+        let src = include_str!("src/main.rs");
         assert!(src.contains("agent_interrupt"), "Falta agent_interrupt en main.rs");
     }
 
@@ -856,17 +856,17 @@ mod test_file_integrity_tests {
     #[test]
     fn archivos_fuente_principales_tienen_llaves_balanceadas() {
         let files = vec![
-            "../src/main.rs",
-            "../src/agent.rs",
-            "../src/state.rs",
-            "../src/auth.rs",
-            "../src/study.rs",
-            "../src/validator.rs",
-            "../src/sub_agent.rs",
-            "../src/sync.rs",
-            "../src/scraper.rs",
-            "../src/desktop.rs",
-            "../src/client_protocol.rs",
+            "src/main.rs",
+            "src/agent.rs",
+            "src/state.rs",
+            "src/auth.rs",
+            "src/study.rs",
+            "src/validator.rs",
+            "src/sub_agent.rs",
+            "src/sync.rs",
+            "src/scraper.rs",
+            "src/desktop.rs",
+            "src/client_protocol.rs",
         ];
 
         for file_path in &files {
