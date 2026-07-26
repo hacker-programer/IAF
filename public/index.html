@@ -6,6 +6,16 @@
     <title>IAF — Intelligent Agent Framework</title>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
+    <!-- Markdown rendering -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <!-- LaTeX rendering -->
+    <script>
+        MathJax = {
+            tex: { inlineMath: [['$', '$'], ['\\(', '\\)']], displayMath: [['$$', '$$'], ['\\[', '\\]']] },
+            options: { skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre'] }
+        };
+    </script>
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
 </head>
 <body>
     <div class="glass-bg"></div>
@@ -134,6 +144,20 @@
                     <div class="chat-area" id="chatArea">
                         <div class="message system-msg"><strong>Sistema:</strong> Bienvenido a IAF. Selecciona un proyecto y modo para empezar.</div>
                     </div>
+                    <!-- Banner inline para pregunta del agente (NO modal full-screen) -->
+                    <div id="agentQuestionBanner" class="agent-question-banner hidden">
+                        <div class="agent-question-banner-content">
+                            <div class="agent-question-banner-icon">🤔</div>
+                            <div class="agent-question-banner-text">
+                                <strong>El agente necesita clarificación:</strong>
+                                <span id="agentQuestionPrompt"></span>
+                            </div>
+                        </div>
+                        <div class="agent-question-banner-actions">
+                            <textarea id="agentQuestionResponse" rows="2" placeholder="Tu respuesta..."></textarea>
+                            <button id="submitAgentResponseBtn" class="btn btn-success">Responder</button>
+                        </div>
+                    </div>
                     <footer class="footer">
                         <div class="input-container">
                             <textarea id="chatInput" placeholder="Escribe tu mensaje..."></textarea>
@@ -257,7 +281,7 @@
         </div>
     </div>
 
-    <!-- Modals (CAPTCHA, Refine, Questions, Plan) -->
+    <!-- Modals (CAPTCHA, Refine, Plan) — NOTA: agentQuestionModal eliminado, ahora es banner inline -->
     <div id="captchaModal" class="modal hidden">
         <div class="modal-content"><h3>Resolver CAPTCHA</h3><p>Abrí la página, resolvé el CAPTCHA y pegá el resultado:</p>
             <a id="captchaLink" href="#" target="_blank" class="btn btn-primary">Abrir página</a>
@@ -271,9 +295,6 @@
             <div class="form-group" style="margin-bottom:12px;"><label style="font-size:12px;color:var(--text-muted);">Instrucción adicional:</label><input type="text" id="refinePromptFeedback" placeholder="Correcciones..." style="width:100%;padding:8px;background:rgba(0,0,0,0.2);border:1px solid var(--border-color);border-radius:8px;color:var(--text-color);"></div>
             <div class="btn-group"><button id="applyRefinedPromptBtn" class="btn btn-success">Aplicar y Enviar</button><button id="reRefinePromptBtn" class="btn btn-warning">Re-Refinar</button><button id="cancelRefinedPromptBtn" class="btn btn-danger">Usar Original</button></div>
         </div>
-    </div>
-    <div id="agentQuestionModal" class="modal hidden">
-        <div class="modal-content"><h3>El Agente Necesita Clarificación</h3><div id="agentQuestionPrompt" style="background:rgba(255,255,255,0.05);padding:12px;border-radius:8px;font-weight:bold;margin-bottom:12px;"></div><textarea id="agentQuestionResponse" rows="4" placeholder="Tu respuesta..."></textarea><div class="btn-group"><button id="submitAgentResponseBtn" class="btn btn-success">Enviar Respuesta</button></div></div>
     </div>
     <div id="agentPlanModal" class="modal hidden">
         <div class="modal-content" style="max-width:650px;"><h3>Plan de Cambios Propuesto</h3><div id="agentPlanContent" style="background:rgba(0,0,0,0.3);border:1px solid var(--border-color);padding:16px;border-radius:8px;max-height:250px;overflow-y:auto;font-family:'JetBrains Mono',monospace;font-size:12px;white-space:pre-wrap;margin-bottom:12px;"></div><div class="btn-group"><button id="approvePlanBtn" class="btn btn-success">Aprobar</button><button id="rejectPlanBtn" class="btn btn-danger">Rechazar</button></div></div>
