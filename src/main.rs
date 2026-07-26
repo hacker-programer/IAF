@@ -1095,13 +1095,19 @@ async fn chat_endpoint(
             agent.pregunta_usuario = None;
             agent.current_session_id = Some(session_id.clone());
             let is_admin_bg = is_admin;
+            agent.current_session_id = Some(session_id.clone());
+
+            let state_bg = state.clone();
+            let session_bg = session.clone();
+            let sid_bg = session_id.clone();
+            let uname_bg = username.clone();
+            let is_admin_bg = is_admin;
             let mode_bg = payload.mode.clone().unwrap_or_else(|| "programming".to_string());
             let dk = deepseek_key().to_string();
             let vk = std::env::var("VOYAGE_API_KEY").unwrap_or_default();
             let ok = std::env::var("OPENROUTER_API_KEY").unwrap_or_default();
 
             tokio::spawn(async move {
-                let result = crate::agent::run_agent_loop(
                     session_bg.messages.clone(),
                     session_bg.project_name.clone(),
                     state_bg.clone(),
