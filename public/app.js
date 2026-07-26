@@ -8,7 +8,7 @@ let currentSessionId = null;
 let agentMonitorInterval = null;
 let currentCaptcha = null;
 let pendingMessageToSend = null;
-let agentQuestionShown = false;  // evita abrir el modal repetidamente
+let agentQuestionShown = false;  // evita mostrar el banner repetidamente
 let agentPlanShown = false;      // evita abrir el modal repetidamente
 
 // Auth state
@@ -552,17 +552,41 @@ document.getElementById('pemFileInput').onchange = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
     const text = await file.text();
-    try {
-        const res = await apiCall('/api/auth/upload-public-key', 'POST', { pem_content: text });
-        if (res.status === 'ok') {
-            document.getElementById('newPublicKey').value = res.public_key;
-        } else {
-            alert('Error: ' + res.message);
-        }
-    } catch(e) {
-        alert('Error al procesar el archivo PEM.');
+    // Extract hex key from PEM
+    const lines = text.split('\n').filter(l => l.trim() && !l.includes('-----'));
+    const hex = lines.join('').trim();
+    if (hex.length >= 64) {
+        document.getElementById('newPublicKey').value = hex.substring(0, 64);
+    } else {
+        alert('El archivo .pem no parece contener una clave válida.');
     }
 };
+
+// ---- Toggle Admin Create Mode ----
+function toggleAdminCreateMode() {
+    var isAdmin = document.getElementById('newIsAdmin').checked;
+    document.getElementById('newPassword').parentElement.parentElement.style.display = isAdmin ? 'none' : '';
+    document.getElementById('newPasswordConfirm').parentElement.parentElement.style.display = isAdmin ? 'none' : '';
+    document.getElementById('newPublicKeyContainer').classList.toggle('hidden', !isAdmin);
+    document.getElementById('uploadPemBtn').classList.toggle('hidden', !isAdmin);
+    document.getElementById('generateKeysBtn').classList.toggle('hidden', !isAdmin);
+    if (isAdmin) {
+        document.getElementById('newStudyAccess').checked = true;
+        document.getElementById('newProgAccess').checked = true;
+        document.getElementById('newEditGlobalPrompt').checked = true;
+        document.getElementById('newEditLocalPrompt').checked = true;
+        document.getElementById('newCanFork').checked = true;
+        document.getElementById('newCanExecPS').checked = true;
+        document.getElementById('newCanWrite').checked = true;
+        document.getElementById('newCanSearchGoogle').checked = true;
+    }
+}
+
+// ---- Close Keygen Modal ----
+document.getElementById('closeKeygenBtn').onclick = function() {
+    document.getElementById('keygenModal').classList.add('hidden');
+};
+
 // ============================================================================
 // PROJECTS
 // ============================================================================
@@ -571,49 +595,42 @@ async function loadProjects() {
     try {
         const res = await apiCall('/api/projects');
         const list = document.getElementById('projectList');
-        if (!list) return;
-
-        // Soporta ambos formatos: {projects: [...]} (nuevo) o array pelado (legacy)
-        const projects = Array.isArray(res) ? res : (res.projects || []);
-        
-        if (projects.length > 0) {
-            list.innerHTML = projects.map(p => `
-                <div class="project-item ${activeProject === p.name ? 'active' : ''}" onclick="selectProject('${p.name}')">${p.name}</div>
+        if (res.status === 'ok' && res.projects && res.projects.length > 0) {
+            list.innerHTML = res.projects.map(p => `
+                <div class="project-item ${p.name === activeProject ? 'active' : ''}" 
+                     onclick="selectProject('${p.name.replace(/'/g, "\\'")}')">
+                    <strong>${p.name}</strong><br>
+                    <small>${p.is_local ? 'Local' : 'GitHub'}</small>
+                </div>
             `).join('');
         } else {
-            list.innerHTML = '<div class="console-empty">No hay proyectos. Agregá uno local o forkeá un repo.</div>';
+            list.innerHTML = '<div style="color:var(--text-muted);font-size:12px;">Sin proyectos</div>';
         }
-    } catch(e) {
-        console.error('[IAF] Error cargando proyectos:', e);
-        const list = document.getElementById('projectList');
-        if (list) list.innerHTML = '<div class="console-empty" style="color:var(--danger);">Error al cargar proyectos. Revisá la consola.</div>';
-    }
+    } catch(e) {}
 }
-
 
 function selectProject(name) {
     activeProject = name;
-    document.getElementById('activeProjectName').innerText = name;
+    document.getElementById('activeProjectName').textContent = name;
     loadProjects();
+    loadChatHistory();
 }
 
-// ---- Fork & Clone ----
 document.getElementById('forkBtn').onclick = async () => {
     const url = document.getElementById('repoUrl').value.trim();
-    if (!url) return alert('Ingresá una URL de GitHub o usuario/repo.');
-
+    if (!url) return alert('Ingresá una URL de GitHub (o usuario/repo).');
     const btn = document.getElementById('forkBtn');
     btn.disabled = true;
     btn.textContent = 'Forkeando...';
-
     try {
         const res = await apiCall('/api/projects/fork', 'POST', { repo_url: url });
         if (res.status === 'ok') {
+            activeProject = res.project_name;
+            document.getElementById('activeProjectName').textContent = res.project_name;
             document.getElementById('repoUrl').value = '';
-            showInfoToast('✅ Repo forkeado y clonado: ' + (res.project ? res.project.name : url));
-            await loadProjects();
+            loadProjects();
         } else {
-            alert('Error: ' + (res.message || 'No se pudo forkear el repo.'));
+            alert('Error: ' + res.message);
         }
     } catch(e) {
         alert('Error de conexión al forkear.');
@@ -622,156 +639,23 @@ document.getElementById('forkBtn').onclick = async () => {
     btn.textContent = 'Fork & Clone';
 };
 
-// ---- Agregar Carpeta Local ----
 document.getElementById('addLocalBtn').onclick = async () => {
     const name = document.getElementById('localProjName').value.trim();
     const path = document.getElementById('localProjPath').value.trim();
-    if (!name) return alert('Ingresá un nombre para el proyecto.');
-    if (!path) return alert('Ingresá la ruta absoluta de la carpeta.');
-
-    const btn = document.getElementById('addLocalBtn');
-    btn.disabled = true;
-    btn.textContent = 'Agregando...';
-
+    if (!name || !path) return alert('Nombre y ruta requeridos.');
     try {
         const res = await apiCall('/api/projects/local', 'POST', { name, path });
         if (res.status === 'ok') {
+            activeProject = name;
+            document.getElementById('activeProjectName').textContent = name;
             document.getElementById('localProjName').value = '';
             document.getElementById('localProjPath').value = '';
-            showInfoToast('✅ Proyecto local agregado: ' + name);
-            await loadProjects();
+            loadProjects();
         } else {
-            alert('Error: ' + (res.message || 'No se pudo agregar el proyecto.'));
+            alert('Error: ' + res.message);
         }
     } catch(e) {
         alert('Error de conexión al agregar proyecto.');
-    }
-    btn.disabled = false;
-    btn.textContent = 'Agregar Carpeta';
-};
-// ============================================================================
-// PROMPTS — alineado con IDs del HTML: globalPrompt, localPrompt,
-//           savePromptsBtn (guarda ambos), resetPromptBtn (restaura global)
-// ============================================================================
-
-async function loadPrompts() {
-    try {
-        const prompts = await apiCall('/api/prompts');
-        if (prompts.status === 'ok') {
-            document.getElementById('globalPrompt').value = prompts.global || '';
-            if (activeProject && prompts.projects && prompts.projects[activeProject]) {
-                document.getElementById('localPrompt').value = prompts.projects[activeProject];
-            } else {
-                document.getElementById('localPrompt').value = '';
-            }
-        }
-    } catch(e) {}
-}
-
-// savePromptsBtn: guarda ambos prompts (global y local) en una sola acción
-document.getElementById('savePromptsBtn').onclick = async () => {
-    const globalContent = document.getElementById('globalPrompt').value;
-    const globalRes = await apiCall('/api/prompts/global', 'PUT', { content: globalContent });
-    if (globalRes.status !== 'ok') {
-        alert('Error al guardar prompt global: ' + globalRes.message);
-        return;
-    }
-
-    if (activeProject) {
-        const localContent = document.getElementById('localPrompt').value;
-        const localRes = await apiCall(`/api/prompts/projects/${activeProject}`, 'PUT', { content: localContent });
-        if (localRes.status !== 'ok') {
-            alert('Error al guardar prompt local: ' + localRes.message);
-            return;
-        }
-        alert('System prompts global y local guardados para ' + activeProject + '.');
-    } else {
-        alert('System prompt global guardado.');
-    }
-};
-
-// resetPromptBtn: restaura el prompt global al valor por defecto
-document.getElementById('resetPromptBtn').onclick = async () => {
-    if (!confirm('¿Restaurar el system prompt global al valor por defecto?')) return;
-    const res = await apiCall('/api/prompts/global/reset', 'POST');
-    if (res.status === 'ok') {
-        document.getElementById('globalPrompt').value = res.content;
-        alert('System prompt global restaurado.');
-    } else {
-        alert('Error: ' + res.message);
-    }
-};
-
-// ============================================================================
-// STUDY PROFILE — carga desde /api/study/profile y rellena el formulario
-// ============================================================================
-
-async function loadStudyProfile() {
-    try {
-        const res = await apiCall('/api/study/profile');
-        if (res.status === 'ok' && res.profile) {
-            const p = res.profile;
-
-            // Rellenar campos del formulario de perfil
-            const ageEl = document.getElementById('profileAge');
-            const gamesEl = document.getElementById('profileGames');
-            const hobbiesEl = document.getElementById('profileHobbies');
-            const neuroEl = document.getElementById('profileNeuro');
-            const phaseEl = document.getElementById('studyPhase');
-
-            if (ageEl && p.age) ageEl.value = p.age;
-            if (gamesEl && p.favorite_games) gamesEl.value = p.favorite_games.join(', ');
-            if (hobbiesEl && p.hobbies) hobbiesEl.value = p.hobbies.join(', ');
-            if (neuroEl && p.neurological_conditions) neuroEl.value = p.neurological_conditions.join(', ');
-
-            // Mostrar info de la fase y resumen de aprendizaje
-            if (phaseEl) {
-                const phaseMap = { 'NotStarted': 'No iniciado', 'Exploration': '🔍 Exploración', 'Exploitation': '🎯 Explotación' };
-                const phaseName = phaseMap[p.phase] || p.phase || 'No definida';
-                const summary = p.learning_style_summary || '';
-                const engagement = res.engagement ? (' | Engagement: ' + Math.round(res.engagement * 100) + '%') : '';
-                phaseEl.innerHTML = '<b>Fase:</b> ' + phaseName + engagement +
-                    (summary ? '<br><b>Resumen:</b> ' + summary : '') +
-                    '<br><b>Usuario:</b> ' + (p.username || authUsername || '?');
-            }
-
-            // Mostrar en el chat que el perfil se cargó correctamente
-            console.log('[IAF] Perfil de estudio cargado:', p.username, 'fase:', p.phase);
-        } else {
-            // Perfil no encontrado, mostrar estado inicial
-            const phaseEl = document.getElementById('studyPhase');
-            if (phaseEl) phaseEl.innerHTML = '<b>Fase:</b> No iniciado — Completá el perfil y guardalo.';
-        }
-    } catch(e) {
-        console.error('[IAF] Error cargando perfil de estudio:', e);
-        const phaseEl = document.getElementById('studyPhase');
-        if (phaseEl) phaseEl.innerHTML = '<b>Error:</b> No se pudo cargar el perfil.';
-    }
-}
-
-// ---- Save Study Profile ----
-document.getElementById('saveProfileBtn').onclick = async () => {
-    const ageRaw = document.getElementById('profileAge').value.trim();
-    const gamesRaw = document.getElementById('profileGames').value.trim();
-    const hobbiesRaw = document.getElementById('profileHobbies').value.trim();
-    const neuroRaw = document.getElementById('profileNeuro').value.trim();
-
-    const payload = {};
-    if (ageRaw) payload.age = parseInt(ageRaw);
-    if (gamesRaw) payload.favorite_games = gamesRaw.split(',').map(s => s.trim()).filter(Boolean);
-    if (hobbiesRaw) payload.hobbies = hobbiesRaw.split(',').map(s => s.trim()).filter(Boolean);
-    if (neuroRaw) payload.neurological_conditions = neuroRaw.split(',').map(s => s.trim()).filter(Boolean);
-
-    try {
-        const res = await apiCall('/api/study/profile', 'POST', payload);
-        if (res.status === 'ok') {
-            showInfoToast('✅ Perfil de estudio guardado correctamente.');
-            loadStudyProfile(); // Recargar para mostrar datos actualizados
-        } else {
-            alert('Error al guardar perfil: ' + (res.message || 'Desconocido'));
-        }
-    } catch(e) {
-        alert('Error de conexión al guardar perfil.');
     }
 };
 
@@ -781,87 +665,170 @@ document.getElementById('saveProfileBtn').onclick = async () => {
 
 async function loadChatHistory() {
     try {
-        const res = await apiCall('/api/chats');
+        const res = await apiCall('/api/chats' + (activeProject ? '?project=' + encodeURIComponent(activeProject) : ''));
         const list = document.getElementById('chatHistoryList');
-        if (res.chats && Array.isArray(res.chats)) {
+        if (res.status === 'ok' && res.chats && res.chats.length > 0) {
             list.innerHTML = res.chats.map(c => `
-                <div class="project-item ${currentSessionId === c.id ? 'active' : ''}" onclick="selectChatSession('${c.id}')">${c.title}</div>
+                <div class="project-item ${c.id === currentSessionId ? 'active' : ''}" 
+                     onclick="loadChat('${c.id}')">
+                    <strong>${c.title || 'Sin título'}</strong><br>
+                    <small>${c.project_name || ''} · ${c.messages_count || 0} msgs</small>
+                </div>
             `).join('');
+        } else {
+            list.innerHTML = '<div style="color:var(--text-muted);font-size:12px;">Sin historial</div>';
         }
     } catch(e) {}
 }
 
-// BUG-014 + BUG-015 FIX: Al seleccionar un chat existente (ej: tras recargar la página),
-// se inicia el monitoreo del agente y se cargan los steps de auditoría desde la sesión.
-async function selectChatSession(id) {
-    currentSessionId = id;
-    loadChatHistory();
-    const res = await apiCall(`/api/chats/${id}`);
-    if (res.status === 'ok') {
-        const chatArea = document.getElementById('chatArea');
-        chatArea.innerHTML = '';
-        res.session.messages.forEach(m => addMessage(m.role, m.content));
-        if (res.session.project_name) {
-            activeProject = res.session.project_name;
-            document.getElementById('activeProjectName').innerText = activeProject;
-            loadProjects();
+async function loadChat(sessionId) {
+    try {
+        const res = await apiCall('/api/chats/' + sessionId);
+        if (res.status === 'ok' && res.session) {
+            currentSessionId = sessionId;
+            const area = document.getElementById('chatArea');
+            area.innerHTML = '';
+            (res.session.messages || []).forEach(m => addMessage(m.role, m.content));
+            loadChatHistory();
         }
-        // BUG-015 FIX: Cargar steps de auditoría desde la sesión persistida
-        if (res.session.steps && Array.isArray(res.session.steps) && res.session.steps.length > 0) {
-            renderConsoleSteps(res.session.steps);
-        }
-        // BUG-014 FIX: Iniciar monitoreo del agente al entrar a un chat existente
-        startAgentMonitoring();
-    }
+    } catch(e) {}
 }
 
-// BUG-019 FIX: Al crear un nuevo chat, limpiar TODO el estado anterior
 document.getElementById('newChatBtn').onclick = () => {
     currentSessionId = null;
     document.getElementById('chatArea').innerHTML = '<div class="message system-msg"><strong>Sistema:</strong> Nuevo chat iniciado.</div>';
-    // BUG-019: Detener monitoreo y limpiar auditoría
-    if (agentMonitorInterval) {
-        clearInterval(agentMonitorInterval);
-        agentMonitorInterval = null;
-    }
-    document.getElementById('interruptBtn').classList.add('hidden');
-    const consoleArea = document.getElementById('consoleArea');
-    if (consoleArea) consoleArea.innerHTML = '';
-    agentQuestionShown = false;
-    agentPlanShown = false;
+    document.getElementById('consoleArea').innerHTML = '<div class="console-empty">El agente está inactivo.</div>';
     loadChatHistory();
 };
 
-// ---- Send Message ----
-const SEND_DEBOUNCE_MS = 500;
-let sendTimeout;
+// ============================================================================
+// SYSTEM PROMPTS
+// ============================================================================
 
-document.getElementById('sendBtn').onclick = () => {
+async function loadPrompts() {
+    try {
+        const res = await apiCall('/api/prompts');
+        if (res.status === 'ok') {
+            document.getElementById('globalPrompt').value = res.global_current || '';
+            document.getElementById('localPrompt').value = res.local_current || '';
+        }
+    } catch(e) {}
+}
+
+document.getElementById('savePromptsBtn').onclick = async () => {
+    const global = document.getElementById('globalPrompt').value;
+    const local = document.getElementById('localPrompt').value;
+    try {
+        const res = await apiCall('/api/prompts', 'POST', {
+            global_current: global,
+            local_current: local,
+            project_name: activeProject
+        });
+        if (res.status === 'ok') {
+            alert('Prompts guardados.');
+        } else {
+            alert('Error: ' + res.message);
+        }
+    } catch(e) {
+        alert('Error de conexión al guardar prompts.');
+    }
+};
+
+document.getElementById('resetPromptBtn').onclick = async () => {
+    if (!confirm('¿Restaurar el system prompt global al original?')) return;
+    try {
+        const res = await apiCall('/api/prompts/reset', 'POST');
+        if (res.status === 'ok') {
+            document.getElementById('globalPrompt').value = res.global_current || '';
+            alert('Prompt global restaurado.');
+        } else {
+            alert('Error: ' + res.message);
+        }
+    } catch(e) {
+        alert('Error de conexión.');
+    }
+};
+
+// ============================================================================
+// STUDY PROFILE
+// ============================================================================
+
+async function loadStudyProfile() {
+    try {
+        const res = await apiCall('/api/study/profile');
+        if (res.status === 'ok' && res.profile) {
+            const p = res.profile;
+            document.getElementById('profileAge').value = p.age || '';
+            document.getElementById('profileGames').value = (p.favorite_games || []).join(', ');
+            document.getElementById('profileHobbies').value = (p.hobbies || []).join(', ');
+            document.getElementById('profileNeuro').value = (p.neurological_conditions || []).join(', ');
+            document.getElementById('studyPhase').textContent = 'Fase: ' + (p.phase || 'Exploration');
+        }
+    } catch(e) {}
+}
+
+document.getElementById('saveProfileBtn').onclick = async () => {
+    const age = parseInt(document.getElementById('profileAge').value) || null;
+    const games = document.getElementById('profileGames').value.split(',').map(s => s.trim()).filter(Boolean);
+    const hobbies = document.getElementById('profileHobbies').value.split(',').map(s => s.trim()).filter(Boolean);
+    const neuro = document.getElementById('profileNeuro').value.split(',').map(s => s.trim()).filter(Boolean);
+
+    try {
+        const res = await apiCall('/api/study/profile', 'POST', {
+            age, favorite_games: games, hobbies, neurological_conditions: neuro
+        });
+        if (res.status === 'ok') {
+            showInfoToast('Perfil guardado.');
+            document.getElementById('studyPhase').textContent = 'Fase: ' + (res.phase || 'Exploration');
+        } else {
+            alert('Error: ' + res.message);
+        }
+    } catch(e) {
+        alert('Error al guardar perfil.');
+    }
+};
+
+// ============================================================================
+// CHAT INPUT & SEND
+// ============================================================================
+
+const SEND_DEBOUNCE_MS = 300;
+
+// Debounce wrapper
+function debounce(fn, ms) {
+    let timer;
+    return function(...args) {
+        clearTimeout(timer);
+        timer = setTimeout(() => fn.apply(this, args), ms);
+    };
+}
+
+// Refinar y Enviar
+document.getElementById('sendBtn').onclick = debounce(async () => {
     const text = document.getElementById('chatInput').value.trim();
     if (!text) return;
-    document.getElementById('sendBtn').disabled = true;
-    clearTimeout(sendTimeout);
-    sendTimeout = setTimeout(async () => {
-        try {
-            const mode = document.getElementById('modeStudy').classList.contains('active') ? 'study' : 'programming';
-            const refineRes = await apiCall('/api/prompts/refine', 'POST', {
-                prompt: text, session_id: currentSessionId, project_name: activeProject
-            });
-            if (refineRes.status === 'ok') {
-                pendingMessageToSend = text;
-                document.getElementById('refinedPromptText').value = refineRes.refined;
-                document.getElementById('refinePromptModal').classList.remove('hidden');
-            } else {
-                document.getElementById('chatInput').value = '';
-                await sendMessageToAgent(text, mode);
-            }
-        } catch(e) {
+    const btn = document.getElementById('sendBtn');
+    btn.disabled = true;
+    const mode = document.getElementById('modeStudy').classList.contains('active') ? 'study' : 'programming';
+
+    try {
+        const refineRes = await apiCall('/api/prompts/refine', 'POST', {
+            prompt: text, session_id: currentSessionId, project_name: activeProject
+        });
+        if (refineRes.status === 'ok') {
+            pendingMessageToSend = text;
+            document.getElementById('refinedPromptText').value = refineRes.refined;
+            document.getElementById('refinePromptModal').classList.remove('hidden');
+        } else {
             document.getElementById('chatInput').value = '';
-            await sendMessageToAgent(text, 'programming');
+            await sendMessageToAgent(text, mode);
         }
-        document.getElementById('sendBtn').disabled = false;
-    }, SEND_DEBOUNCE_MS);
-};
+    } catch(e) {
+        document.getElementById('chatInput').value = '';
+        await sendMessageToAgent(text, 'programming');
+    }
+    document.getElementById('sendBtn').disabled = false;
+}, SEND_DEBOUNCE_MS);
 
 document.getElementById('sendDirectBtn').onclick = async () => {
     const text = document.getElementById('chatInput').value.trim();
@@ -928,14 +895,47 @@ async function sendMessageToAgent(text, mode) {
     }
 }
 
+// ============================================================================
+// RENDERIZADO DE MENSAJES CON MARKDOWN + LATEX
+// ============================================================================
+
+/**
+ * Renderiza texto con Markdown (marked.js) y LaTeX (MathJax).
+ * Si marked no está disponible, usa HTML básico.
+ */
+function renderMarkdown(text) {
+    if (typeof marked !== 'undefined' && marked.parse) {
+        // Usar marked para renderizar markdown a HTML
+        return marked.parse(text);
+    }
+    // Fallback básico
+    return text.replace(/\n/g, '<br>');
+}
+
+/**
+ * Añade un mensaje al chat renderizando Markdown + LaTeX.
+ */
 function addMessage(role, text, extraClass) {
     const div = document.createElement('div');
     var cssClass = 'message ' + role + '-msg';
     if (extraClass) cssClass += ' ' + extraClass;
     div.className = cssClass;
-    div.innerHTML = '<strong>' + (role === 'user' ? 'Tú' : 'Agente') + ':</strong> ' + text.replace(/\n/g, '<br>');
+
+    const senderLabel = role === 'user' ? 'Tú' : 'Agente';
+
+    // Renderizar markdown
+    const rendered = renderMarkdown(text);
+
+    div.innerHTML = '<strong>' + senderLabel + ':</strong> <div class="message-body">' + rendered + '</div>';
     document.getElementById('chatArea').appendChild(div);
     document.getElementById('chatArea').scrollTop = document.getElementById('chatArea').scrollHeight;
+
+    // Disparar MathJax para renderizar LaTeX en el nuevo contenido
+    if (typeof MathJax !== 'undefined' && MathJax.typesetPromise) {
+        MathJax.typesetPromise([div]).catch(function(err) {
+            console.warn('MathJax render error:', err);
+        });
+    }
 }
 
 // ---- Agent Monitoring (Console) ----
@@ -994,12 +994,12 @@ async function startAgentMonitoring() {
                 renderConsoleSteps(stepsRes.steps);
             }
 
-            // Mostrar pregunta del agente al usuario
+            // Mostrar pregunta del agente como BANNER INLINE (no modal full-screen)
             if (statusRes.esperando_respuesta_usuario && statusRes.pregunta_usuario && !agentQuestionShown) {
                 agentQuestionShown = true;
                 document.getElementById('agentQuestionPrompt').textContent = statusRes.pregunta_usuario;
                 document.getElementById('agentQuestionResponse').value = '';
-                document.getElementById('agentQuestionModal').classList.remove('hidden');
+                document.getElementById('agentQuestionBanner').classList.remove('hidden');
             }
 
             // Mostrar plan de cambios propuesto
@@ -1014,9 +1014,10 @@ async function startAgentMonitoring() {
                 document.getElementById('captchaAlert').classList.remove('hidden');
             }
 
-            // Si el agente ya no está esperando respuesta, resetear flag
+            // Si el agente ya no está esperando respuesta, resetear flag y ocultar banner
             if (!statusRes.esperando_respuesta_usuario) {
                 agentQuestionShown = false;
+                document.getElementById('agentQuestionBanner').classList.add('hidden');
             }
             if (!statusRes.esperando_aprobacion_plan) {
                 agentPlanShown = false;
@@ -1026,6 +1027,7 @@ async function startAgentMonitoring() {
             document.getElementById('interruptBtn').classList.add('hidden');
             agentQuestionShown = false;
             agentPlanShown = false;
+            document.getElementById('agentQuestionBanner').classList.add('hidden');
         }
     }, 1000); // BUG-021: reducido de 1500ms a 1000ms para mejor tiempo real
 }
@@ -1096,13 +1098,13 @@ document.getElementById('closeCaptchaBtn').onclick = () => {
     document.getElementById('captchaModal').classList.add('hidden');
 };
 
-// ---- Agent Question Modal ----
+// ---- Agent Question Banner (inline, no modal) ----
 document.getElementById('submitAgentResponseBtn').onclick = async () => {
     const respuesta = document.getElementById('agentQuestionResponse').value.trim();
     if (!respuesta) return;
     addMessage('user', respuesta);
     await apiCall('/api/agent/responder', 'POST', { respuesta });
-    document.getElementById('agentQuestionModal').classList.add('hidden');
+    document.getElementById('agentQuestionBanner').classList.add('hidden');
     agentQuestionShown = false;
 };
 
@@ -1143,31 +1145,6 @@ function downloadPem(type, content) {
     a.click();
     URL.revokeObjectURL(a.href);
 }
-
-// ---- Toggle Admin Create Mode ----
-function toggleAdminCreateMode() {
-    var isAdmin = document.getElementById('newIsAdmin').checked;
-    document.getElementById('newPassword').parentElement.parentElement.style.display = isAdmin ? 'none' : '';
-    document.getElementById('newPasswordConfirm').parentElement.parentElement.style.display = isAdmin ? 'none' : '';
-    document.getElementById('newPublicKeyContainer').classList.toggle('hidden', !isAdmin);
-    document.getElementById('uploadPemBtn').classList.toggle('hidden', !isAdmin);
-    document.getElementById('generateKeysBtn').classList.toggle('hidden', !isAdmin);
-    if (isAdmin) {
-        document.getElementById('newStudyAccess').checked = true;
-        document.getElementById('newProgAccess').checked = true;
-        document.getElementById('newEditGlobalPrompt').checked = true;
-        document.getElementById('newEditLocalPrompt').checked = true;
-        document.getElementById('newCanFork').checked = true;
-        document.getElementById('newCanExecPS').checked = true;
-        document.getElementById('newCanWrite').checked = true;
-        document.getElementById('newCanSearchGoogle').checked = true;
-    }
-}
-
-// ---- Close Keygen Modal ----
-document.getElementById('closeKeygenBtn').onclick = function() {
-    document.getElementById('keygenModal').classList.add('hidden');
-};
 
 // ---- Init ----
 init();
