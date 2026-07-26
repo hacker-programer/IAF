@@ -1,9 +1,9 @@
 ﻿// ============================================================================
-// tests/integration_tests.rs â€” Tests de IntegraciÃ³n y AceptaciÃ³n
+// tests/integration_tests.rs — Tests de Integración y Aceptación
 //
-// Tests REALES que prueban componentes del sistema interactuando entre sÃ­:
-// StudyEngine con disco, UserStore con contraseÃ±as, sanitize_filename,
-// ActiveAgentStatus serialization, y creaciÃ³n/lectura real de DOCX.
+// Tests REALES que prueban componentes del sistema interactuando entre sí:
+// StudyEngine con disco, UserStore con contraseñas, sanitize_filename,
+// ActiveAgentStatus serialization, y creación/lectura real de DOCX.
 // ============================================================================
 
 use std::fs;
@@ -20,7 +20,7 @@ fn tmp_dir(name: &str) -> PathBuf {
     dir
 }
 
-/// Crea un UserStore aislado en un directorio temporal con users.json vacÃ­o
+/// Crea un UserStore aislado en un directorio temporal con users.json vacío
 fn temp_user_store(name: &str) -> iaf::auth::UserStore {
     let dir = tmp_dir(name);
     let _ = fs::write(dir.join("users.json"), "{\"users\":[]}");
@@ -28,7 +28,7 @@ fn temp_user_store(name: &str) -> iaf::auth::UserStore {
 }
 
 // ============================================================================
-// SECCIÃ“N 1: StudyEngine â€” Persistencia real en disco
+// SECCIÓN 1: StudyEngine — Persistencia real en disco
 // ============================================================================
 
 #[cfg(test)]
@@ -188,7 +188,7 @@ mod study_engine_tests {
 
 
 // ============================================================================
-// SECCIÃ“N 2: sanitize_filename â€” Funciones utilitarias reales
+// SECCIÓN 2: sanitize_filename — Funciones utilitarias reales
 // ============================================================================
 
 #[cfg(test)]
@@ -215,13 +215,13 @@ mod sanitize_filename_tests {
     }
 
     #[test]
-    #[test]
     fn sanitiza_caracteres_no_ascii() {
         let result = sanitize_filename("Análisis del código");
         assert!(result.chars().all(|c| c.is_ascii()));
         assert!(!result.contains("á"));
         assert!(!result.contains("ó"));
     }
+
     #[test]
     fn sanitiza_trunca_a_40_caracteres() {
         let long_name = "a".repeat(100);
@@ -259,7 +259,7 @@ mod sanitize_filename_tests {
 
 
 // ============================================================================
-// SECCIÃ“N 3: ActiveAgentStatus â€” SerializaciÃ³n y valores por defecto
+// SECCIÓN 3: ActiveAgentStatus — Serialización y valores por defecto
 // ============================================================================
 
 #[cfg(test)]
@@ -330,7 +330,7 @@ mod active_agent_status_tests {
 
 
 // ============================================================================
-// SECCIÃ“N 4: DOCX Creation & Reading â€” Prueba real de extract_text_from_docx
+// SECCIÓN 4: DOCX Creation & Reading — Prueba real de extract_text_from_docx
 // ============================================================================
 
 #[cfg(test)]
@@ -352,9 +352,9 @@ mod docx_tests {
         let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
 <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
   <w:body>
-    <w:p><w:r><w:t>Primer pÃ¡rrafo del documento</w:t></w:r></w:p>
-    <w:p><w:r><w:t>Segundo pÃ¡rrafo con mÃ¡s contenido</w:t></w:r></w:p>
-    <w:p><w:r><w:t>Tercer pÃ¡rrafo</w:t></w:r></w:p>
+    <w:p><w:r><w:t>Primer párrafo del documento</w:t></w:r></w:p>
+    <w:p><w:r><w:t>Segundo párrafo con más contenido</w:t></w:r></w:p>
+    <w:p><w:r><w:t>Tercer párrafo</w:t></w:r></w:p>
   </w:body>
 </w:document>"#;
         {
@@ -396,9 +396,9 @@ mod docx_tests {
             }
         }
 
-        assert!(text.contains("Primer pÃ¡rrafo del documento"));
-        assert!(text.contains("Segundo pÃ¡rrafo con mÃ¡s contenido"));
-        assert!(text.contains("Tercer pÃ¡rrafo"));
+        assert!(text.contains("Primer párrafo del documento"));
+        assert!(text.contains("Segundo párrafo con más contenido"));
+        assert!(text.contains("Tercer párrafo"));
 
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -465,7 +465,7 @@ mod docx_tests {
 
 
 // ============================================================================
-// SECCIÃ“N 5: UserStore â€” AutenticaciÃ³n y permisos
+// SECCIÓN 5: UserStore — Autenticación y permisos
 // ============================================================================
 
 #[cfg(test)]
@@ -585,7 +585,7 @@ mod user_store_tests {
 
 
 // ============================================================================
-// SECCIÃ“N 6: CiclePhase â€” Transiciones de estado
+// SECCIÓN 6: CiclePhase — Transiciones de estado
 // ============================================================================
 
 #[cfg(test)]
@@ -623,7 +623,7 @@ mod cicle_phase_tests {
 
 
 // ============================================================================
-// SECCIÃ“N 7: ChatSession â€” SerializaciÃ³n
+// SECCIÓN 7: ChatSession — Serialización
 // ============================================================================
 
 #[cfg(test)]
@@ -644,7 +644,7 @@ mod chat_session_tests {
                 },
                 ChatMessage {
                     role: "agent".to_string(),
-                    content: "Hola, Â¿cÃ³mo puedo ayudarte?".to_string(),
+                    content: "Hola, ¿cómo puedo ayudarte?".to_string(),
                     timestamp: 1700000001,
                 },
             ],
@@ -666,7 +666,7 @@ mod chat_session_tests {
 
 
 // ============================================================================
-// SECCIÃ“N 8: Contrato API â€” VerificaciÃ³n de endpoints requeridos
+// SECCIÓN 8: Contrato API — Verificación de endpoints requeridos
 // ============================================================================
 
 #[cfg(test)]
@@ -827,20 +827,18 @@ mod test_file_integrity_tests {
     fn exhaustive_tests_rs_tiene_llaves_balanceadas() {
         let content = include_str!("exhaustive_tests.rs");
         let (open, close) = count_real_braces(content);
-        let delta = (open as i64 - close as i64).abs();
-        assert!(delta <= 2,
+        assert_eq!(open, close,
             "REGRESION: exhaustive_tests.rs tiene {} llaves de apertura y {} de cierre. Delta: {}. El archivo NO compilara.",
-            open, close, delta);
+            open, close, (open as i64 - close as i64).abs());
     }
 
     #[test]
     fn integration_tests_rs_tiene_llaves_balanceadas() {
         let content = include_str!("integration_tests.rs");
         let (open, close) = count_real_braces(content);
-        let delta = (open as i64 - close as i64).abs();
-        assert!(delta <= 2,
+        assert_eq!(open, close,
             "REGRESION: integration_tests.rs tiene {} llaves de apertura y {} de cierre. Delta: {}.",
-            open, close, delta);
+            open, close, (open as i64 - close as i64).abs());
     }
 
     #[test]
@@ -865,10 +863,9 @@ mod test_file_integrity_tests {
                 Err(_) => continue,
             };
             let (open, close) = count_real_braces(&content);
-            let delta = (open as i64 - close as i64).abs();
-            assert!(delta <= 2,
+            assert_eq!(open, close,
                 "REGRESION: {} tiene {} llaves de apertura y {} de cierre. Delta: {}. El archivo NO compilara.",
-                file_path, open, close, delta);
+                file_path, open, close, (open as i64 - close as i64).abs());
         }
     }
 
@@ -1006,7 +1003,7 @@ mod regression_bugs_tests {
     }
 
     // =========================================================================
-    // BUG-004: finalizar_tarea devuelve error "No se proporcionï¿½ URL"
+    // BUG-004: finalizar_tarea devuelve error "No se proporcion� URL"
     // =========================================================================
 
     #[test]
@@ -1093,7 +1090,7 @@ mod regression_bugs_tests {
     }
 
     // =========================================================================
-    // BUG: No se puede empezar una conversaciï¿½n (addMessage duplicada)
+    // BUG: No se puede empezar una conversaci�n (addMessage duplicada)
     // =========================================================================
 
     #[test]
