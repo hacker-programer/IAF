@@ -364,11 +364,47 @@ textarea {
     border-bottom-right-radius: 4px;
 }
 
+// Líneas 375-390 de 870 en public/style.css - agregando .info-msg y .final-msg
+
 .agent-msg {
     align-self: flex-start;
     background: rgba(255, 255, 255, 0.05);
     border: 1px solid var(--border-color);
     border-bottom-left-radius: 4px;
+}
+
+/* BUG-021: Estilo para mensajes informativos en tiempo real en el chat */
+.info-msg {
+    align-self: flex-start;
+    background: rgba(0, 212, 255, 0.08);
+    border: 1px solid rgba(0, 212, 255, 0.25);
+    border-bottom-left-radius: 4px;
+    color: #b8ecff;
+    font-size: 14px;
+    animation: infoMsgFadeIn 0.4s ease-out;
+}
+
+@keyframes infoMsgFadeIn {
+    from { opacity: 0; transform: translateX(-10px); }
+    to { opacity: 1; transform: translateX(0); }
+}
+
+/* Estilo para el mensaje final de tarea completada */
+.final-msg {
+    align-self: center;
+    background: rgba(16, 185, 129, 0.12);
+    border: 1px solid rgba(16, 185, 129, 0.35);
+    color: #6ee7b7;
+    font-size: 15px;
+    font-weight: 600;
+    text-align: center;
+    animation: finalMsgPulse 0.5s ease-out;
+}
+
+@keyframes finalMsgPulse {
+    0% { transform: scale(0.95); opacity: 0; }
+    50% { transform: scale(1.02); }
+    100% { transform: scale(1); opacity: 1; }
 }
 
 .system-msg {
@@ -379,15 +415,6 @@ textarea {
     font-size: 13px;
     text-align: center;
 }
-
-.footer {
-    padding: 24px;
-    border-top: 1px solid var(--border-color);
-}
-
-.input-container {
-    display: flex;
-    gap: 12px;
     align-items: flex-end;
 }
 
