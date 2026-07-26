@@ -824,7 +824,6 @@ mod test_file_integrity_tests {
     }
 
     #[test]
-    #[test]
     fn exhaustive_tests_rs_tiene_llaves_balanceadas() {
         let content = include_str!("exhaustive_tests.rs");
         let (open, close) = count_real_braces(content);
