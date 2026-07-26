@@ -152,6 +152,9 @@ pub struct ActiveAgentStatus {
     pub thinking_content: Vec<String>,
     pub steps: Vec<AuditStep>,
     pub current_session_id: Option<String>,
+    /// Ruta absoluta al archivo .json de la sesión de chat actual
+    /// Se usa para que el agente pueda renombrar el chat al finalizar
+    pub current_chat_path: Option<String>,
 }
 
 // ============================================================================
