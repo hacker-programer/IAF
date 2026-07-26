@@ -896,15 +896,6 @@ mod edge_case_tests {
         let ext = Path::new("reporte_final_🚀.pdf").extension().and_then(|e| e.to_str()).unwrap_or("");
         assert_eq!(ext, "pdf");
     }
- {
-        let status = iaf::state::ActiveAgentStatus::default();
-        let json = serde_json::to_value(&status).unwrap();
-
-        // Verificar que el JSON se serializa correctamente
-        assert_eq!(json["running"], false);
-        assert_eq!(json["finished"], false);
-        assert_eq!(json["info_messages"].as_array().unwrap().len(), 0);
-    }
 
     #[test]
     fn finalizar_tarea_sin_argumentos_usa_default() {
