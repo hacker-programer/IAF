@@ -1,9 +1,9 @@
-// ============================================================================
-// tests/integration_tests.rs — Tests de Integración y Aceptación
+﻿// ============================================================================
+// tests/integration_tests.rs â€” Tests de IntegraciÃ³n y AceptaciÃ³n
 //
-// Tests REALES que prueban componentes del sistema interactuando entre sí:
-// StudyEngine con disco, UserStore con contraseñas, sanitize_filename,
-// ActiveAgentStatus serialization, y creación/lectura real de DOCX.
+// Tests REALES que prueban componentes del sistema interactuando entre sÃ­:
+// StudyEngine con disco, UserStore con contraseÃ±as, sanitize_filename,
+// ActiveAgentStatus serialization, y creaciÃ³n/lectura real de DOCX.
 // ============================================================================
 
 use std::fs;
@@ -20,7 +20,7 @@ fn tmp_dir(name: &str) -> PathBuf {
     dir
 }
 
-/// Crea un UserStore aislado en un directorio temporal con users.json vacío
+/// Crea un UserStore aislado en un directorio temporal con users.json vacÃ­o
 fn temp_user_store(name: &str) -> iaf::auth::UserStore {
     let dir = tmp_dir(name);
     let _ = fs::write(dir.join("users.json"), "{\"users\":[]}");
@@ -28,7 +28,7 @@ fn temp_user_store(name: &str) -> iaf::auth::UserStore {
 }
 
 // ============================================================================
-// SECCIÓN 1: StudyEngine — Persistencia real en disco
+// SECCIÃ“N 1: StudyEngine â€” Persistencia real en disco
 // ============================================================================
 
 #[cfg(test)]
@@ -188,7 +188,7 @@ mod study_engine_tests {
 
 
 // ============================================================================
-// SECCIÓN 2: sanitize_filename — Funciones utilitarias reales
+// SECCIÃ“N 2: sanitize_filename â€” Funciones utilitarias reales
 // ============================================================================
 
 #[cfg(test)]
@@ -216,10 +216,10 @@ mod sanitize_filename_tests {
 
     #[test]
     fn sanitiza_caracteres_no_ascii() {
-        let result = sanitize_filename("Análisis del código");
+        let result = sanitize_filename("AnÃ¡lisis del cÃ³digo");
         assert!(result.chars().all(|c| c.is_ascii()));
-        assert!(!result.contains('á'));
-        assert!(!result.contains('ó'));
+        assert!(!result.contains('Ã¡'));
+        assert!(!result.contains('Ã³'));
     }
 
     #[test]
@@ -259,7 +259,7 @@ mod sanitize_filename_tests {
 
 
 // ============================================================================
-// SECCIÓN 3: ActiveAgentStatus — Serialización y valores por defecto
+// SECCIÃ“N 3: ActiveAgentStatus â€” SerializaciÃ³n y valores por defecto
 // ============================================================================
 
 #[cfg(test)]
@@ -330,7 +330,7 @@ mod active_agent_status_tests {
 
 
 // ============================================================================
-// SECCIÓN 4: DOCX Creation & Reading — Prueba real de extract_text_from_docx
+// SECCIÃ“N 4: DOCX Creation & Reading â€” Prueba real de extract_text_from_docx
 // ============================================================================
 
 #[cfg(test)]
@@ -352,9 +352,9 @@ mod docx_tests {
         let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
 <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
   <w:body>
-    <w:p><w:r><w:t>Primer párrafo del documento</w:t></w:r></w:p>
-    <w:p><w:r><w:t>Segundo párrafo con más contenido</w:t></w:r></w:p>
-    <w:p><w:r><w:t>Tercer párrafo</w:t></w:r></w:p>
+    <w:p><w:r><w:t>Primer pÃ¡rrafo del documento</w:t></w:r></w:p>
+    <w:p><w:r><w:t>Segundo pÃ¡rrafo con mÃ¡s contenido</w:t></w:r></w:p>
+    <w:p><w:r><w:t>Tercer pÃ¡rrafo</w:t></w:r></w:p>
   </w:body>
 </w:document>"#;
         {
@@ -396,9 +396,9 @@ mod docx_tests {
             }
         }
 
-        assert!(text.contains("Primer párrafo del documento"));
-        assert!(text.contains("Segundo párrafo con más contenido"));
-        assert!(text.contains("Tercer párrafo"));
+        assert!(text.contains("Primer pÃ¡rrafo del documento"));
+        assert!(text.contains("Segundo pÃ¡rrafo con mÃ¡s contenido"));
+        assert!(text.contains("Tercer pÃ¡rrafo"));
 
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -465,7 +465,7 @@ mod docx_tests {
 
 
 // ============================================================================
-// SECCIÓN 5: UserStore — Autenticación y permisos
+// SECCIÃ“N 5: UserStore â€” AutenticaciÃ³n y permisos
 // ============================================================================
 
 #[cfg(test)]
@@ -585,7 +585,7 @@ mod user_store_tests {
 
 
 // ============================================================================
-// SECCIÓN 6: CiclePhase — Transiciones de estado
+// SECCIÃ“N 6: CiclePhase â€” Transiciones de estado
 // ============================================================================
 
 #[cfg(test)]
@@ -623,7 +623,7 @@ mod cicle_phase_tests {
 
 
 // ============================================================================
-// SECCIÓN 7: ChatSession — Serialización
+// SECCIÃ“N 7: ChatSession â€” SerializaciÃ³n
 // ============================================================================
 
 #[cfg(test)]
@@ -644,7 +644,7 @@ mod chat_session_tests {
                 },
                 ChatMessage {
                     role: "agent".to_string(),
-                    content: "Hola, ¿cómo puedo ayudarte?".to_string(),
+                    content: "Hola, Â¿cÃ³mo puedo ayudarte?".to_string(),
                     timestamp: 1700000001,
                 },
             ],
@@ -666,7 +666,7 @@ mod chat_session_tests {
 
 
 // ============================================================================
-// SECCIÓN 8: Contrato API — Verificación de endpoints requeridos
+// SECCIÃ“N 8: Contrato API â€” VerificaciÃ³n de endpoints requeridos
 // ============================================================================
 
 #[cfg(test)]
@@ -1003,7 +1003,7 @@ mod regression_bugs_tests {
     }
 
     // =========================================================================
-    // BUG-004: finalizar_tarea devuelve error "No se proporcion� URL"
+    // BUG-004: finalizar_tarea devuelve error "No se proporcionï¿½ URL"
     // =========================================================================
 
     #[test]
@@ -1090,7 +1090,7 @@ mod regression_bugs_tests {
     }
 
     // =========================================================================
-    // BUG: No se puede empezar una conversaci�n (addMessage duplicada)
+    // BUG: No se puede empezar una conversaciï¿½n (addMessage duplicada)
     // =========================================================================
 
     #[test]
