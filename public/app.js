@@ -563,7 +563,6 @@ document.getElementById('pemFileInput').onchange = async (e) => {
         alert('Error al procesar el archivo PEM.');
     }
 };
-
 // ============================================================================
 // PROJECTS
 // ============================================================================
@@ -572,19 +571,25 @@ async function loadProjects() {
     try {
         const res = await apiCall('/api/projects');
         const list = document.getElementById('projectList');
-        if (res.projects && Array.isArray(res.projects)) {
-            list.innerHTML = res.projects.map(p => `
+        if (!list) return;
+
+        // Soporta ambos formatos: {projects: [...]} (nuevo) o array pelado (legacy)
+        const projects = Array.isArray(res) ? res : (res.projects || []);
+        
+        if (projects.length > 0) {
+            list.innerHTML = projects.map(p => `
                 <div class="project-item ${activeProject === p.name ? 'active' : ''}" onclick="selectProject('${p.name}')">${p.name}</div>
             `).join('');
+        } else {
+            list.innerHTML = '<div class="console-empty">No hay proyectos. Agregá uno local o forkeá un repo.</div>';
         }
-    } catch(e) {}
+    } catch(e) {
+        console.error('[IAF] Error cargando proyectos:', e);
+        const list = document.getElementById('projectList');
+        if (list) list.innerHTML = '<div class="console-empty" style="color:var(--danger);">Error al cargar proyectos. Revisá la consola.</div>';
+    }
 }
 
-function selectProject(name) {
-    activeProject = name;
-    document.getElementById('activeProjectName').innerText = name;
-    loadProjects();
-}
 
 // ---- Fork & Clone ----
 document.getElementById('forkBtn').onclick = async () => {
