@@ -1,5 +1,5 @@
 // ============================================================================
-// IAF Ã¢â‚¬â€ app.js Ã¢â‚¬â€ Cliente Web con AutenticaciÃƒÂ³n
+// IAF — app.js — Cliente Web con Autenticación
 // ============================================================================
 
 // ---- State ----
@@ -42,7 +42,7 @@ function togglePassword(fieldId) {
 
 /**
  * Copia el comando sign_nonce al portapapeles.
- * Ahora recibe 'event' explÃƒÂ­citamente y tiene fallback para navegadores
+ * Ahora recibe 'event' explícitamente y tiene fallback para navegadores
  * sin Clipboard API (HTTP, navegadores antiguos).
  */
 function copyNonceCmd(event) {
@@ -51,7 +51,7 @@ function copyNonceCmd(event) {
     const nonce = window._lastNonce || '';
     const cmd = '.\\scripts\\sign_nonce.ps1 -Nonce "' + nonce + '" -KeyPath ".config\\admin_private.pem"';
 
-    // Resolver el botÃƒÂ³n que disparÃƒÂ³ el evento
+    // Resolver el botón que disparó el evento
     var btn = null;
     if (event && event.target) {
         btn = event.target;
@@ -85,13 +85,13 @@ function copyNonceCmd(event) {
 
     function onSuccess() {
         if (btn) {
-            btn.textContent = 'Ã¢Å“â€œ';
-            setTimeout(function () { btn.textContent = 'Ã°Å¸â€œâ€¹'; }, 1500);
+            btn.textContent = '✓';
+            setTimeout(function () { btn.textContent = '📋'; }, 1500);
         }
     }
 
     function onFailure() {
-        alert('No se pudo copiar al portapapeles. CopiÃƒÂ¡ manualmente:\n\n' + cmd);
+        alert('No se pudo copiar al portapapeles. Copiá manualmente:\n\n' + cmd);
     }
 
     // Intentar primero la API moderna
@@ -138,7 +138,7 @@ async function checkClient() {
         let data;
         try { data = JSON.parse(text); } catch(e) { return; }
         if (!data.client_installed) {
-            clientWarning.innerHTML = 'Ã¢Å¡Â Ã¯Â¸Â <b>Cliente no detectado.</b><br>' + data.instructions;
+            clientWarning.innerHTML = '⚠️ <b>Cliente no detectado.</b><br>' + data.instructions;
             clientWarning.classList.remove('hidden');
         }
     } catch(e) {
@@ -162,16 +162,16 @@ loginTabs.addEventListener('click', (e) => {
 document.getElementById('loginBtn').onclick = async () => {
     const username = document.getElementById('loginUser').value.trim();
     const password = document.getElementById('loginPass').value;
-    if (!username || !password) return showLoginError('Usuario y contraseÃƒÂ±a requeridos.');
+    if (!username || !password) return showLoginError('Usuario y contraseña requeridos.');
 
     try {
         const res = await apiCall('/api/auth/login', 'POST', { username, password });
         if (res.status === 'ok') {
             setAuth(res);
         } else {
-            showLoginError(res.message || 'Credenciales invÃƒÂ¡lidas.');
+            showLoginError(res.message || 'Credenciales inválidas.');
         }
-    } catch(e) { showLoginError('Error de conexiÃƒÂ³n.'); }
+    } catch(e) { showLoginError('Error de conexión.'); }
 };
 
 // ---- Nonce Login ----
@@ -192,7 +192,7 @@ document.getElementById('getChallengeBtn').onclick = async () => {
         } else {
             showLoginError(res.message);
         }
-    } catch(e) { showLoginError('Error de conexiÃƒÂ³n.'); }
+    } catch(e) { showLoginError('Error de conexión.'); }
 };
 
 document.getElementById('verifyNonceBtn').onclick = async () => {
@@ -206,9 +206,9 @@ document.getElementById('verifyNonceBtn').onclick = async () => {
         if (res.status === 'ok') {
             setAuth(res);
         } else {
-            showLoginError(res.message || 'Firma invÃƒÂ¡lida.');
+            showLoginError(res.message || 'Firma inválida.');
         }
-    } catch(e) { showLoginError('Error de conexiÃƒÂ³n.'); }
+    } catch(e) { showLoginError('Error de conexión.'); }
 };
 
 function showLoginError(msg) {
@@ -228,7 +228,7 @@ function setAuth(res) {
 function showApp() {
     loginScreen.classList.add('hidden');
     appContainer.classList.remove('hidden');
-    userBadge.textContent = authUsername + (authIsAdmin ? ' Ã°Å¸â€˜â€˜' : '');
+    userBadge.textContent = authUsername + (authIsAdmin ? ' 👑' : '');
     if (authIsAdmin) adminPanel.classList.remove('hidden');
     if (!authHasProgramming) document.getElementById('modeProgramming').classList.add('hidden');
     if (!authHasStudy) document.getElementById('modeStudy').classList.add('hidden');
@@ -265,11 +265,11 @@ async function apiCall(endpoint, method = 'GET', body = null) {
         return JSON.parse(text);
     } catch (e) {
         if (text.length === 0) {
-            console.warn('apiCall: respuesta vacÃƒÂ­a de ' + endpoint + ' (HTTP ' + res.status + ')');
+            console.warn('apiCall: respuesta vacía de ' + endpoint + ' (HTTP ' + res.status + ')');
         } else {
             console.warn('apiCall: respuesta no-JSON de ' + endpoint + ' (HTTP ' + res.status + '):', text.substring(0, 200));
         }
-        return { status: 'error', message: 'Respuesta invÃƒÂ¡lida del servidor (HTTP ' + res.status + ')' };
+        return { status: 'error', message: 'Respuesta inválida del servidor (HTTP ' + res.status + ')' };
     }
 }
 
@@ -280,7 +280,7 @@ document.getElementById('modeStudy').onclick = () => switchMode('study');
 function switchMode(mode) {
     document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
     document.getElementById(mode === 'study' ? 'modeStudy' : 'modeProgramming').classList.add('active');
-    document.getElementById('activeMode').textContent = mode === 'study' ? 'Ã°Å¸â€œÅ¡ Estudiar' : 'Ã°Å¸â€™Â» Programar';
+    document.getElementById('activeMode').textContent = mode === 'study' ? '📚 Estudiar' : '💻 Programar';
     studyProfileSection.classList.toggle('hidden', mode !== 'study');
     if (mode === 'study') loadStudyProfile();
 }
@@ -304,10 +304,10 @@ async function refreshUsersTable() {
         if (res.status !== 'ok') return;
         tbody.innerHTML = res.users.map(u => `
             <tr style="border-bottom:1px solid var(--border-color);">
-                <td style="padding:6px;">${u.username}${u.is_admin ? ' Ã°Å¸â€˜â€˜' : ''}</td>
-                <td>${u.is_admin ? 'Ã¢Å“â€¦' : 'Ã¢ÂÅ’'}</td>
-                <td>${u.has_study_access ? 'Ã¢Å“â€¦' : 'Ã¢ÂÅ’'}</td>
-                <td>${u.has_programming_access ? 'Ã¢Å“â€¦' : 'Ã¢ÂÅ’'}</td>
+                <td style="padding:6px;">${u.username}${u.is_admin ? ' 👑' : ''}</td>
+                <td>${u.is_admin ? '✅' : '❌'}</td>
+                <td>${u.has_study_access ? '✅' : '❌'}</td>
+                <td>${u.has_programming_access ? '✅' : '❌'}</td>
                 <td><button class="btn btn-warning btn-sm" onclick="editUser('${u.username}')">Editar</button></td>
             </tr>
         `).join('');
@@ -443,7 +443,7 @@ document.getElementById('saveEditUserBtn').onclick = async () => {
 
 document.getElementById('deleteUserBtn').onclick = async () => {
     const username = document.getElementById('editUsername').textContent;
-    if (!confirm(`Ã‚Â¿Eliminar permanentemente a ${username}?`)) return;
+    if (!confirm(`¿Eliminar permanentemente a ${username}?`)) return;
     await apiCall(`/api/admin/users/${username}`, 'DELETE');
     document.getElementById('adminEditUserModal').classList.add('hidden');
     await refreshUsersTable();
@@ -484,48 +484,33 @@ document.getElementById('createUserBtn').onclick = async () => {
     if (isAdmin) {
         const publicKey = document.getElementById('newPublicKey').value.trim();
         if (!publicKey || publicKey.length < 64) {
-            return alert('Para crear un admin se requiere la clave pÃƒÂºblica (64 caracteres hex). Generala con "Generar Claves" o subÃƒÂ­ un .pem.');
+            return alert('Para crear un admin se requiere la clave pública (64 caracteres hex). Generá un par de claves con el botón "Generar Par de Claves".');
         }
         payload.public_key = publicKey;
     } else {
         const password = document.getElementById('newPassword').value;
-        if (!password) return alert('ContraseÃƒÂ±a requerida para usuarios normales.');
-        if (password.length < 8) return alert('La contraseÃƒÂ±a debe tener al menos 8 caracteres.');
         payload.password = password;
     }
 
-    const res = await apiCall('/api/admin/users', 'POST', payload);
-
-    if (res.status === 'ok') {
-        document.getElementById('newUsername').value = '';
-        document.getElementById('newPassword').value = '';
-        document.getElementById('newPublicKey').value = '';
-        // Reset checkboxes
-        document.getElementById('newIsAdmin').checked = false;
-        document.getElementById('newStudyAccess').checked = true;
-        document.getElementById('newProgAccess').checked = false;
-        document.getElementById('newEditGlobalPrompt').checked = false;
-        document.getElementById('newEditLocalPrompt').checked = false;
-        document.getElementById('newCanFork').checked = false;
-        document.getElementById('newCanExecPS').checked = false;
-        document.getElementById('newCanWrite').checked = false;
-        document.getElementById('newCanSearchGoogle').checked = false;
-        toggleAdminCreateMode();
-        await refreshUsersTable();
-    } else {
-        alert('Error: ' + res.message);
-    }
+    try {
+        const res = await apiCall('/api/admin/users', 'POST', payload);
+        if (res.status === 'ok') {
+            alert('Usuario creado correctamente.');
+            // Clear form fields
+            document.getElementById('newUsername').value = '';
+            document.getElementById('newPassword').value = '';
+            document.getElementById('newPasswordConfirm').value = '';
+            document.getElementById('newPublicKey').value = '';
+            document.getElementById('keygenPublic').value = '';
+            document.getElementById('keygenPrivate').value = '';
+            document.getElementById('keygenModal').classList.add('hidden');
+            document.getElementById('newIsAdmin').checked = false;
+            await refreshUsersTable();
+        } else {
+            alert('Error: ' + (res.message || 'Error desconocido'));
+        }
+    } catch(e) { alert('Error de conexión.'); }
 };
-
-// ---- Admin Create Mode Toggle ----
-function toggleAdminCreateMode() {
-    const isAdmin = document.getElementById('newIsAdmin').checked;
-    document.getElementById('newPasswordContainer').classList.toggle('hidden', isAdmin);
-    document.getElementById('newPublicKeyContainer').classList.toggle('hidden', !isAdmin);
-    document.getElementById('uploadPemBtn').classList.toggle('hidden', !isAdmin);
-    document.getElementById('generateKeysBtn').classList.toggle('hidden', !isAdmin);
-    document.getElementById('pemFileInput').style.display = isAdmin ? 'inline' : 'none';
-}
 
 // ---- PEM File Upload ----
 document.getElementById('uploadPemBtn').onclick = () => {
@@ -545,7 +530,7 @@ document.getElementById('pemFileInput').onchange = async (e) => {
             if (hexMatch) {
                 document.getElementById('newPublicKey').value = hexMatch[1].toLowerCase();
             } else {
-                alert('Formato .pem invÃƒÂ¡lido. Debe contener una clave ED25519 de 64 caracteres hex.');
+                alert('Formato .pem inválido. Debe contener una clave ED25519 de 64 caracteres hex.');
             }
         }
     } catch(err) { alert('Error leyendo el archivo .pem'); }
@@ -563,7 +548,7 @@ document.getElementById('generateKeysBtn').onclick = async () => {
         } else {
             alert('Error generando claves: ' + res.message);
         }
-    } catch(e) { alert('Error de conexiÃƒÂ³n al generar claves.'); }
+    } catch(e) { alert('Error de conexión al generar claves.'); }
 };
 
 document.getElementById('closeKeygenBtn').onclick = () => {
@@ -708,14 +693,8 @@ async function loadChatHistory() {
     } catch(e) {}
 }
 
-async function selectChatSession(id) {
-    currentSessionId = id;
-    loadChatHistory();
-    const res = await apiCall(`/api/chats/${id}`);
-    if (res.status === 'ok') {
-        const chatArea = document.getElementById('chatArea');
-        chatArea.innerHTML = '';
-// Líneas 718-750 de 1021 en C:\Users\Fa\Desktop\IAF\public\app.js
+// BUG-014 + BUG-015 FIX: Al seleccionar un chat existente (ej: tras recargar la página),
+// se inicia el monitoreo del agente y se cargan los steps de auditoría desde la sesión.
 async function selectChatSession(id) {
     currentSessionId = id;
     loadChatHistory();
@@ -729,14 +708,21 @@ async function selectChatSession(id) {
             document.getElementById('activeProjectName').innerText = activeProject;
             loadProjects();
         }
-        // BUG-015 FIX: Cargar steps de auditoría desde la sesión y mostrarlos
-        if (res.session.steps && Array.isArray(res.session.steps)) {
+        // BUG-015 FIX: Cargar steps de auditoría desde la sesión persistida
+        if (res.session.steps && Array.isArray(res.session.steps) && res.session.steps.length > 0) {
             renderConsoleSteps(res.session.steps);
         }
         // BUG-014 FIX: Iniciar monitoreo del agente al entrar a un chat existente
+        // (sin esto, no se ven mensajes en tiempo real ni se actualiza la auditoría)
         startAgentMonitoring();
     }
 }
+
+document.getElementById('newChatBtn').onclick = () => {
+    currentSessionId = null;
+    document.getElementById('chatArea').innerHTML = '<div class="message system-msg"><strong>Sistema:</strong> Nuevo chat iniciado.</div>';
+    loadChatHistory();
+};
 
 // ---- Send Message ----
 const SEND_DEBOUNCE_MS = 500;
@@ -818,7 +804,7 @@ document.getElementById('cancelRefinedPromptBtn').onclick = async () => {
 
 async function sendMessageToAgent(text, mode) {
     addMessage('user', text);
-    // Resetear flags de modales para la nueva sesiÃƒÂ³n del agente
+    // Resetear flags de modales para la nueva sesión del agente
     agentQuestionShown = false;
     agentPlanShown = false;
     const res = await apiCall('/api/chat', 'POST', {
@@ -837,14 +823,14 @@ async function sendMessageToAgent(text, mode) {
 function addMessage(role, text) {
     const div = document.createElement('div');
     div.className = `message ${role}-msg`;
-    div.innerHTML = `<strong>${role === 'user' ? 'TÃƒÂº' : 'Agente'}:</strong> ${text.replace(/\n/g, '<br>')}`;
+    div.innerHTML = `<strong>${role === 'user' ? 'Tú' : 'Agente'}:</strong> ${text.replace(/\n/g, '<br>')}`;
     document.getElementById('chatArea').appendChild(div);
     document.getElementById('chatArea').scrollTop = document.getElementById('chatArea').scrollHeight;
 }
 
 // ---- Agent Monitoring (Console) ----
 // BUG-002 FIX: Reestructurado para que los mensajes informativos se consuman
-// SIEMPRE, incluso cuando el agente ya terminÃƒÂ³. La lÃƒÂ³gica anterior solo
+// SIEMPRE, incluso cuando el agente ya terminó. La lógica anterior solo
 // consultaba info_messages si (active || running), lo que causaba que los
 // mensajes se perdieran cuando el agente finalizaba entre polls.
 async function startAgentMonitoring() {
@@ -856,14 +842,14 @@ async function startAgentMonitoring() {
     agentMonitorInterval = setInterval(async () => {
         const statusRes = await apiCall('/api/agent/status');
 
-        // BUG-002 FIX: Reiniciar contador solo cuando cambia la sesiÃƒÂ³n
+        // BUG-002 FIX: Reiniciar contador solo cuando cambia la sesión
         if (statusRes.current_session_id && statusRes.current_session_id !== lastSessionId) {
             lastSessionId = statusRes.current_session_id;
             lastInfoMessageCount = 0;
         }
 
         // BUG-002 FIX: Consumir info_messages SIEMPRE, independientemente
-        // de si el agente estÃƒÂ¡ corriendo o ya terminÃƒÂ³
+        // de si el agente está corriendo o ya terminó
         if (statusRes.info_messages && Array.isArray(statusRes.info_messages)) {
             const currentCount = statusRes.info_messages.length;
             if (currentCount > lastInfoMessageCount && currentCount > 0) {
@@ -876,10 +862,10 @@ async function startAgentMonitoring() {
             }
         }
 
-        // Mostrar mensaje final si el agente terminÃƒÂ³
+        // Mostrar mensaje final si el agente terminó
         if (statusRes.finished && statusRes.final_message) {
-            showInfoToast('Ã¢Å“â€œ ' + statusRes.final_message);
-            // Limpiar el intervalo despuÃƒÂ©s de mostrar el mensaje final
+            showInfoToast('✓ ' + statusRes.final_message);
+            // Limpiar el intervalo después de mostrar el mensaje final
             setTimeout(() => {
                 if (agentMonitorInterval) {
                     clearInterval(agentMonitorInterval);
@@ -889,9 +875,9 @@ async function startAgentMonitoring() {
             }, 2000);
         }
 
-        // El resto de la lÃƒÂ³gica solo aplica cuando el agente estÃƒÂ¡ activo
+        // El resto de la lógica solo aplica cuando el agente está activo
         if (statusRes.status === 'ok' && (statusRes.active || statusRes.running)) {
-            // Actualizar pasos de auditorÃƒÂ­a en la consola
+            // Actualizar pasos de auditoría en la consola
             const stepsRes = await apiCall('/api/agent/steps');
             if (stepsRes.status === 'ok' && stepsRes.steps) {
                 renderConsoleSteps(stepsRes.steps);
@@ -917,7 +903,7 @@ async function startAgentMonitoring() {
                 document.getElementById('captchaAlert').classList.remove('hidden');
             }
 
-            // Si el agente ya no estÃƒÂ¡ esperando respuesta, resetear flag
+            // Si el agente ya no está esperando respuesta, resetear flag
             if (!statusRes.esperando_respuesta_usuario) {
                 agentQuestionShown = false;
             }
@@ -972,7 +958,7 @@ document.getElementById('summarizeStepsBtn').onclick = async () => {
     const res = await apiCall('/api/agent/summary');
     if (res.status === 'ok') {
         const area = document.getElementById('consoleArea');
-        area.innerHTML = `<div class="console-step"><div class="console-step-title">Ã°Å¸â€œâ€¹ Resumen</div><div class="console-step-detail">${res.summary}</div></div>`;
+        area.innerHTML = `<div class="console-step"><div class="console-step-title">📋 Resumen</div><div class="console-step-detail">${res.summary}</div></div>`;
     }
 };
 
@@ -1002,9 +988,13 @@ document.getElementById('closeCaptchaBtn').onclick = () => {
 // ---- Agent Question Modal ----
 // NOTA: El modal se abre desde startAgentMonitoring cuando detecta
 // esperando_respuesta_usuario === true en el endpoint /api/agent/status.
+// BUG-016 FIX: Al responder, se guarda la respuesta en el chat visible
+// y también se persiste en el backend (agent_responder ahora guarda en sesión).
 document.getElementById('submitAgentResponseBtn').onclick = async () => {
     const respuesta = document.getElementById('agentQuestionResponse').value.trim();
     if (!respuesta) return;
+    // BUG-016 FIX: Mostrar la respuesta del usuario en el chat inmediatamente
+    addMessage('user', respuesta);
     await apiCall('/api/agent/responder', 'POST', { respuesta });
     document.getElementById('agentQuestionModal').classList.add('hidden');
     agentQuestionShown = false;
