@@ -2,75 +2,82 @@
 
 ## Bugs Corregidos (Sesión 2025-2026)
 
+### BUG-011: 2 tests fallaban por assertions incorrectos (no bugs reales en el código)
+- **Test 1: `agent_rs_finalizar_tarea_no_exige_parametro_url`**
+  - **Causa**: El test buscaba `"finalizar_tarea"` y delimitaba el schema con `"=> {"`, pero `"=> {"` capturaba handlers de otros tools incluyendo `image_fetch` que sí tiene `"url"` en required. El `schema_block` era demasiado grande y contenía `"url"` de otros schemas.
+  - **Fix**: Reescribir el test para buscar `"required"` después de `"finalizar_tarea"` y acotar al primer `]` (fin del array required). Así solo verifica el contenido de `"required": ["mensaje_final"]`.
+- **Test 2: `agent_rs_read_file_tiene_manejo_errores`**
+  - **Causa**: El test buscaba la frase `"No existe"` en el handler de `read_file`, pero el código real usa `"Error leyendo archivo"` (de `format!("Error leyendo archivo: {}", e)`).
+  - **Fix**: Cambiar el assert de `"No existe"` a `"Error leyendo archivo"`.
+- **Lección**: Los tests que verifican strings en código fuente pueden romperse si el código cambia su wording. Usar frases que sean estables o verificar múltiples variantes.
+
 ### BUG-010: Módulos duplicados y match String vs &str (4 errores)
-- **Causa real**: Al cerrar BUG-005 (`mod regression_new_bugs`), los módulos `stress_tests` (L618 y L1312) y `fault_injection_tests` (L681 y L1367) —que estaban en scopes diferentes— colisionaron en el scope padre. También `match ext` fallaba porque `ext` era `String` (de `to_lowercase()`) y los brazos usaban literales `&str`.
-- **Fix aplicado**:
-  1. Renombrar `mod stress_tests` en L1312 → `mod stress_tests_extended` (tests de carga masiva: 100k mensajes, 10k archivos, JSON parse)
-  2. Renombrar `mod fault_injection_tests` en L1367 → `mod fault_injection_tests_extended` (tests de caracteres especiales, unicode, null bytes)
-  3. Cambiar `match ext {` → `match ext.as_str() {` en L1427 para que `String` haga match contra `&str`
-- **Verificación**: 15 módulos únicos, sin duplicados. `match ext.as_str()` presente.
+- **Causa real**: Al cerrar BUG-005 (`mod regression_new_bugs`), los módulos `stress_tests` (L618 y L1312) y `fault_injection_tests` (L681 y L1367) colisionaron. También `match ext` fallaba porque `ext` era `String` y los brazos usaban `&str`.
+- **Fix**: Renombrar a `stress_tests_extended`, `fault_injection_tests_extended`, y `match ext.as_str()`.
 
 ### Cadena completa de bugs encadenados en exhaustive_tests.rs:
-**BUG-005** (unclosed delimiter) → **BUG-006** (fn sin cuerpo) → **BUG-009** (bloque huérfano) → **BUG-010** (módulos duplicados + match String/&str)
-Cada bug ocultaba al siguiente. Al arreglar uno, el compilador revelaba el siguiente.
-
-### BUG-009: Bloque huérfano en exhaustive_tests.rs (línea 899)
-- **Causa**: Al eliminar BUG-006, el cuerpo de la función quedó huérfano (`{ let status = ... }`).
-- **Fix**: Eliminar 9 líneas del bloque huérfano. Archivo: 1833 líneas.
-
-### BUG-008: include_str!("src/main.rs") no encuentra archivo (error os 3)
-- **Causa**: Replace global de BUG-007 rompió `include_str!` en `api_contract_tests`.
-- **Fix**: Revertir 5 `include_str!("src/main.rs")` → `include_str!("../src/main.rs")`.
-- **Regla**: `include_str!` = relativo al archivo fuente. `std::fs::read_to_string` = relativo al CWD.
-
-### BUG-007: Rutas incorrectas en integration_tests.rs
-- **Causa**: `std::fs::read_to_string("../src/")` usa CWD (raíz), no el directorio del archivo fuente.
-- **Fix**: Cambiar `"../src/` → `"src/"` en 11 rutas.
-
-### BUG-006: Función sin cuerpo (línea 828)
-- `fn estado_agente_con_todos_los_campos_null_o_default()` sin `{ }`.
-- **Fix**: Eliminar líneas 827-828.
+**BUG-005** → **BUG-006** → **BUG-009** → **BUG-010** → **BUG-011**
+Cada bug ocultaba al siguiente. Al arreglar uno, el compilador o los tests revelaban el siguiente.
 
 ### BUG-005: Unclosed delimiter (línea 974)
-- `mod regression_new_bugs {` nunca se cerraba con `}`.
-- **Fix**: Insertar `}` después del último test del módulo (L1099).
+- `mod regression_new_bugs {` nunca se cerraba con `}`. Insertada llave.
 
-### BUG-001: No puede analizar PDFs ni .docx
-- **Fix**: `fn extract_text_from_docx()` + `pdf_extract::extract_text()` + detección de extensiones.
+### BUG-006: Función sin cuerpo (línea 828)
+- `fn estado_agente_con_todos_los_campos_null_o_default()` sin `{ }`. Eliminada.
 
-### BUG-002: Frontend no muestra mensajes informativos en tiempo real
-- **Fix**: `info_messages` se consume SIEMPRE en app.js, no se limpia en `finalizar_tarea`.
+### BUG-009: Bloque huérfano (línea 899)
+- Cuerpo de BUG-006 quedó huérfano. Eliminado.
 
-### BUG-004: finalizar_tarea devuelve error "No se proporcionó URL"
-- **Fix**: Refactorizado a ~15 líneas, usa `mensaje_final`, sin campo `"url"`.
+### BUG-007: Rutas incorrectas en integration_tests.rs
+- `std::fs::read_to_string("../src/")` → `"src/"`.
 
-### BUG: addMessage duplicada en app.js, perfil estudio, system prompt local
+### BUG-008: include_str!("src/main.rs") roto
+- Replace global de BUG-007 rompió `include_str!` en `api_contract_tests`. Revertido.
+
+### BUG-001: PDF/DOCX
+- **Fix**: `fn extract_text_from_docx()` + `pdf_extract::extract_text()` + detección de extensiones. Verificado en agent.rs.
+
+### BUG-002: Mensajes informativos en tiempo real
+- **Fix**: `info_messages` se consume SIEMPRE en app.js, no se limpia en `finalizar_tarea`. Verificado.
+
+### BUG-004: finalizar_tarea error URL
+- **Fix**: `"required": ["mensaje_final"]`, sin `"url"`. Verificado en schema.
+
+### BUGs: addMessage duplicada, perfil estudio, system prompt local
 - **Fix**: Todos arreglados y verificados en código fuente.
 
 ## Por qué estos bugs no fueron detectados por tests
 
-### La cadena BUG-005→006→009→010
+### La cadena BUG-005→006→009→010→011
 - **Los errores estaban en el propio archivo de tests.** Si el archivo no compila, ningún test se ejecuta.
 - **Solución**: Tests de integridad en archivo separado (`integration_tests.rs`) que verifican `exhaustive_tests.rs` como texto.
 - **Lección**: Los errores de sintaxis se encadenan. Arreglar uno revela el siguiente. Siempre verificar balance de llaves ANTES de compilar.
 
-### BUG-008/007 (rutas incorrectas)
-- `include_str!` es relativo al archivo fuente. `std::fs::read_to_string` es relativo al CWD.
-- **Lección**: NUNCA hacer replace global de rutas.
+### BUG-011 (asserts incorrectos)
+- Tests que verifican strings literales en código fuente son frágiles. Si el código cambia su wording, el test falla sin que haya un bug real.
+- **Solución**: Acotar las búsquedas de strings al contexto correcto (ej: delimitar por `[`/`]` en lugar de `"=> {"`) y usar frases estables.
 
-## Verificación de bugs viejos (estado actual — verificado 2025-07)
+## Verificación completa de bugs viejos (2025-07, tras arreglar BUG-011)
 
-| Bug | Estado | Verificación |
-|-----|--------|-------------|
-| PDF/DOCX | ✅ | `fn extract_text_from_docx`, `pdf_extract::extract_text`, `zip::ZipArchive`, `quick_xml::Reader`, `ext == "pdf"/"docx"` — TODO presente. `pdftotext` NO existe |
-| finalizar_tarea URL | ✅ | ~15 líneas, `mensaje_final`, sin `"url"`, sin `info_messages.clear()` |
-| System prompt local | ✅ | `load_local_prompt`, `get_project_path`, `Project Specific Prompt:`, `fn load_global_prompt`, `fn load_local_prompt`, `globalPrompt.json`, `localPrompt.json` |
+| Bug | Estado | Evidencia en código fuente |
+|-----|--------|---------------------------|
+| PDF/DOCX | ✅ | `fn extract_text_from_docx`, `pdf_extract::extract_text`, `zip::ZipArchive`, `quick_xml::Reader`, `ext == "pdf"`, `ext == "docx"` |
+| finalizar_tarea URL | ✅ | `"required": ["mensaje_final"]`, sin `"url"` en required |
+| System prompt local | ✅ | `load_local_prompt`, `get_project_path`, `Project Specific Prompt:`, `fn load_global_prompt`, `fn load_local_prompt` |
 | Mensajes en tiempo real | ✅ | `showInfoToast`, `startAgentMonitoring`, `lastInfoMessageCount`, `info_messages: Vec<String>` |
 | addMessage | ✅ | 1 `function addMessage`, `sendMessageToAgent`, `function init`, `init()` |
-| Perfil estudio | ✅ | `loadStudyProfile`, `/api/study/profile`, `study_get_profile`, `profile_exists_on_disk`, `profile.json` |
-| JS sintaxis | ✅ | Balanceado: 252 `{}`, 745 `()`, 31 `[]` — delta 0 |
-| Módulos duplicados | ✅ | 15 módulos únicos en exhaustive_tests.rs, 0 duplicados |
-| match String/&str | ✅ | `match ext.as_str()` en fault_injection_tests_extended |
+| Perfil estudio | ✅ | `loadStudyProfile`, `/api/study/profile`, `study_get_profile`, `profile_exists_on_disk` |
+| JS sintaxis | ✅ | 252 `{}`, 745 `()`, 31 `[]` — delta 0 |
+| Módulos duplicados | ✅ | 15 módulos únicos en exhaustive_tests.rs |
+| match String/&str | ✅ | `match ext.as_str()` |
+| Tests pasan | ✅ | 121 de 123 → ahora 123/123 (BUG-011 corregido) |
+
+## Resultados de cargo test (tras BUG-011)
+- lib.rs: 38/38 pasan
+- main.rs: 40/40 pasan
+- exhaustive_tests.rs: 123/123 pasan (0 failures)
+- integration_tests.rs: por verificar (requiere compilación)
+- **0 warnings**
 
 ## APIs y comportamiento verificado
 - `POST /api/chat` spawnea el agente en `tokio::spawn`
@@ -78,13 +85,13 @@ Cada bug ocultaba al siguiente. Al arreglar uno, el compilador revelaba el sigui
 - `Path::extension()` para `.gitignore` devuelve `None`
 - `include_str!` es relativo al archivo fuente; `std::fs::read_to_string` es relativo al CWD
 
-## Cambios estructurales (v3.1)
-- `tests/exhaustive_tests.rs`: 1833 líneas. 15 módulos únicos: `source_code_verification_tests`, `regression_tests`, `integration_tests`, `stress_tests`, `fault_injection_tests`, `edge_case_tests`, `smoke_tests`, `regression_new_bugs`, `user_requested_test_names`, `additional_regression_tests`, `stress_tests_extended`, `fault_injection_tests_extended`, `additional_edge_case_tests`, `e2e_tests`, `regression_historical`
-- `tests/integration_tests.rs`: 1197 líneas. 10 módulos. 25 `include_str!` con rutas correctas.
-- `app.js`: Balanceado. `addMessage` 1 vez. `startAgentMonitoring` consume `info_messages` SIEMPRE.
-- `agent.rs`: `extract_text_from_docx()`, `pdf_extract::extract_text()`, `finalizar_tarea` ~15 líneas.
+## Cambios estructurales (v3.2)
+- `tests/exhaustive_tests.rs`: 1835 líneas. 15 módulos únicos. BUG-011 corregido: test `agent_rs_finalizar_tarea_no_exige_parametro_url` reescrito con delimitación correcta, test `agent_rs_read_file_tiene_manejo_errores` con assert actualizado.
+- `tests/integration_tests.rs`: 1197 líneas. 10 módulos.
+- `app.js`: Balanceado. `addMessage` 1 vez.
+- `agent.rs`: `extract_text_from_docx()`, `pdf_extract::extract_text()`, `finalizar_tarea` ~15 líneas, `read_file` con `"Error leyendo archivo"`.
 
-## Archivos de tests (v3.1)
-- `tests/exhaustive_tests.rs` (1833 líneas) — 15 módulos: source code verification, regresión, integración, estrés, inyección de fallos, casos límite, smoke, e2e, + variantes extended
-- `tests/integration_tests.rs` (1197 líneas) — StudyEngine, UserStore, sanitize_filename, ActiveAgentStatus, DOCX, CiclePhase, ChatSession, contrato API, integridad de archivos, regresión de bugs viejos
+## Archivos de tests (v3.2)
+- `tests/exhaustive_tests.rs` (1835 líneas) — 15 módulos, 123 tests
+- `tests/integration_tests.rs` (1197 líneas) — 10 módulos, incluyendo `test_file_integrity_tests` y `regression_bugs_tests`
 - `tests/frontend_regression_tests.js` — Tests de regresión del frontend (JS, Node)
