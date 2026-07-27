@@ -1,4 +1,4 @@
-﻿// ============================================================================
+// ============================================================================
 // IAF — app.js — Cliente Web con Autenticación
 // ============================================================================
 
@@ -484,98 +484,42 @@ document.getElementById('createUserBtn').onclick = async () => {
     };
 
     if (isAdmin) {
-        const publicKey = document.getElementById('newPublicKey').value.trim();
-        if (!publicKey || publicKey.length < 64) {
-            return alert('Para crear un admin se requiere la clave pública (64 caracteres hex). Generá un par de claves con el botón "Generar Par de Claves".');
+        const createRes = await apiCall('/api/admin/users', 'POST', payload);
+        if (createRes.status === 'ok') {
+            document.getElementById('newUsername').value = '';
+            document.getElementById('newIsAdmin').checked = false;
+            showInfoToast('✅ Admin creado exitosamente.');
+            await refreshUsersTable();
+        } else {
+            alert('Error: ' + (createRes.message || 'Error al crear admin.'));
         }
-        payload.public_key = publicKey;
     } else {
-        const password = document.getElementById('newPassword').value;
-        payload.password = password;
-    }
-
-    try {
-        const res = await apiCall('/api/admin/users', 'POST', payload);
-        if (res.status === 'ok') {
+        const pwd = document.getElementById('newPassword').value;
+        if (!pwd) return alert('Password requerido para usuarios normales.');
+        payload.password = pwd;
+        const createRes = await apiCall('/api/admin/users', 'POST', payload);
+        if (createRes.status === 'ok') {
             document.getElementById('newUsername').value = '';
             document.getElementById('newPassword').value = '';
             document.getElementById('newPasswordConfirm').value = '';
-            document.getElementById('newPublicKey').value = '';
+            showInfoToast('✅ Usuario creado exitosamente.');
             await refreshUsersTable();
         } else {
-            alert('Error: ' + (res.message || 'No se pudo crear el usuario.'));
+            alert('Error: ' + (createRes.message || 'Error al crear usuario.'));
         }
-    } catch(e) {
-        alert('Error de conexión al crear usuario.');
     }
 };
 
 // ============================================================================
-// KEY GENERATION
-// ============================================================================
-
-let currentServerKey = null;
-
-// ---- Generate Keys locally ----
-document.getElementById('generateKeysBtn').onclick = async () => {
-    const btn = document.getElementById('generateKeysBtn');
-    btn.disabled = true;
-    btn.textContent = 'Generando...';
-    try {
-        const res = await apiCall('/api/auth/generate-keypair', 'GET');
-        if (res.status === 'ok') {
-            document.getElementById('newPublicKey').value = res.public_key;
-            // Create blob and download private key
-            const blob = new Blob([res.private_key], { type: 'application/x-pem-file' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = 'admin_private.pem';
-            a.click();
-            URL.revokeObjectURL(url);
-        } else {
-            alert('Error: ' + res.message);
-        }
-    } catch(e) {
-        alert('Error al generar claves.');
-    }
-    btn.disabled = false;
-    btn.textContent = '🔑 Generar Par de Claves';
-};
-
-// ---- Upload PEM file ----
-document.getElementById('uploadPemBtn').onclick = () => {
-    document.getElementById('pemFileInput').click();
-};
-
-document.getElementById('pemFileInput').onchange = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    const text = await file.text();
-    try {
-        const res = await apiCall('/api/auth/upload-public-key', 'POST', { pem_content: text });
-        if (res.status === 'ok') {
-            document.getElementById('newPublicKey').value = res.public_key;
-        } else {
-            alert('Error: ' + res.message);
-        }
-    } catch(e) {
-        alert('Error al procesar el archivo PEM.');
-    }
-};
-// ============================================================================
-// PROJECTS
+// PROYECTOS
 // ============================================================================
 
 async function loadProjects() {
     try {
         const res = await apiCall('/api/projects');
         const list = document.getElementById('projectList');
-        if (!list) return;
-
-        // Soporta ambos formatos: {projects: [...]} (nuevo) o array pelado (legacy)
-        const projects = Array.isArray(res) ? res : (res.projects || []);
-        
+        if (!res.projects || !Array.isArray(res.projects)) return;
+        const projects = res.projects;
         if (projects.length > 0) {
             list.innerHTML = projects.map(p => `
                 <div class="project-item ${activeProject === p.name ? 'active' : ''}" onclick="selectProject('${p.name}')">${p.name}</div>
@@ -671,7 +615,8 @@ async function loadPrompts() {
 // savePromptsBtn: guarda ambos prompts (global y local) en una sola acción
 document.getElementById('savePromptsBtn').onclick = async () => {
     const globalContent = document.getElementById('globalPrompt').value;
-    const globalRes = await apiCall('/api/prompts/global', 'PUT', { content: globalContent });
+    // FIX: El backend solo acepta POST en /api/prompts/global (no PUT)
+    const globalRes = await apiCall('/api/prompts/global', 'POST', { content: globalContent });
     if (globalRes.status !== 'ok') {
         alert('Error al guardar prompt global: ' + globalRes.message);
         return;
@@ -679,7 +624,8 @@ document.getElementById('savePromptsBtn').onclick = async () => {
 
     if (activeProject) {
         const localContent = document.getElementById('localPrompt').value;
-        const localRes = await apiCall(`/api/prompts/projects/${activeProject}`, 'PUT', { content: localContent });
+        // FIX: /api/prompts/local usa POST y recibe { project_name, content } en el body (no PUT a /api/prompts/projects/...)
+        const localRes = await apiCall('/api/prompts/local', 'POST', { project_name: activeProject, content: localContent });
         if (localRes.status !== 'ok') {
             alert('Error al guardar prompt local: ' + localRes.message);
             return;
@@ -928,260 +874,233 @@ async function sendMessageToAgent(text, mode) {
     }
 }
 
-
 // ============================================================================
-// RENDERIZADO DE MENSAJES CON MARKDOWN + LATEX
+// AGENT MONITORING — polling con manejo de mensajes informativos
 // ============================================================================
 
-function renderMarkdown(text) {
-    try {
-        if (typeof marked !== "undefined" && marked.parse) {
-            return marked.parse(text);
+function startAgentMonitoring() {
+    if (agentMonitorInterval) clearInterval(agentMonitorInterval);
+    agentMonitorInterval = setInterval(async () => {
+        try {
+            const res = await apiCall('/api/agent/status');
+            if (res.status !== 'ok') return;
+
+            // Mostrar thinking en la consola de auditoría
+            if (res.thinking_content && Array.isArray(res.thinking_content)) {
+                const thinking = res.thinking_content.join('\n');
+                if (thinking.trim()) {
+                    updateConsoleThinking(thinking);
+                }
+            }
+
+            // Mostrar steps en la consola
+            if (res.steps && Array.isArray(res.steps)) {
+                renderConsoleSteps(res.steps);
+            }
+
+            // Mostrar mensajes informativos en el chat
+            if (res.info_messages && Array.isArray(res.info_messages)) {
+                // Solo mostrar los mensajes nuevos (no duplicados)
+                const shownKey = '_shownInfoMsgs';
+                if (!window[shownKey]) window[shownKey] = new Set();
+                res.info_messages.forEach(msg => {
+                    if (!window[shownKey].has(msg)) {
+                        window[shownKey].add(msg);
+                        addMessage('agent', 'ℹ️ ' + msg, 'info-msg');
+                    }
+                });
+                // Limpiar el set si crece demasiado
+                if (window[shownKey].size > 200) window[shownKey] = new Set();
+            }
+
+            // Mostrar pregunta del agente (modal)
+            if (res.esperando_respuesta_usuario && res.pregunta_usuario && !agentQuestionShown) {
+                agentQuestionShown = true;
+                showAgentQuestionModal(res.pregunta_usuario);
+            }
+
+            // Mostrar plan del agente (modal)
+            if (res.esperando_aprobacion_plan && res.plan_propuesto && !agentPlanShown) {
+                agentPlanShown = true;
+                showAgentPlanModal(res.plan_propuesto);
+            }
+
+            // Agente terminó (finalizar_tarea)
+            if (res.finished) {
+                clearInterval(agentMonitorInterval);
+                agentMonitorInterval = null;
+                if (res.final_message) {
+                    addMessage('agent', '✅ ' + res.final_message, 'final-msg');
+                }
+                // Recargar historial
+                loadChatHistory();
+                updateConsoleStatus('✅ Agente finalizado.');
+            }
+
+            // Interrupción
+            if (res.interrupted) {
+                updateConsoleStatus('⚠️ Agente interrumpido.');
+            }
+        } catch(e) {
+            console.error('[IAF] Error en monitoreo del agente:', e);
         }
-    } catch(e) { console.warn("marked.parse error:", e); }
-    return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\n/g, "<br>");
+    }, 1000);
 }
+
+// ---- Interrupt Button ----
+document.getElementById('interruptBtn').onclick = async () => {
+    const res = await apiCall('/api/agent/interrupt', 'POST');
+    if (res.status === 'ok') {
+        showInfoToast('⏸️ Agente interrumpido.');
+    }
+};
+
+// ---- Agent Answer (responder a pregunta) ----
+async function responderAgente(respuesta) {
+    document.getElementById('agentQuestionModal').classList.add('hidden');
+    agentQuestionShown = false;
+    await apiCall('/api/agent/responder', 'POST', { respuesta });
+}
+
+// ---- Agent Approve Plan ----
+async function aprobarPlan(aprobado, feedback) {
+    document.getElementById('agentPlanModal').classList.add('hidden');
+    agentPlanShown = false;
+    await apiCall('/api/agent/aprobar_plan', 'POST', { aprobado, feedback: feedback || '' });
+}
+
+// ============================================================================
+// UI HELPERS — modales, toasts, consola, mensajes
+// ============================================================================
+
+function showAgentQuestionModal(pregunta) {
+    const modal = document.getElementById('agentQuestionModal');
+    document.getElementById('agentQuestionText').textContent = pregunta;
+    document.getElementById('agentAnswerInput').value = '';
+    modal.classList.remove('hidden');
+    document.getElementById('agentAnswerInput').focus();
+}
+
+document.getElementById('agentAnswerSendBtn').onclick = () => {
+    const respuesta = document.getElementById('agentAnswerInput').value.trim();
+    if (!respuesta) return;
+    responderAgente(respuesta);
+};
+
+// Enter en el input de respuesta
+document.getElementById('agentAnswerInput').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+        document.getElementById('agentAnswerSendBtn').click();
+    }
+});
+
+function showAgentPlanModal(plan) {
+    const modal = document.getElementById('agentPlanModal');
+    document.getElementById('agentPlanText').textContent = plan;
+    document.getElementById('agentPlanFeedback').value = '';
+    modal.classList.remove('hidden');
+}
+
+document.getElementById('agentPlanApproveBtn').onclick = () => {
+    const feedback = document.getElementById('agentPlanFeedback').value.trim();
+    aprobarPlan(true, feedback);
+};
+
+document.getElementById('agentPlanRejectBtn').onclick = () => {
+    const feedback = document.getElementById('agentPlanFeedback').value.trim();
+    aprobarPlan(false, feedback);
+};
 
 function addMessage(role, text, extraClass) {
+    const chatArea = document.getElementById('chatArea');
     const div = document.createElement('div');
-    var cssClass = 'message ' + role + '-msg';
-    if (extraClass) cssClass += ' ' + extraClass;
-    div.className = cssClass;
-    div.innerHTML = '<strong>' + (role === 'user' ? 'Tú' : 'Agente') + ':</strong> ' + text.replace(/\n/g, '<br>');
-    document.getElementById('chatArea').appendChild(div);
-    document.getElementById('chatArea').scrollTop = document.getElementById('chatArea').scrollHeight;
+    div.classList.add('message');
+    if (role === 'agent') div.classList.add('agent');
+    if (extraClass) div.classList.add(extraClass);
+    div.textContent = text;
+    chatArea.appendChild(div);
+    chatArea.scrollTop = chatArea.scrollHeight;
 }
 
-// ---- Agent Monitoring (Console) ----
-// BUG-021 FIX: Mensajes informativos se muestran EN EL CHAT en tiempo real
-// (no solo en la auditoría). Polling reducido a 1s para mejor respuesta.
-async function startAgentMonitoring() {
-    if (agentMonitorInterval) clearInterval(agentMonitorInterval);
-    document.getElementById('interruptBtn').classList.remove('hidden');
-    let lastInfoMessageCount = 0;
-    let lastSessionId = null;
-
-    agentMonitorInterval = setInterval(async () => {
-        const statusRes = await apiCall('/api/agent/status');
-
-        // Reiniciar contador solo cuando cambia la sesión
-        if (statusRes.current_session_id && statusRes.current_session_id !== lastSessionId) {
-            lastSessionId = statusRes.current_session_id;
-            lastInfoMessageCount = 0;
-        }
-
-        // BUG-021 FIX: Consumir info_messages SIEMPRE y mostrarlos en el CHAT
-        // (antes solo aparecían en la consola de auditoría)
-        if (statusRes.info_messages && Array.isArray(statusRes.info_messages)) {
-            const currentCount = statusRes.info_messages.length;
-            if (currentCount > lastInfoMessageCount && currentCount > 0) {
-                const newMessages = statusRes.info_messages.slice(lastInfoMessageCount);
-                newMessages.forEach(function(msg) {
-                    // Toast flotante (notificación visual inmediata)
-                    showInfoToast(msg);
-                    // Mensaje en el chat con estilo distintivo (fondo azul semitransparente)
-                    addMessage('agent', 'ℹ️ ' + msg, 'info-msg');
-                });
-                lastInfoMessageCount = currentCount;
-            }
-        }
-
-        // Mostrar mensaje final si el agente terminó
-        if (statusRes.finished && statusRes.final_message) {
-            addMessage('agent', '✅ ' + statusRes.final_message, 'final-msg');
-            showInfoToast('✅ Tarea completada: ' + statusRes.final_message);
-            // Limpiar el intervalo después de mostrar el mensaje final
-            setTimeout(() => {
-                if (agentMonitorInterval) {
-                    clearInterval(agentMonitorInterval);
-                    agentMonitorInterval = null;
-                    document.getElementById('interruptBtn').classList.add('hidden');
-                }
-            }, 2000);
-        }
-
-        // El resto de la lógica solo aplica cuando el agente está activo
-        if (statusRes.status === 'ok' && (statusRes.active || statusRes.running)) {
-            // Actualizar pasos de auditoría en la consola
-            const stepsRes = await apiCall('/api/agent/steps');
-            if (stepsRes.status === 'ok' && stepsRes.steps) {
-                renderConsoleSteps(stepsRes.steps);
-            }
-
-            // Mostrar pregunta del agente al usuario
-            if (statusRes.esperando_respuesta_usuario && statusRes.pregunta_usuario && !agentQuestionShown) {
-                agentQuestionShown = true;
-                document.getElementById('agentQuestionPrompt').textContent = statusRes.pregunta_usuario;
-                document.getElementById('agentQuestionResponse').value = '';
-                document.getElementById('agentQuestionBanner').classList.remove('hidden');
-            }
-
-            // Mostrar plan de cambios propuesto
-            if (statusRes.esperando_aprobacion_plan && statusRes.plan_propuesto && !agentPlanShown) {
-                agentPlanShown = true;
-                document.getElementById('agentPlanContent').textContent = statusRes.plan_propuesto;
-                document.getElementById('agentPlanModal').classList.remove('hidden');
-            }
-
-            // Alerta de CAPTCHA
-            if (statusRes.captcha_pending) {
-                document.getElementById('captchaAlert').classList.remove('hidden');
-            }
-
-            // Si el agente ya no está esperando respuesta, resetear flag
-            if (!statusRes.esperando_respuesta_usuario) {
-                agentQuestionShown = false;
-            }
-            if (!statusRes.esperando_aprobacion_plan) {
-                agentPlanShown = false;
-            }
-        } else if (!statusRes.finished) {
-            // Agente detenido pero no finalizado (posiblemente interrumpido)
-            document.getElementById('interruptBtn').classList.add('hidden');
-            agentQuestionShown = false;
-            agentPlanShown = false;
-        }
-    }, 1000); // BUG-021: reducido de 1500ms a 1000ms para mejor tiempo real
+// Toast informativo
+function showInfoToast(msg) {
+    const toast = document.getElementById('infoToast');
+    if (!toast) {
+        // Crear toast si no existe
+        const t = document.createElement('div');
+        t.id = 'infoToast';
+        t.className = 'info-toast';
+        t.textContent = msg;
+        document.body.appendChild(t);
+        setTimeout(() => { t.classList.add('show'); }, 10);
+        setTimeout(() => {
+            t.classList.remove('show');
+            setTimeout(() => { t.remove(); }, 300);
+        }, 3000);
+        return;
+    }
+    toast.textContent = msg;
+    toast.classList.add('show');
+    setTimeout(() => { toast.classList.remove('show'); }, 3000);
 }
+
+// ============================================================================
+// CONSOLE DE AUDITORÍA — renderizado de steps y thinking
+// ============================================================================
 
 function renderConsoleSteps(steps) {
-    const area = document.getElementById('consoleArea');
-    if (!area) return;
-    area.innerHTML = steps.map(function(s) {
-        return `<div class="console-step">
-            <div class="console-step-title">[${s.step_type || ''}] ${s.title || ''}</div>
-            <div class="console-step-detail">${s.detail || ''}</div>
+    const consoleArea = document.getElementById('consoleArea');
+    if (!consoleArea) return;
+    if (!steps || steps.length === 0) return;
+
+    // Evitar re-renderizar si no hay cambios
+    const hash = steps.length + '-' + (steps[steps.length - 1]?.title || '');
+    if (consoleArea.dataset.stepsHash === hash) return;
+    consoleArea.dataset.stepsHash = hash;
+
+    let html = '';
+    steps.forEach((step, i) => {
+        const icon = step.step_type === 'thinking' ? '🧠' :
+                     step.step_type === 'tool_call' ? '🔧' :
+                     step.step_type === 'tool_result' ? '📋' :
+                     step.step_type === 'info' ? 'ℹ️' : '📌';
+        html += `<div class="console-step">
+            <span class="console-step-icon">${icon}</span>
+            <span class="console-step-title">#${i + 1} ${step.title}</span>
         </div>`;
-    }).join('');
-    area.scrollTop = area.scrollHeight;
+    });
+    consoleArea.innerHTML = html;
+    consoleArea.scrollTop = consoleArea.scrollHeight;
 }
 
+function updateConsoleThinking(thinking) {
+    const consoleArea = document.getElementById('consoleArea');
+    if (!consoleArea) return;
 
-function showInfoToast(message) {
-    var toast = document.createElement('div');
-    toast.className = 'info-toast';
-    toast.textContent = message;
-    toast.style.cssText = 'position:fixed;bottom:20px;right:20px;background:linear-gradient(135deg,#1a1a2e,#16213e);color:#e0e0e0;padding:12px 20px;border-radius:8px;border:1px solid var(--accent,#00d4ff);box-shadow:0 4px 20px rgba(0,0,0,0.5);z-index:10000;max-width:400px;font-size:13px;animation:slideIn 0.3s ease-out;cursor:pointer;';
-    toast.onclick = function() { toast.remove(); };
-    document.body.appendChild(toast);
-    setTimeout(function() {
-        if (toast.parentNode) {
-            toast.style.opacity = '0';
-            toast.style.transition = 'opacity 0.3s';
-            setTimeout(function() { if (toast.parentNode) toast.remove(); }, 300);
-        }
-    }, 8000);
-}
-
-document.getElementById('interruptBtn').onclick = async () => {
-    await apiCall('/api/agent/interrupt', 'POST');
-    document.getElementById('interruptBtn').classList.add('hidden');
-    if (agentMonitorInterval) clearInterval(agentMonitorInterval);
-};
-
-document.getElementById('summarizeStepsBtn').onclick = async () => {
-    const res = await apiCall('/api/agent/summary');
-    if (res.status === 'ok') {
-        const area = document.getElementById('consoleArea');
-        area.innerHTML = `<div class="console-step"><div class="console-step-title">📋 Resumen</div><div class="console-step-detail">${res.summary}</div></div>`;
+    // Buscar si ya hay un div de thinking
+    let thinkDiv = consoleArea.querySelector('.console-thinking');
+    if (!thinkDiv) {
+        thinkDiv = document.createElement('div');
+        thinkDiv.className = 'console-thinking';
+        consoleArea.appendChild(thinkDiv);
     }
-};
-
-// ---- CAPTCHA ----
-document.getElementById('openCaptchaBtn').onclick = async () => {
-    const res = await apiCall('/api/captcha/status');
-    if (res.status === 'ok' && res.url) {
-        document.getElementById('captchaLink').href = res.url;
-        document.getElementById('captchaModal').classList.remove('hidden');
-    }
-};
-
-document.getElementById('submitCaptchaBtn').onclick = async () => {
-    const solution = document.getElementById('captchaSolution').value.trim();
-    if (!solution) return;
-    const res = await apiCall('/api/captcha/solve', 'POST', { id: currentCaptcha, solved_content: solution });
-    if (res.status === 'ok') {
-        document.getElementById('captchaModal').classList.add('hidden');
-        document.getElementById('captchaAlert').classList.add('hidden');
-    } else { alert('Error: ' + res.message); }
-};
-
-document.getElementById('closeCaptchaBtn').onclick = () => {
-    document.getElementById('captchaModal').classList.add('hidden');
-};
-
-// ---- Agent Question Modal ----
-document.getElementById('submitAgentResponseBtn').onclick = async () => {
-    const respuesta = document.getElementById('agentQuestionResponse').value.trim();
-    if (!respuesta) return;
-    addMessage('user', respuesta);
-    await apiCall('/api/agent/responder', 'POST', { respuesta });
-    document.getElementById('agentQuestionBanner').classList.add('hidden');
-    agentQuestionShown = false;
-};
-
-// ---- Agent Plan Modal ----
-document.getElementById('approvePlanBtn').onclick = async () => {
-    await apiCall('/api/agent/aprobar_plan', 'POST', { aprobado: true });
-    document.getElementById('agentPlanModal').classList.add('hidden');
-    agentPlanShown = false;
-};
-
-document.getElementById('rejectPlanBtn').onclick = async () => {
-    await apiCall('/api/agent/aprobar_plan', 'POST', { aprobado: false });
-    document.getElementById('agentPlanModal').classList.add('hidden');
-    agentPlanShown = false;
-};
-
-// ---- Helper: Download script ----
-function downloadScript(name) {
-    var url = '/api/scripts/' + name;
-    fetch(url)
-        .then(function(r) { return r.blob(); })
-        .then(function(blob) {
-            var a = document.createElement('a');
-            a.href = URL.createObjectURL(blob);
-            a.download = name + '.ps1';
-            a.click();
-            URL.revokeObjectURL(a.href);
-        })
-        .catch(function() { alert('Error al descargar el script.'); });
+    // Mostrar solo las últimas 500 caracteres para no saturar
+    const short = thinking.length > 500 ? '...' + thinking.slice(-500) : thinking;
+    thinkDiv.textContent = '🧠 Thinking: ' + short;
+    consoleArea.scrollTop = consoleArea.scrollHeight;
 }
 
-// ---- Helper: Download PEM ----
-function downloadPem(type, content) {
-    var blob = new Blob([content], { type: 'application/x-pem-file' });
-    var a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = type === 'private' ? 'admin_private.pem' : 'admin_public.pem';
-    a.click();
-    URL.revokeObjectURL(a.href);
+function updateConsoleStatus(status) {
+    const consoleArea = document.getElementById('consoleArea');
+    if (!consoleArea) return;
+    const div = document.createElement('div');
+    div.className = 'console-status';
+    div.textContent = status;
+    consoleArea.appendChild(div);
+    consoleArea.scrollTop = consoleArea.scrollHeight;
 }
 
-// ---- Toggle Admin Create Mode ----
-function toggleAdminCreateMode() {
-    var isAdmin = document.getElementById('newIsAdmin').checked;
-    document.getElementById('newPassword').parentElement.parentElement.style.display = isAdmin ? 'none' : '';
-    document.getElementById('newPasswordConfirm').parentElement.parentElement.style.display = isAdmin ? 'none' : '';
-    document.getElementById('newPublicKeyContainer').classList.toggle('hidden', !isAdmin);
-    document.getElementById('uploadPemBtn').classList.toggle('hidden', !isAdmin);
-    document.getElementById('generateKeysBtn').classList.toggle('hidden', !isAdmin);
-    if (isAdmin) {
-        document.getElementById('newStudyAccess').checked = true;
-        document.getElementById('newProgAccess').checked = true;
-        document.getElementById('newEditGlobalPrompt').checked = true;
-        document.getElementById('newEditLocalPrompt').checked = true;
-        document.getElementById('newCanFork').checked = true;
-        document.getElementById('newCanExecPS').checked = true;
-        document.getElementById('newCanWrite').checked = true;
-        document.getElementById('newCanSearchGoogle').checked = true;
-    }
-}
-
-// ---- Close Keygen Modal ----
-document.getElementById('closeKeygenBtn').onclick = function() {
-    document.getElementById('keygenModal').classList.add('hidden');
-};
-
-// ---- Init ----
+// ============================================================================
+// INIT
+// ============================================================================
 init();
