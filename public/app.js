@@ -534,13 +534,12 @@ async function loadProjects() {
     }
 }
 
-
 function selectProject(name) {
     activeProject = name;
     document.getElementById('activeProjectName').innerText = name;
     loadProjects();
+    loadPrompts(); // BUG-024 FIX: Reload prompts when switching projects so local prompt updates
 }
-
 // ---- Fork & Clone ----
 document.getElementById('forkBtn').onclick = async () => {
     const url = document.getElementById('repoUrl').value.trim();
