@@ -594,6 +594,7 @@ document.getElementById('addLocalBtn').onclick = async () => {
     btn.textContent = 'Agregar Carpeta';
 };
 // ============================================================================
+// ============================================================================
 // PROMPTS — alineado con IDs del HTML: globalPrompt, localPrompt,
 //           savePromptsBtn (guarda ambos), resetPromptBtn (restaura global)
 // ============================================================================
@@ -602,7 +603,8 @@ async function loadPrompts() {
     try {
         const prompts = await apiCall('/api/prompts');
         if (prompts.status === 'ok') {
-            document.getElementById('globalPrompt').value = prompts.global || '';
+            // BUG-024 FIX: Backend returns global_current, not global
+            document.getElementById('globalPrompt').value = prompts.global_current || '';
             if (activeProject && prompts.projects && prompts.projects[activeProject]) {
                 document.getElementById('localPrompt').value = prompts.projects[activeProject];
             } else {
