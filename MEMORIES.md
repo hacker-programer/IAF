@@ -2,6 +2,17 @@
 
 ## Bugs Corregidos (Sesión 2025-2026)
 
+### BUG-024: System prompt no se cargaba en la interfaz gráfica (TextArea vacío)
+- **Síntoma**: El textarea `globalPrompt` siempre aparecía vacío en la UI, aunque el backend sí devolvía el prompt correctamente.
+- **Causa real**: Mismatch de nombres de campo entre frontend y backend:
+  - Backend `legacy_prompts_get` (main.rs:1883) devuelve `"global_current"` y `"global_default"`
+  - Frontend `loadPrompts()` (app.js:606) leía `prompts.global` (campo inexistente)
+  - `prompts.global` siempre era `undefined` → `''` (string vacía)
+- **Fix aplicado**:
+  1. `app.js:606`: Cambiado `prompts.global` → `prompts.global_current`
+  2. `app.js:540`: `selectProject()` ahora también llama a `loadPrompts()` para que el prompt local se actualice al cambiar de proyecto
+- **Lección**: Cuando se cambia el esquema de respuesta de un endpoint, verificar TODOS los consumidores (frontend JS, tests, etc.) para asegurar que los nombres de campo coincidan.
+
 ### BUG-018: Study mode — obsesión con escribir archivos .md en vez de enseñar
 - **Causa real**: El `study_system_prompt.txt` tenía reglas contra escribir archivos, pero no eran lo suficientemente prominentes. El `default_system_prompt.txt` contiene "DOCUMENTACIÓN INTERNA Y EXTERNA OBLIGATORIA" que entraba en conflicto. Además, el prompt de estudio no mencionaba la transparencia de razonamiento ni el testing de métodos de aprendizaje.
 - **Fix aplicado**: `study_system_prompt.txt` completamente reescrito:
