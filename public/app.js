@@ -1022,12 +1022,13 @@ document.getElementById('submitAgentResponseBtn').onclick = () => {
 };
 
 // Enter en el input de respuesta del banner inline
+// BUG-027 FIX: Enter solo envía; Shift+Enter permite salto de línea
 document.getElementById('agentQuestionResponse').addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') {
+    if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
         document.getElementById('submitAgentResponseBtn').click();
     }
 });
-
 // BUG-025 FIX: agentPlanText → agentPlanContent (ID real en HTML).
 // agentPlanFeedback no existe en HTML, se eliminó su referencia.
 function showAgentPlanModal(plan) {
