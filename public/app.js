@@ -742,10 +742,6 @@ async function loadChatHistory() {
 // se inicia el monitoreo del agente y se cargan los steps de auditoría desde la sesión.
 async function selectChatSession(id) {
     currentSessionId = id;
-// BUG-014 + BUG-015 FIX: Al seleccionar un chat existente (ej: tras recargar la página),
-// se inicia el monitoreo del agente y se cargan los steps de auditoría desde la sesión.
-async function selectChatSession(id) {
-    currentSessionId = id;
     loadChatHistory();
     const res = await apiCall(`/api/chats/${id}`);
     if (res.status === 'ok') {
@@ -753,6 +749,10 @@ async function selectChatSession(id) {
         chatArea.innerHTML = '';
         res.session.messages.forEach(m => addMessage(m.role, m.content));
         // BUG-002 FIX: Limpiar Set de mensajes ya mostrados al cambiar de sesión
+        window._shownInfoMsgs = new Set();
+        if (res.session.project_name) {
+            activeProject = res.session.project_name;
+            document.getElementById('activeProjectName').innerText = activeProject;
         window._shownInfoMsgs = new Set();
         if (res.session.project_name) {
             activeProject = res.session.project_name;
