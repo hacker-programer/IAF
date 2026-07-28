@@ -1,42 +1,48 @@
 <# 
 .SYNOPSIS
-    Configura y ejecuta un túnel Cloudflare para exponer el puerto 8080 de IAF.
+    Ejecuta el túnel Cloudflare para exponer el puerto 8080 de IAF.
     SOLO expone el puerto 8080 (autenticación requerida), NUNCA el puerto 80 (admin local).
 
 .DESCRIPCIÓN
-    Este script tiene dos modos:
-    - MODO RÁPIDO:    Crea un túnel efímero con URL de trycloudflare.com (para pruebas)
-    - MODO PERMANENTE: Configura un túnel nombrado con dominio propio (para producción)
-    
+    Tres modos de operación:
+    - MODO RUN:       Ejecuta el túnel ya configurado "IAF" -> iaf.mujerbonitauy.com (por defecto)
+    - MODO QUICK:     Crea un túnel efímero con URL de trycloudflare.com (para pruebas)
+    - MODO SETUP:     Configura un nuevo túnel desde cero con dominio propio
+
     El puerto 80 NUNCA se expone. Solo se tunela 127.0.0.1:8080.
 
 .PARAMETER Mode
-    "quick" para túnel rápido, "permanent" para túnel permanente con dominio propio.
+    "run" (defecto), "quick" o "setup".
 
 .PARAMETER TunnelName
-    Nombre del túnel (solo modo permanente). Default: "iaf-tunnel"
+    Nombre del túnel. Default: "IAF"
 
 .PARAMETER Domain
-    Dominio configurado en Cloudflare (solo modo permanente). Ej: "iaf.midominio.com"
+    Dominio configurado en Cloudflare. Default: "iaf.mujerbonitauy.com"
 
 .EJEMPLO
-    # Túnel rápido (pruebas)
+    # Simplemente ejecutar el túnel IAF (lo más común)
+    .\cloudflare_tunnel.ps1
+
+    # Ejecutar el túnel IAF explícitamente
+    .\cloudflare_tunnel.ps1 -Mode run
+
+    # Túnel rápido de prueba
     .\cloudflare_tunnel.ps1 -Mode quick
 
-    # Túnel permanente
-    .\cloudflare_tunnel.ps1 -Mode permanent -TunnelName "iaf-prod" -Domain "iaf.midominio.com"
+    # Configurar un túnel nuevo desde cero
+    .\cloudflare_tunnel.ps1 -Mode setup -TunnelName "mi-tunel" -Domain "iaf.midominio.com"
 #>
 
 param(
-    [ValidateSet("quick", "permanent")]
-    [string]$Mode = "quick",
-    [string]$TunnelName = "iaf-tunnel",
-    [string]$Domain = ""
+    [ValidateSet("run", "quick", "setup")]
+    [string]$Mode = "run",
+    [string]$TunnelName = "IAF",
+    [string]$Domain = "iaf.mujerbonitauy.com"
 )
 
 $ErrorActionPreference = "Stop"
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-$ProjectRoot = Resolve-Path "$ScriptDir\.."
 
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host "  Túnel Cloudflare para IAF (Puerto 8080)" -ForegroundColor Cyan
@@ -52,8 +58,7 @@ if (-not $cloudflared) {
     Write-Host ""
     Write-Host "Opciones de instalación:"
     Write-Host "  1. winget install Cloudflare.cloudflared"
-    Write-Host "  2. Descargar de: https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/"
-    Write-Host "  3. Chocolatey: choco install cloudflared"
+    Write-Host "  2. choco install cloudflared"
     exit 1
 }
 Write-Host "[OK] cloudflared detectado: $($cloudflared.Source)" -ForegroundColor Green
@@ -85,40 +90,59 @@ Write-Host "╚═════════════════════�
 Write-Host ""
 
 # ============================================================================
-# MODO RÁPIDO
+# MODO RUN — Simplemente ejecuta el túnel existente
 # ============================================================================
-if ($Mode -eq "quick") {
-    Write-Host "[MODO RÁPIDO] Iniciando túnel efímero (trycloudflare.com)..." -ForegroundColor Cyan
-    Write-Host "[INFO] Se generará una URL temporal del tipo https://xxx.trycloudflare.com" -ForegroundColor Gray
+if ($Mode -eq "run") {
+    Write-Host "[MODO RUN] Ejecutando túnel '$TunnelName'..." -ForegroundColor Cyan
+    Write-Host "[INFO] Dominio: https://$Domain" -ForegroundColor Gray
+    Write-Host "[INFO] Servicio: http://127.0.0.1:8080 (SOLO puerto 8080)" -ForegroundColor Gray
     Write-Host "[INFO] Presiona Ctrl+C para detener el túnel." -ForegroundColor Gray
     Write-Host ""
     
-    # Ejecutar cloudflared tunnel --url
-    & cloudflared tunnel --url http://127.0.0.1:8080 --no-autoupdate
+    # Verificar que el túnel existe
+    $tunnelList = & cloudflared tunnel list 2>&1 | Out-String
+    if ($tunnelList -notmatch $TunnelName) {
+        Write-Host "[ERROR] El túnel '$TunnelName' no existe." -ForegroundColor Red
+        Write-Host "        Créalo primero con: .\cloudflare_tunnel.ps1 -Mode setup" -ForegroundColor Red
+        Write-Host "        O usa el modo rápido: .\cloudflare_tunnel.ps1 -Mode quick" -ForegroundColor Red
+        exit 1
+    }
     
+    & cloudflared tunnel run $TunnelName
     exit 0
 }
 
 # ============================================================================
-# MODO PERMANENTE
+# MODO QUICK — Túnel efímero con trycloudflare.com
 # ============================================================================
-Write-Host "[MODO PERMANENTE] Configurando túnel '$TunnelName'..." -ForegroundColor Cyan
+if ($Mode -eq "quick") {
+    Write-Host "[MODO QUICK] Iniciando túnel efímero (trycloudflare.com)..." -ForegroundColor Cyan
+    Write-Host "[INFO] Se generará una URL temporal del tipo https://xxx.trycloudflare.com" -ForegroundColor Gray
+    Write-Host "[INFO] Presiona Ctrl+C para detener el túnel." -ForegroundColor Gray
+    Write-Host ""
+    
+    & cloudflared tunnel --url http://127.0.0.1:8080 --no-autoupdate
+    exit 0
+}
+
+# ============================================================================
+# MODO SETUP — Configurar túnel desde cero
+# ============================================================================
+Write-Host "[MODO SETUP] Configurando túnel '$TunnelName'..." -ForegroundColor Cyan
 Write-Host ""
 
 # Verificar dominio
 if ([string]::IsNullOrWhiteSpace($Domain)) {
-    Write-Host "[ERROR] Debes especificar un dominio con -Domain para el modo permanente." -ForegroundColor Red
+    Write-Host "[ERROR] Debes especificar un dominio con -Domain para el modo setup." -ForegroundColor Red
     Write-Host "        Ejemplo: -Domain 'iaf.midominio.com'" -ForegroundColor Red
     exit 1
 }
 
-# Autenticación con Cloudflare (si no está autenticado)
+# Autenticación con Cloudflare
 Write-Host "[PASO 1/4] Verificando autenticación con Cloudflare..." -ForegroundColor Yellow
 $loginCheck = & cloudflared tunnel list 2>&1
-if ($LASTEXITCODE -ne 0 -or $loginCheck -match "You have no tunnels") {
-    # Puede que no esté autenticado
-    Write-Host "[INFO] No hay túneles o no estás autenticado." -ForegroundColor Yellow
-    Write-Host "[INFO] Se abrirá el navegador para autenticarte con Cloudflare..." -ForegroundColor Yellow
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "[INFO] No estás autenticado. Se abrirá el navegador..." -ForegroundColor Yellow
     & cloudflared tunnel login
     if ($LASTEXITCODE -ne 0) {
         Write-Host "[ERROR] Falló la autenticación con Cloudflare." -ForegroundColor Red
@@ -198,13 +222,11 @@ Write-Host "Servicio:  http://127.0.0.1:8080 (SOLO puerto 8080)"
 Write-Host ""
 
 Write-Host "Para ejecutar el túnel ahora:" -ForegroundColor Cyan
-Write-Host "  cloudflared tunnel run $TunnelName" -ForegroundColor White
+Write-Host "  .\cloudflare_tunnel.ps1" -ForegroundColor White
+Write-Host "  (o simplemente: cloudflared tunnel run $TunnelName)" -ForegroundColor White
 Write-Host ""
 Write-Host "Para instalar como servicio de Windows (inicio automático):" -ForegroundColor Cyan
 Write-Host "  cloudflared service install" -ForegroundColor White
-Write-Host ""
-Write-Host "Para ver el estado de los túneles:" -ForegroundColor Cyan
-Write-Host "  cloudflared tunnel list" -ForegroundColor White
 Write-Host ""
 Write-Host "ADVERTENCIA: El puerto 80 (admin local sin auth) NO está expuesto por el túnel." -ForegroundColor Yellow
 Write-Host "             Accede localmente a http://localhost:80 solo desde tu red de confianza." -ForegroundColor Yellow
