@@ -912,7 +912,6 @@ function startAgentMonitoring() {
             }
 
             // Mostrar mensajes informativos en el chat
-            if (res.info_messages && Array.isArray(res.info_messages)) {
             // Mostrar mensajes informativos en el chat
             if (res.info_messages && Array.isArray(res.info_messages)) {
                 // Solo mostrar los mensajes nuevos (no duplicados)
@@ -934,10 +933,11 @@ function startAgentMonitoring() {
                 if (window[shownKey].size > 200) window[shownKey] = new Set();
             }
 
-            // Mostrar plan del agente (modal)
-            if (res.esperando_aprobacion_plan && res.plan_propuesto && !agentPlanShown) {
-                agentPlanShown = true;
-                showAgentPlanModal(res.plan_propuesto);
+            // Mostrar pregunta del agente (banner inline, ya no es modal)
+            if (res.esperando_respuesta_usuario && res.pregunta_usuario && !agentQuestionShown) {
+                agentQuestionShown = true;
+                showAgentQuestionBanner(res.pregunta_usuario);
+            }
             }
 
             // Agente terminó (finalizar_tarea)
