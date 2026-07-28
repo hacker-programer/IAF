@@ -1047,6 +1047,21 @@ mod regression_new_bugs {
             "REGRESION: sendMessageToAgent no inicia el monitoreo del agente.");
     }
 
+    #[test]
+    fn app_js_load_prompts_existe() {
+        let js = include_str!("../public/app.js");
+        assert!(js.contains("function loadPrompts"),
+            "BUG-028 REGRESION: app.js no contiene loadPrompts. Se perdio en una reescritura.");
+        assert!(js.contains("savePromptsBtn"),
+            "BUG-028 REGRESION: app.js no contiene savePromptsBtn.");
+        assert!(js.contains("resetPromptBtn"),
+            "BUG-028 REGRESION: app.js no contiene resetPromptBtn.");
+        assert!(js.contains("globalPrompt"),
+            "BUG-028 REGRESION: app.js no contiene referencias a globalPrompt.");
+        assert!(js.contains("localPrompt"),
+            "BUG-028 REGRESION: app.js no contiene referencias a localPrompt.");
+    }
+
     // =========================================================================
     // BUG: El perfil de usuario no se pasa al agente
     // =========================================================================
