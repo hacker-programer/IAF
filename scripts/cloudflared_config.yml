@@ -1,0 +1,45 @@
+# ============================================================================
+# Configuración de Túnel Cloudflare para IAF
+# ============================================================================
+# 
+# Este archivo es una PLANTILLA. Ejecuta el script cloudflare_tunnel.ps1
+# en modo "permanent" para generar tu configuración personalizada:
+#
+#   .\scripts\cloudflare_tunnel.ps1 -Mode permanent -Domain "iaf.tudominio.com"
+#
+# O para pruebas rápidas (sin dominio propio):
+#
+#   .\scripts\cloudflare_tunnel.ps1 -Mode quick
+#
+# ============================================================================
+# SEGURIDAD: Solo se expone el puerto 8080 (requiere autenticación).
+# El puerto 80 (admin local sin contraseña) NUNCA se expone.
+# ============================================================================
+
+# Reemplaza <TUNNEL_ID> con el ID de tu túnel (lo obtienes con: cloudflared tunnel list)
+tunnel: <TUNNEL_ID>
+
+# Reemplaza con la ruta a tu archivo de credenciales
+# (generalmente en %USERPROFILE%\.cloudflared\<nombre-tunel>.json)
+credentials-file: C:\Users\<TU_USUARIO>\.cloudflared\iaf-tunnel.json
+
+# ============================================================================
+# Reglas de enrutamiento (ingress)
+# Se evalúan en orden. La PRIMERA coincidencia gana.
+# ============================================================================
+ingress:
+  # Regla 1: Dominio principal -> SOLO puerto 8080 (autenticación requerida)
+  - hostname: iaf.tudominio.com
+    service: http://127.0.0.1:8080
+
+  # Regla 2 (OBLIGATORIA): Rechazar cualquier otra solicitud
+  # Esto asegura que NADIE pueda acceder al puerto 80 por el túnel
+  - service: http_status:404
+
+# ============================================================================
+# NOTAS:
+# - NO agregues reglas para el puerto 80. El puerto 80 da acceso admin sin auth.
+# - 127.0.0.1:8080 requiere login con usuario/contraseña o nonce firmado.
+# - Para instalar como servicio: cloudflared service install
+# - Para ejecutar manualmente:  cloudflared tunnel run iaf-tunnel
+# ============================================================================
