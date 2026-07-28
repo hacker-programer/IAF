@@ -646,6 +646,7 @@ pub async fn run_agent_loop(
         }
         let message_val = &choice["message"];
 
+// Líneas 649-670 de 2409 en C:\Users\Fa\Desktop\IAF\src\agent.rs
         let content = message_val["content"].as_str().unwrap_or("");
         if !content.is_empty() {
             {
@@ -656,6 +657,13 @@ pub async fn run_agent_loop(
                     detail: content.to_string(),
                     timestamp: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs(),
                 });
+                // BUG-002 FIX: Agregar respuesta de texto a info_messages para que el frontend
+                // la muestre en tiempo real. El frontend distingue mensajes normales (sin prefijo)
+                // de notificaciones ([NOTIF]).
+                status.info_messages.push(content.to_string());
+                if status.info_messages.len() > 200 {
+                    status.info_messages.remove(0);
+                }
                 save_chat_steps_to_disk(&state, &session_id, &status.steps);
             }
             
