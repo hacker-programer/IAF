@@ -931,6 +931,7 @@ function startAgentMonitoring() {
                 // Limpiar el set si crece demasiado
                 if (window[shownKey].size > 200) window[shownKey] = new Set();
             }
+            }
 
             // Mostrar pregunta del agente (banner inline, ya no es modal)
             if (res.esperando_respuesta_usuario && res.pregunta_usuario && !agentQuestionShown) {
@@ -941,8 +942,6 @@ function startAgentMonitoring() {
             // Mostrar plan del agente (modal)
             if (res.esperando_aprobacion_plan && res.plan_propuesto && !agentPlanShown) {
                 agentPlanShown = true;
-                showAgentPlanModal(res.plan_propuesto);
-            }
                 showAgentPlanModal(res.plan_propuesto);
             }
 
