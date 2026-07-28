@@ -1019,16 +1019,31 @@ document.getElementById('rejectPlanBtn').onclick = () => {
 };
 
 function addMessage(role, text, extraClass) {
+function addMessage(role, text, extraClass) {
     const chatArea = document.getElementById('chatArea');
     const div = document.createElement('div');
     div.classList.add('message');
-    if (role === 'agent') div.classList.add('agent');
+    if (role === 'user') {
+        div.classList.add('user-msg');
+    } else if (role === 'agent') {
+        div.classList.add('agent-msg');
+    }
     if (extraClass) div.classList.add(extraClass);
-    div.textContent = text;
+
+    // Renderizar markdown para mensajes del agente, texto plano para usuario
+    if (role === 'agent' && typeof marked !== 'undefined') {
+        try {
+            div.innerHTML = marked.parse(text);
+        } catch(e) {
+            div.textContent = text;
+        }
+    } else {
+        div.textContent = text;
+    }
+
     chatArea.appendChild(div);
     chatArea.scrollTop = chatArea.scrollHeight;
 }
-
 // Toast informativo
 function showInfoToast(msg) {
     const toast = document.getElementById('infoToast');
