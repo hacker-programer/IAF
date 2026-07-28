@@ -1360,28 +1360,26 @@ pub async fn run_agent_loop(
                                     if status.interrupted {
                                         state.process_registry.kill_all();
                                         return Ok("EjecuciÃƒÆ’Ã‚Â³n del agente interrumpida mientras esperaba respuesta del usuario.".to_string());
+                                    }
+                                    if !status.esperando_respuesta_usuario {
+                                        if let Some(ref respuesta) = status.respuesta_usuario {
+                                            break respuesta.clone();
+                                        }
+                                    }
+                                }
+                            };
+                            format!("Respuesta del usuario: {}", respuesta)
                         } else {
                             // tipo informativo
                             {
                                 let mut status = state.active_agent.lock().unwrap();
-                                // BUG-002 FIX: Agregar prefijo [NOTIF] para que el frontend distinga
-                                // notificaciones informativas de respuestas de texto normales.
-                                status.info_messages.push(format!("[NOTIF] {}", mensaje));
-                                if status.info_messages.len() > 200 {
+                                // Agregar a info_messages para frontend (BUG-002)
+                                status.info_messages.push(mensaje.to_string());
+                                if status.info_messages.len() > 100 {
                                     status.info_messages.remove(0);
                                 }
                                 status.steps.push(crate::state::AuditStep {
                                     step_type: "informativo".to_string(),
-                                    title: "Notificación del Agente".to_string(),
-                                    detail: mensaje.to_string(),
-                                    timestamp: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs(),
-                                });
-                                if let Some(ref s_id) = session_id {
-                                    save_chat_steps_to_disk(&state, &Some(s_id.clone()), &status.steps);
-                                }
-                            }
-                            format!("Notificación enviada con éxito: {}", mensaje)
-                        }
                                     title: "NotificaciÃ³n del Agente".to_string(),
                                     detail: mensaje.to_string(),
                                     timestamp: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs(),
