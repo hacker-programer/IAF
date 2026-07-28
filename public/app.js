@@ -881,10 +881,22 @@ async function sendMessageToAgent(text, mode) {
 
 function startAgentMonitoring() {
     if (agentMonitorInterval) clearInterval(agentMonitorInterval);
+    updateConsoleStatus('🔍 Agente iniciando...');
+
     agentMonitorInterval = setInterval(async () => {
         try {
             const res = await apiCall('/api/agent/status');
             if (res.status !== 'ok') return;
+
+            // Mostrar/ocultar botón de interrumpir según estado
+            const interruptBtn = document.getElementById('interruptBtn');
+            if (interruptBtn) {
+                if (res.running) {
+                    interruptBtn.classList.remove('hidden');
+                } else if (res.finished || res.interrupted || !res.active) {
+                    interruptBtn.classList.add('hidden');
+                }
+            }
 
             // Mostrar thinking en la consola de auditoría
             if (res.thinking_content && Array.isArray(res.thinking_content)) {
@@ -936,11 +948,16 @@ function startAgentMonitoring() {
                 // Recargar historial
                 loadChatHistory();
                 updateConsoleStatus('✅ Agente finalizado.');
+                // Ocultar botón de interrumpir
+                const ib = document.getElementById('interruptBtn');
+                if (ib) ib.classList.add('hidden');
             }
 
             // Interrupción
             if (res.interrupted) {
                 updateConsoleStatus('⚠️ Agente interrumpido.');
+                const ib = document.getElementById('interruptBtn');
+                if (ib) ib.classList.add('hidden');
             }
         } catch(e) {
             console.error('[IAF] Error en monitoreo del agente:', e);
