@@ -1073,6 +1073,7 @@ async fn chat_endpoint(
     let _ = fs::write(&save_path, serde_json::to_string_pretty(&session).unwrap());
 
     // Iniciar agente en background (BUG #4 fix)
+    // Iniciar agente en background (BUG #4 fix)
     {
         let mut agent = state.active_agent.lock().unwrap();
         agent.current_chat_path = Some(save_path.to_string_lossy().to_string());
@@ -1081,6 +1082,8 @@ async fn chat_endpoint(
             agent.interrupted = false;
             agent.finished = false;
             agent.final_message = None;
+            // BUG-002 FIX: Limpiar info_messages al iniciar nuevo agente
+            agent.info_messages.clear();
             // BUG FIX: Solo limpiar steps si es conversacion NUEVA. Si es existente, cargar desde sesion.
             if chat_file.is_some() {
                 if let Some(ref steps) = session.steps { agent.steps = steps.clone(); }
@@ -1094,11 +1097,6 @@ async fn chat_endpoint(
             agent.plan_propuesto = None;
             agent.pregunta_usuario = None;
             agent.current_session_id = Some(session_id.clone());
-
-            let state_bg = state.clone();
-            let session_bg = session.clone();
-            let sid_bg = session_id.clone();
-            let uname_bg = username.clone();
             let is_admin_bg = is_admin;
             let mode_bg = payload.mode.clone().unwrap_or_else(|| "programming".to_string());
             let dk = deepseek_key().to_string();
