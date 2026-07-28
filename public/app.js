@@ -767,8 +767,9 @@ async function selectChatSession(id) {
 // BUG-019 FIX: Al crear un nuevo chat, limpiar TODO el estado anterior
 document.getElementById('newChatBtn').onclick = () => {
     currentSessionId = null;
+    // BUG-002 FIX: Limpiar Set de mensajes ya mostrados al crear nuevo chat
+    window._shownInfoMsgs = new Set();
     document.getElementById('chatArea').innerHTML = '<div class="message system-msg"><strong>Sistema:</strong> Nuevo chat iniciado.</div>';
-    // BUG-019: Detener monitoreo y limpiar auditoría
     if (agentMonitorInterval) {
         clearInterval(agentMonitorInterval);
         agentMonitorInterval = null;
