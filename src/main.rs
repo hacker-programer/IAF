@@ -1554,9 +1554,7 @@ async fn get_agent_status(State(state): State<AppState>) -> impl IntoResponse {
         "current_session_id": status.current_session_id,
     }))
 }
-}
 async fn agent_steps(
-    State(state): State<AppState>,
     headers: HeaderMap,
 ) -> impl IntoResponse {
     let _username = match require_auth(&state, &headers).await {
