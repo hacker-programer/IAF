@@ -748,12 +748,6 @@ async function selectChatSession(id) {
         const chatArea = document.getElementById('chatArea');
         chatArea.innerHTML = '';
         res.session.messages.forEach(m => addMessage(m.role, m.content));
-        // BUG-002 FIX: Limpiar Set de mensajes ya mostrados al cambiar de sesión
-        window._shownInfoMsgs = new Set();
-        if (res.session.project_name) {
-            activeProject = res.session.project_name;
-            document.getElementById('activeProjectName').innerText = activeProject;
-        window._shownInfoMsgs = new Set();
         if (res.session.project_name) {
             activeProject = res.session.project_name;
             document.getElementById('activeProjectName').innerText = activeProject;
@@ -772,8 +766,6 @@ async function selectChatSession(id) {
 document.getElementById('newChatBtn').onclick = () => {
     currentSessionId = null;
     document.getElementById('chatArea').innerHTML = '<div class="message system-msg"><strong>Sistema:</strong> Nuevo chat iniciado.</div>';
-    // BUG-002 FIX: Limpiar Set de mensajes ya mostrados al crear nuevo chat
-    window._shownInfoMsgs = new Set();
     // BUG-019: Detener monitoreo y limpiar auditoría
     if (agentMonitorInterval) {
         clearInterval(agentMonitorInterval);
@@ -781,6 +773,8 @@ document.getElementById('newChatBtn').onclick = () => {
     }
     document.getElementById('interruptBtn').classList.add('hidden');
     const consoleArea = document.getElementById('consoleArea');
+    if (consoleArea) consoleArea.innerHTML = '';
+    agentQuestionShown = false;
     agentPlanShown = false;
     loadChatHistory();
 };
@@ -918,7 +912,6 @@ function startAgentMonitoring() {
             }
 
             // Mostrar mensajes informativos en el chat
-            // Mostrar mensajes informativos en el chat
             if (res.info_messages && Array.isArray(res.info_messages)) {
                 // Solo mostrar los mensajes nuevos (no duplicados)
                 const shownKey = '_shownInfoMsgs';
@@ -950,6 +943,8 @@ function startAgentMonitoring() {
                 agentPlanShown = true;
                 showAgentPlanModal(res.plan_propuesto);
             }
+                showAgentPlanModal(res.plan_propuesto);
+            }
 
             // Agente terminó (finalizar_tarea)
             if (res.finished) {
@@ -977,6 +972,8 @@ function startAgentMonitoring() {
         }
     }, 1000);
 }
+
+// ---- Interrupt Button ----
 document.getElementById('interruptBtn').onclick = async () => {
     const res = await apiCall('/api/agent/interrupt', 'POST');
     if (res.status === 'ok') {
