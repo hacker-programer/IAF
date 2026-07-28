@@ -113,8 +113,14 @@ pub async fn run_agent_loop(
         "\n\nNOTA DE CONTEXTO: Para optimizar la memoria y la eficiencia, el sistema puede resumir los mensajes mÃƒÆ’Ã‚Â¡s antiguos del chat en una sola entrada con el encabezado `--- RESUMEN CONTEXTO ANTERIOR (Auto-comprimido por el sistema) ---`. Si encuentras este mensaje, debes interpretarlo como la continuaciÃƒÆ’Ã‚Â³n histÃƒÆ’Ã‚Â³rica y fidedigna de los acontecimientos y decisiones tomadas en el proyecto hasta ese momento."
     );
 
+    // BUG-026 FIX: Si estamos en modo estudio, reemplazar COMPLETAMENTE el system prompt
+    // con STUDY_SYSTEM_PROMPT + perfil del estudiante (intereses, conocimientos, fase, etc.).
+    // Esto SOBREESCRIBE el prompt de programación, no lo aumenta.
+    if mode == "study" {
+        system_prompt = state.study_engine.build_study_system_prompt(username, crate::STUDY_SYSTEM_PROMPT);
+    }
+
     let mut messages = vec![
-        json!({ "role": "system", "content": system_prompt }),
     ];
 
     // Cargar todo el historial del chat excepto el ÃƒÆ’Ã‚Âºltimo mensaje (que es el nuevo prompt del usuario)
