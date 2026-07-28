@@ -747,9 +747,11 @@ async function selectChatSession(id) {
     if (res.status === 'ok') {
         const chatArea = document.getElementById('chatArea');
         chatArea.innerHTML = '';
+        chatArea.innerHTML = '';
         res.session.messages.forEach(m => addMessage(m.role, m.content));
+        // BUG-002 FIX: Limpiar Set de mensajes ya mostrados al cambiar de sesión
+        window._shownInfoMsgs = new Set();
         if (res.session.project_name) {
-            activeProject = res.session.project_name;
             document.getElementById('activeProjectName').innerText = activeProject;
             loadProjects();
         }
