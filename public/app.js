@@ -615,7 +615,58 @@ async function loadProjects() {
         activeProject = null;
         document.getElementById('activeProjectName').textContent = 'Ninguno (Global)';
     }
+
+// ============================================================================
+// PROMPTS — carga, guardado y restauración de system prompts
+// ============================================================================
+
+async function loadPrompts() {
+    try {
+        const prompts = await apiCall('/api/prompts');
+        if (prompts.status === 'ok') {
+            document.getElementById('globalPrompt').value = prompts.global_current || '';
+            if (activeProject && prompts.projects && prompts.projects[activeProject]) {
+                document.getElementById('localPrompt').value = prompts.projects[activeProject];
+            } else {
+                document.getElementById('localPrompt').value = '';
+            }
+        }
+    } catch(e) {}
 }
+
+document.getElementById('savePromptsBtn').onclick = async () => {
+    const globalContent = document.getElementById('globalPrompt').value;
+    const globalRes = await apiCall('/api/prompts/global', 'POST', { content: globalContent });
+    if (globalRes.status !== 'ok') {
+        alert('Error al guardar prompt global: ' + globalRes.message);
+        return;
+    }
+
+    if (activeProject) {
+        const localContent = document.getElementById('localPrompt').value;
+        const localRes = await apiCall('/api/prompts/local', 'POST', { project_name: activeProject, content: localContent });
+        if (localRes.status !== 'ok') {
+            alert('Error al guardar prompt local: ' + localRes.message);
+            return;
+        }
+        showInfoToast('✅ System prompts guardados para ' + activeProject);
+    } else {
+        showInfoToast('✅ System prompt global guardado.');
+    }
+};
+
+document.getElementById('resetPromptBtn').onclick = async () => {
+    if (!confirm('¿Restaurar el system prompt global al valor por defecto?')) return;
+    const res = await apiCall('/api/prompts/global/reset', 'POST');
+    if (res.status === 'ok') {
+        document.getElementById('globalPrompt').value = res.content;
+        showInfoToast('✅ System prompt global restaurado.');
+    } else {
+        alert('Error: ' + res.message);
+    }
+};
+
+
 
 function selectProject(name) {
     activeProject = name;
