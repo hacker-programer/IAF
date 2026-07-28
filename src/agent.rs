@@ -665,11 +665,11 @@ pub async fn run_agent_loop(
                 }
                 save_chat_steps_to_disk(&state, &session_id, &status.steps);
             }
+            
+            if let Some(ref s_id) = session_id {
                 save_agent_message_to_disk(&state, s_id, "agent", &content);
             }
         }
-
-        if let Some(tool_calls) = message_val["tool_calls"].as_array() {
             messages.push(message_val.clone());
             let mut tool_responses = Vec::new();
             let mut final_message: Option<String> = None;
