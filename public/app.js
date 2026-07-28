@@ -1046,7 +1046,6 @@ function addMessage(role, text, extraClass) {
 // Toast informativo
 function showInfoToast(msg) {
     const toast = document.getElementById('infoToast');
-    const toast = document.getElementById('infoToast');
     if (!toast) {
         // Crear toast si no existe
         const t = document.createElement('div');
