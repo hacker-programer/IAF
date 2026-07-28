@@ -1085,6 +1085,7 @@ function showInfoToast(msg) {
 }
 
 // ============================================================================
+// ============================================================================
 // CONSOLE DE AUDITORÍA — renderizado de steps y thinking
 // ============================================================================
 
@@ -1093,7 +1094,6 @@ function renderConsoleSteps(steps) {
     if (!consoleArea) return;
     if (!steps || steps.length === 0) {
         // Si no hay pasos, dejar el estado actual (no sobreescribir con vacío)
-        // Solo limpiar si hay un mensaje de "inactivo" y el agente está corriendo
         const emptyEl = consoleArea.querySelector('.console-empty');
         if (emptyEl && window._agentRunning) {
             emptyEl.textContent = '🔍 Agente ejecutándose, esperando primer paso...';
@@ -1121,6 +1121,9 @@ function renderConsoleSteps(steps) {
     consoleArea.innerHTML = html;
     consoleArea.scrollTop = consoleArea.scrollHeight;
 }
+
+function updateConsoleThinking(thinking) {
+    const consoleArea = document.getElementById('consoleArea');
     if (!consoleArea) return;
 
     // Buscar si ya hay un div de thinking
