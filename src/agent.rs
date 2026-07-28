@@ -1363,10 +1363,12 @@ pub async fn run_agent_loop(
                                     }
                                 }
                             };
-                            format!("Respuesta del usuario: {}", respuesta)
-                        } else {
-                            // tipo informativo
-                            {
+                                // BUG-002 FIX: Agregar prefijo [NOTIF] para que el frontend distinga
+                                // notificaciones informativas de respuestas de texto normales.
+                                status.info_messages.push(format!("[NOTIF] {}", mensaje));
+                                if status.info_messages.len() > 200 {
+                                    status.info_messages.remove(0);
+                                }
                                 let mut status = state.active_agent.lock().unwrap();
                                 // Agregar a info_messages para frontend (BUG-002)
                                 status.info_messages.push(mensaje.to_string());
