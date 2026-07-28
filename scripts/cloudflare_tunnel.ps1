@@ -43,6 +43,11 @@ param(
 
 $ErrorActionPreference = "Stop"
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+$ProjectRoot = Resolve-Path "$ScriptDir\.."
+
+# Rutas de archivos de configuración
+$ConfigInScripts = "$ScriptDir\cloudflared_config.yml"
+$ConfigInUser = "$env:USERPROFILE\.cloudflared\config.yml"
 
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host "  Túnel Cloudflare para IAF (Puerto 8080)" -ForegroundColor Cyan
@@ -90,6 +95,21 @@ Write-Host "╚═════════════════════�
 Write-Host ""
 
 # ============================================================================
+# Función: Copiar configuración al directorio estándar de cloudflared
+# ============================================================================
+function Sync-ConfigToUser {
+    param([string]$Source, [string]$Dest)
+    if (Test-Path $Source) {
+        $destDir = Split-Path -Parent $Dest
+        if (-not (Test-Path $destDir)) {
+            New-Item -ItemType Directory -Path $destDir -Force | Out-Null
+        }
+        Copy-Item -Path $Source -Destination $Dest -Force
+        Write-Host "[OK] Configuración sincronizada a: $Dest" -ForegroundColor Green
+    }
+}
+
+# ============================================================================
 # MODO RUN — Simplemente ejecuta el túnel existente
 # ============================================================================
 if ($Mode -eq "run") {
@@ -108,7 +128,22 @@ if ($Mode -eq "run") {
         exit 1
     }
     
-    & cloudflared tunnel run $TunnelName
+    # Sincronizar config al directorio estándar (~/.cloudflared/config.yml)
+    Sync-ConfigToUser -Source $ConfigInScripts -Dest $ConfigInUser
+    
+    # Elegir el archivo de config: preferir el del usuario (estándar), fallback al de scripts
+    if (Test-Path $ConfigInUser) {
+        $ConfigToUse = $ConfigInUser
+    } elseif (Test-Path $ConfigInScripts) {
+        $ConfigToUse = $ConfigInScripts
+    } else {
+        Write-Host "[ERROR] No se encontró cloudflared_config.yml." -ForegroundColor Red
+        Write-Host "        Ejecuta primero: .\cloudflare_tunnel.ps1 -Mode setup" -ForegroundColor Red
+        exit 1
+    }
+    
+    Write-Host "[INFO] Usando configuración: $ConfigToUse" -ForegroundColor Gray
+    & cloudflared tunnel --config "$ConfigToUse" run $TunnelName
     exit 0
 }
 
@@ -183,10 +218,10 @@ if ($LASTEXITCODE -ne 0) {
     Write-Host "[OK] Registro DNS creado para $Domain" -ForegroundColor Green
 }
 
-# Generar config.yml
+# Generar config.yml en scripts/
 Write-Host "[PASO 4/4] Generando archivo de configuración..." -ForegroundColor Yellow
 $credentialsFile = "$env:USERPROFILE\.cloudflared\$TunnelName.json"
-$configPath = "$ScriptDir\cloudflared_config.yml"
+$configPath = $ConfigInScripts
 
 $configContent = @"
 # Configuración de túnel Cloudflare para IAF
@@ -210,6 +245,9 @@ ingress:
 Set-Content -Path $configPath -Value $configContent -Encoding UTF8
 Write-Host "[OK] Configuración guardada en: $configPath" -ForegroundColor Green
 
+# Sincronizar al directorio estándar de cloudflared
+Sync-ConfigToUser -Source $configPath -Dest $ConfigInUser
+
 # Instrucciones finales
 Write-Host ""
 Write-Host "========================================" -ForegroundColor Green
@@ -220,10 +258,9 @@ Write-Host "Túnel:     $TunnelName"
 Write-Host "Dominio:   https://$Domain"
 Write-Host "Servicio:  http://127.0.0.1:8080 (SOLO puerto 8080)"
 Write-Host ""
-
 Write-Host "Para ejecutar el túnel ahora:" -ForegroundColor Cyan
-Write-Host "  .\cloudflare_tunnel.ps1" -ForegroundColor White
-Write-Host "  (o simplemente: cloudflared tunnel run $TunnelName)" -ForegroundColor White
+Write-Host "  .\run_tunnel.ps1" -ForegroundColor White
+Write-Host "  (o: .\scripts\cloudflare_tunnel.ps1)" -ForegroundColor White
 Write-Host ""
 Write-Host "Para instalar como servicio de Windows (inicio automático):" -ForegroundColor Cyan
 Write-Host "  cloudflared service install" -ForegroundColor White
