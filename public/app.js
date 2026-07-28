@@ -614,11 +614,14 @@ async function loadProjects() {
     if (activeProject && !res.projects.find(p => p.name === activeProject)) {
         activeProject = null;
         document.getElementById('activeProjectName').textContent = 'Ninguno (Global)';
+    if (activeProject && !res.projects.find(p => p.name === activeProject)) {
+        activeProject = null;
+        document.getElementById('activeProjectName').textContent = 'Ninguno (Global)';
     }
+}
 
 // ============================================================================
 // PROMPTS — carga, guardado y restauración de system prompts
-// ============================================================================
 
 async function loadPrompts() {
     try {
