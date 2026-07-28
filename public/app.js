@@ -1091,7 +1091,16 @@ function showInfoToast(msg) {
 function renderConsoleSteps(steps) {
     const consoleArea = document.getElementById('consoleArea');
     if (!consoleArea) return;
-    if (!steps || steps.length === 0) return;
+    if (!steps || steps.length === 0) {
+        // Si no hay pasos, dejar el estado actual (no sobreescribir con vacío)
+        // Solo limpiar si hay un mensaje de "inactivo" y el agente está corriendo
+        const emptyEl = consoleArea.querySelector('.console-empty');
+        if (emptyEl && window._agentRunning) {
+            emptyEl.textContent = '🔍 Agente ejecutándose, esperando primer paso...';
+            emptyEl.className = 'console-step';
+        }
+        return;
+    }
 
     // Evitar re-renderizar si no hay cambios
     const hash = steps.length + '-' + (steps[steps.length - 1]?.title || '');
@@ -1112,9 +1121,6 @@ function renderConsoleSteps(steps) {
     consoleArea.innerHTML = html;
     consoleArea.scrollTop = consoleArea.scrollHeight;
 }
-
-function updateConsoleThinking(thinking) {
-    const consoleArea = document.getElementById('consoleArea');
     if (!consoleArea) return;
 
     // Buscar si ya hay un div de thinking
