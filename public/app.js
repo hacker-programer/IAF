@@ -1019,7 +1019,6 @@ document.getElementById('rejectPlanBtn').onclick = () => {
 };
 
 function addMessage(role, text, extraClass) {
-function addMessage(role, text, extraClass) {
     const chatArea = document.getElementById('chatArea');
     const div = document.createElement('div');
     div.classList.add('message');
@@ -1046,6 +1045,7 @@ function addMessage(role, text, extraClass) {
 }
 // Toast informativo
 function showInfoToast(msg) {
+    const toast = document.getElementById('infoToast');
     const toast = document.getElementById('infoToast');
     if (!toast) {
         // Crear toast si no existe
