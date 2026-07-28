@@ -938,6 +938,11 @@ function startAgentMonitoring() {
                 agentQuestionShown = true;
                 showAgentQuestionBanner(res.pregunta_usuario);
             }
+
+            // Mostrar plan del agente (modal)
+            if (res.esperando_aprobacion_plan && res.plan_propuesto && !agentPlanShown) {
+                agentPlanShown = true;
+                showAgentPlanModal(res.plan_propuesto);
             }
 
             // Agente terminó (finalizar_tarea)
@@ -966,8 +971,6 @@ function startAgentMonitoring() {
         }
     }, 1000);
 }
-
-// ---- Interrupt Button ----
 document.getElementById('interruptBtn').onclick = async () => {
     const res = await apiCall('/api/agent/interrupt', 'POST');
     if (res.status === 'ok') {
