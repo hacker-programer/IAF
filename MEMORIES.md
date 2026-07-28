@@ -2,6 +2,21 @@
 
 ## Bugs Corregidos (Sesión 2025-2026)
 
+### BUG-027: Enter en respuesta a pregunta del agente no permitía saltos de línea
+- **Síntoma**: Al responder una pregunta del agente en el textarea del banner, presionar Enter enviaba inmediatamente la respuesta sin permitir escribir múltiples líneas.
+- **Causa real**: El event listener `keydown` en `#agentQuestionResponse` (app.js ~L926) capturaba cualquier `e.key === 'Enter'` y llamaba a `submitAgentResponseBtn.click()` sin verificar modificadores.
+- **Fix aplicado**: Cambiado a `if (e.key === 'Enter' && (e.ctrlKey || e.metaKey))` — Ctrl+Enter (o Cmd+Enter en Mac) envía la respuesta, Enter solo inserta nueva línea. También se agregó `e.preventDefault()` para evitar comportamiento por defecto.
+- **Lección**: Los textareas siempre deben permitir saltos de línea con Enter simple. El envío debe requerir un modificador (Ctrl/Cmd) o un botón explícito.
+
+### BUG-026: System prompt de estudio no se cargaba — el agente actuaba como modo programación
+- **Síntoma**: Al usar el modo estudio, el agente ignoraba completamente el prompt de estudio (`study_system_prompt.txt`) y usaba el prompt global de programación. El agente no sabía que estaba en modo estudio.
+- **Causa real**: `run_agent_loop()` en `agent.rs` recibía el parámetro `mode: &str` pero **jamás lo usaba**. Siempre cargaba el `global_prompt` (modo programación). `STUDY_SYSTEM_PROMPT` existía como constante privada en `main.rs` y solo se usaba en el endpoint de preview `study_build_prompt`, nunca en el bucle real del agente.
+- **Fix aplicado** (3 archivos):
+  1. `src/main.rs` L51: `const STUDY_SYSTEM_PROMPT` → `pub const STUDY_SYSTEM_PROMPT` (accesible desde `agent.rs` vía `crate::`)
+  2. `src/lib.rs`: Agregado `pub const STUDY_SYSTEM_PROMPT` también en la librería
+  3. `src/agent.rs` L116-121: Agregado bloque `if mode == "study"` que SOBREESCRIBE `system_prompt` con `state.study_engine.build_study_system_prompt(username, crate::STUDY_SYSTEM_PROMPT)`. Esto reemplaza completamente el prompt de programación con el prompt de estudio + perfil del estudiante (edad, intereses, fase, engagement, conocimientos previos).
+- **Lección**: Cuando un parámetro se pasa a una función pero no se usa, es una bandera roja. Verificar que todos los parámetros tengan un propósito real en el código.
+
 ### BUG-024: System prompt no se cargaba en la interfaz gráfica (TextArea vacío)
 - **Síntoma**: El textarea `globalPrompt` siempre aparecía vacío en la UI, aunque el backend sí devolvía el prompt correctamente.
 - **Causa real**: Mismatch de nombres de campo entre frontend y backend:
@@ -84,6 +99,14 @@
 
 ## Por qué estos bugs no fueron detectados por tests
 
+### BUG-026 (system prompt estudio)
+- `run_agent_loop` recibía `mode: &str` pero ningún test verificaba que el prompt cambiara según el modo.
+- **Solución**: Agregar test que verifique que cuando `mode == "study"`, `system_prompt` contiene `STUDY_SYSTEM_PROMPT`.
+
+### BUG-027 (Enter en textarea)
+- No había test de frontend que simulase eventos de teclado en el textarea de respuesta.
+- **Solución**: Agregar test de regresión en `frontend_regression_tests.js`.
+
 ### BUG-018/017 (study mode)
 - Tests de integración no incluyen pruebas del system prompt porque el prompt es texto libre.
 - **Solución**: Agregar test que verifique que el prompt de estudio contiene las reglas clave (prohibición .md, transparencia).
@@ -120,7 +143,7 @@
 | Mensajes en tiempo real | ✅ | `showInfoToast`, `startAgentMonitoring`, `lastInfoMessageCount` |
 | addMessage | ✅ | 1 `function addMessage` |
 | Perfil estudio | ✅ | `loadStudyProfile`, `/api/study/profile`, `profile_exists_on_disk` |
-| JS sintaxis | ✅ | 252 `{}`, 745 `()`, 31 `[]` — delta 0 |
+| JS sintaxis | ✅ | Llaves y paréntesis balanceados |
 | Módulos duplicados | ✅ | 15 módulos únicos |
 | match String/&str | ✅ | `match ext.as_str()` |
 | Race condition tests | ✅ | `AtomicU32` counter |
@@ -132,14 +155,14 @@
 - `write_file_with_commit` con archivos grandes puede truncar el contenido
 - Verificar métodos cross-file después de cada edición
 - `node --check` valida sintaxis JS sin ejecutar
+- Un parámetro que se recibe pero no se usa es una bandera roja de bug
 
-## Cambios estructurales (v3.5)
-- `src/study.rs`: 973 líneas. `get_user_projects` (L583), `build_study_system_prompt` (L515), `test_engine()` con `AtomicU32`.
-- `src/main.rs`: 2260 líneas. Agregada `find_chat_file_by_session_id_inner()` para BUG-016.
-- `tests/exhaustive_tests.rs`: 1835 líneas, 15 módulos, 123 tests.
-- `tests/integration_tests.rs`: 1197 líneas, 10 módulos, 24 tests de regresión.
-- `public/app.js`: 1021 líneas. `selectChatSession` ahora inicia monitoreo + carga steps; `submitAgentResponseBtn` agrega `addMessage`.
-- `prompts/study_system_prompt.txt`: Reescrito — 3 reglas de oro, anti-.md, transparencia, testing de métodos.
+## Cambios estructurales (v3.6 — BUG-026 + BUG-027)
+- `src/main.rs`: `STUDY_SYSTEM_PROMPT` ahora es `pub const` (L51)
+- `src/lib.rs`: Agregado `pub const STUDY_SYSTEM_PROMPT` para acceso desde librería
+- `src/agent.rs`: ~2418 líneas. Bloque `if mode == "study"` en L116-121 que reemplaza system prompt con estudio + perfil
+- `public/app.js`: ~1066 líneas. Fix BUG-027: Ctrl+Enter envía respuesta, Enter inserta nueva línea
+- `prompts/study_system_prompt.txt`: Prompt pedagógico completo con 4 reglas de oro
 
 ## Archivos de tests (v3.5)
 - `tests/exhaustive_tests.rs` (1835 líneas) — 15 módulos, 123 tests
