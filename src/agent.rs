@@ -656,20 +656,21 @@ pub async fn run_agent_loop(
                     detail: content.to_string(),
                     timestamp: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs(),
                 });
+                save_chat_steps_to_disk(&state, &session_id, &status.steps);
+            }
                 // BUG-002 FIX: Agregar respuesta de texto a info_messages para que el frontend
-                // la muestre en tiempo real. El frontend distingue mensajes normales (sin prefijo)
-                // de notificaciones ([NOTIF]).
+                // la muestre en tiempo real.
                 status.info_messages.push(content.to_string());
                 if status.info_messages.len() > 200 {
                     status.info_messages.remove(0);
                 }
                 save_chat_steps_to_disk(&state, &session_id, &status.steps);
-            }
-            
             if let Some(ref s_id) = session_id {
                 save_agent_message_to_disk(&state, s_id, "agent", &content);
             }
         }
+
+        if let Some(tool_calls) = message_val["tool_calls"].as_array() {
             messages.push(message_val.clone());
             let mut tool_responses = Vec::new();
             let mut final_message: Option<String> = None;
