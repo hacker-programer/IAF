@@ -8,7 +8,7 @@ let currentSessionId = null;
 let agentMonitorInterval = null;
 let currentCaptcha = null;
 let pendingMessageToSend = null;
-let agentQuestionShown = false;  // evita abrir el modal repetidamente
+let agentQuestionShown = false;  // evita abrir el banner repetidamente
 let agentPlanShown = false;      // evita abrir el modal repetidamente
 
 // Auth state
@@ -914,10 +914,10 @@ function startAgentMonitoring() {
                 if (window[shownKey].size > 200) window[shownKey] = new Set();
             }
 
-            // Mostrar pregunta del agente (modal)
+            // Mostrar pregunta del agente (banner inline, ya no es modal)
             if (res.esperando_respuesta_usuario && res.pregunta_usuario && !agentQuestionShown) {
                 agentQuestionShown = true;
-                showAgentQuestionModal(res.pregunta_usuario);
+                showAgentQuestionBanner(res.pregunta_usuario);
             }
 
             // Mostrar plan del agente (modal)
@@ -956,9 +956,9 @@ document.getElementById('interruptBtn').onclick = async () => {
     }
 };
 
-// ---- Agent Answer (responder a pregunta) ----
+// ---- Agent Answer (responder a pregunta, banner inline) ----
 async function responderAgente(respuesta) {
-    document.getElementById('agentQuestionModal').classList.add('hidden');
+    document.getElementById('agentQuestionBanner').classList.add('hidden');
     agentQuestionShown = false;
     await apiCall('/api/agent/responder', 'POST', { respuesta });
 }
@@ -974,42 +974,48 @@ async function aprobarPlan(aprobado, feedback) {
 // UI HELPERS — modales, toasts, consola, mensajes
 // ============================================================================
 
-function showAgentQuestionModal(pregunta) {
-    const modal = document.getElementById('agentQuestionModal');
-    document.getElementById('agentQuestionText').textContent = pregunta;
-    document.getElementById('agentAnswerInput').value = '';
-    modal.classList.remove('hidden');
-    document.getElementById('agentAnswerInput').focus();
+// BUG-025 FIX: El modal agentQuestionModal fue ELIMINADO del HTML y reemplazado
+// por el banner inline #agentQuestionBanner. Se renombró la función y se usan
+// los IDs correctos: agentQuestionBanner, agentQuestionPrompt, agentQuestionResponse.
+function showAgentQuestionBanner(pregunta) {
+    const banner = document.getElementById('agentQuestionBanner');
+    document.getElementById('agentQuestionPrompt').textContent = pregunta;
+    document.getElementById('agentQuestionResponse').value = '';
+    banner.classList.remove('hidden');
+    document.getElementById('agentQuestionResponse').focus();
 }
 
-document.getElementById('agentAnswerSendBtn').onclick = () => {
-    const respuesta = document.getElementById('agentAnswerInput').value.trim();
+// BUG-025 FIX: Los IDs agentAnswerSendBtn/agentAnswerInput ya no existen.
+// Se usan submitAgentResponseBtn/agentQuestionResponse que están en el HTML.
+document.getElementById('submitAgentResponseBtn').onclick = () => {
+    const respuesta = document.getElementById('agentQuestionResponse').value.trim();
     if (!respuesta) return;
     responderAgente(respuesta);
 };
 
-// Enter en el input de respuesta
-document.getElementById('agentAnswerInput').addEventListener('keydown', (e) => {
+// Enter en el input de respuesta del banner inline
+document.getElementById('agentQuestionResponse').addEventListener('keydown', (e) => {
     if (e.key === 'Enter') {
-        document.getElementById('agentAnswerSendBtn').click();
+        document.getElementById('submitAgentResponseBtn').click();
     }
 });
 
+// BUG-025 FIX: agentPlanText → agentPlanContent (ID real en HTML).
+// agentPlanFeedback no existe en HTML, se eliminó su referencia.
 function showAgentPlanModal(plan) {
     const modal = document.getElementById('agentPlanModal');
-    document.getElementById('agentPlanText').textContent = plan;
-    document.getElementById('agentPlanFeedback').value = '';
+    document.getElementById('agentPlanContent').textContent = plan;
     modal.classList.remove('hidden');
 }
 
-document.getElementById('agentPlanApproveBtn').onclick = () => {
-    const feedback = document.getElementById('agentPlanFeedback').value.trim();
-    aprobarPlan(true, feedback);
+// BUG-025 FIX: agentPlanApproveBtn/agentPlanRejectBtn → approvePlanBtn/rejectPlanBtn (IDs reales en HTML).
+// Se eliminó agentPlanFeedback (no existe en el HTML del modal).
+document.getElementById('approvePlanBtn').onclick = () => {
+    aprobarPlan(true, '');
 };
 
-document.getElementById('agentPlanRejectBtn').onclick = () => {
-    const feedback = document.getElementById('agentPlanFeedback').value.trim();
-    aprobarPlan(false, feedback);
+document.getElementById('rejectPlanBtn').onclick = () => {
+    aprobarPlan(false, '');
 };
 
 function addMessage(role, text, extraClass) {
