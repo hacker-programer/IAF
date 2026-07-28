@@ -1,8 +1,9 @@
-# DOCUMENTATION.md — Mapa Técnico del Proyecto IAF v2.8
+# DOCUMENTATION.md — Mapa Técnico del Proyecto IAF v2.9
 
 > **IAF (Intelligent Agent Framework)** — Framework de agente autónomo + plataforma de enseñanza en Rust + Axum.
 > Servidor HTTP doble puerto (80 auto-admin, 8080 auth), autenticación dual (password + Ed25519),
-> motor de estudio con perfilado de aprendizaje, sincronización de proyectos y cliente de ejecución remota.
+> motor de estudio con perfilado de aprendizaje, sincronización de proyectos, cliente de ejecución remota,
+> y túnel Cloudflare para acceso remoto seguro (solo puerto 8080).
 
 ---
 
@@ -10,10 +11,10 @@
 
 | Archivo | Líneas | Rol |
 |---------|--------|-----|
-| `src/main.rs` | ~2239 | Servidor HTTP doble puerto, endpoints REST, CAPTCHA, legacy routes, migración, scripts, system prompts, ciclos, `pub const STUDY_SYSTEM_PROMPT` (L51) |
+| `src/main.rs` | ~2239 | Servidor HTTP doble puerto, endpoints REST, CAPTCHA, legacy routes, migración, scripts, system prompts, ciclos, `pub const STUDY_SYSTEM_PROMPT` (L51), `port_80` flag (L2150-2190), `build_app()` (L2077) |
 | `src/agent.rs` | ~2418 | Bucle principal del agente, 26 herramientas, extract_text_from_docx(), soporte PDF/DOCX nativo, BUG-026: `if mode == "study"` carga prompt de estudio (L116-121) |
 | `src/auth.rs` | ~947 | Auth dual: contraseñas (argon2) + nonce Ed25519, permisos booleanos, WeeklySchedule, UserLimits |
-| `src/state.rs` | ~575 | AppState, ActiveAgentStatus (con info_messages), CicleState/CiclePhase, CaptchaRequest, ToolResultStore, SubAgentManager, ProcessRegistry |
+| `src/state.rs` | ~575 | AppState (con `port_80: bool`), ActiveAgentStatus (con info_messages), CicleState/CiclePhase, CaptchaRequest, ToolResultStore, SubAgentManager, ProcessRegistry |
 | `src/study.rs` | ~973 | Motor de estudio: UserLearningProfile, UserKnowledgeBase, StudyEngine, persistencia en .config/data/, `build_study_system_prompt()` (L515) |
 | `src/sync.rs` | ~280 | Sincronización de proyectos (push/pull/conflictos) |
 | `src/client_protocol.rs` | ~180 | Protocolo cliente-servidor para ejecución remota |
@@ -25,6 +26,8 @@
 | `src/utils.rs` | ~72 | sanitize_filename() — sanitización de nombres de archivo |
 | `scripts/generate_keys.ps1` | ~105 | Genera par de claves Ed25519 via API y las guarda como .pem |
 | `scripts/sign_nonce.ps1` | ~110 | Firma un nonce con clave privada para autenticación admin |
+| `scripts/cloudflare_tunnel.ps1` | ~180 | [v2.9] Configura y ejecuta túnel Cloudflare para puerto 8080 (modo quick + permanent) |
+| `scripts/cloudflared_config.yml` | ~45 | [v2.9] Plantilla YAML de configuración ingress para cloudflared |
 | `public/index.html` | ~298 | Frontend web con login dual, admin panel, gestión de usuarios, perfil de estudio con IDs correctos |
 | `public/app.js` | ~1066 | Lógica del frontend: auth, admin, perfil de estudio, mensajes en tiempo real, BUG-027: Ctrl+Enter para enviar respuesta |
 | `public/style.css` | ~893 | Estilos completos: .info-msg, .final-msg, .input-container, toasts, modales, consola |
@@ -34,6 +37,56 @@
 | `tests/integration_tests.rs` | ~1197 | Tests reales: StudyEngine, UserStore, sanitize_filename, ActiveAgentStatus, DOCX real |
 | `tests/frontend_regression_tests.js` | ~230 | Tests de regresión del frontend (Node.js) |
 | `prompts/study_system_prompt.txt` | ~80 | System prompt para modo estudio (4 reglas de oro, anti-resúmenes, transparencia) |
+
+---
+
+## 🔧 Cambios v2.9 — Cloudflare Tunnel (Solo Puerto 8080)
+
+### Arquitectura de doble puerto con túnel
+
+```
+                    ┌──────────────────────────────────────┐
+                    │         IAF Server (Rust/Axum)        │
+                    │                                      │
+                    │  ┌─────────────┐  ┌───────────────┐  │
+ Firewall local ◄───┼──│ Puerto 80   │  │ Puerto 8080   │──┼──► cloudflared
+ (solo confianza)   │  │ 0.0.0.0:80  │  │ 127.0.0.1:8080│  │    (túnel TLS)
+                    │  │ port_80:true│  │ port_80:false │  │    │
+                    │  │ SIN auth    │  │ CON auth      │  │    ▼
+                    │  └─────────────┘  └───────────────┘  │  Internet
+                    └──────────────────────────────────────┘  (https://...)
+```
+
+### Puntos clave de seguridad
+- **Puerto 80**: `port_80 = true` → `require_admin()` y `require_auth()` retornan `Ok("admin_local")` sin verificar token. Solo accesible desde LAN.
+- **Puerto 8080**: `port_80 = false` → siempre verifica token Bearer. Bind a `127.0.0.1` (localhost). El túnel cloudflared se conecta localmente.
+- **Túnel**: El ingress YAML solo expone `127.0.0.1:8080`. El puerto 80 NO aparece en las reglas. Cualquier otra request recibe HTTP 404.
+- **Admin remoto**: Para ser admin por el túnel, se necesita autenticación Ed25519 (nonce firmado con clave privada). No hay forma de saltarse el login.
+
+### Nuevos scripts
+| Script | Propósito |
+|--------|-----------|
+| `scripts/cloudflare_tunnel.ps1` | Modo quick (trycloudflare.com) y modo permanent (dominio propio) |
+| `scripts/cloudflared_config.yml` | Plantilla YAML con ingress rules (solo 8080, 404 para todo lo demás) |
+
+### Uso rápido
+```powershell
+# Túnel efímero para pruebas
+.\scripts\cloudflare_tunnel.ps1 -Mode quick
+
+# Túnel permanente con dominio propio
+.\scripts\cloudflare_tunnel.ps1 -Mode permanent -Domain "iaf.midominio.com"
+
+# Ejecutar túnel permanente
+cloudflared tunnel run iaf-tunnel
+
+# Instalar como servicio de Windows
+cloudflared service install
+```
+
+### Documentación actualizada
+- `DOCUMENTACION_CLIENTE.md`: Nueva sección "Acceso Remoto con Cloudflare Tunnel" + sección de seguridad de puertos
+- `DOCUMENTACION_INTERNA.md`: Nueva sección "Arquitectura de Doble Puerto" + "Cloudflare Tunnel" con diagramas y flujo de conexión
 
 ---
 
@@ -101,6 +154,26 @@ pub struct ActiveAgentStatus {
 
 ---
 
+## 🔀 Arquitectura de Doble Puerto (main.rs ~L2137-L2190)
+
+```rust
+// Puerto 80: admin local sin auth
+let mut state_80 = state.clone();
+state_80.port_80 = true;   // ← require_admin() retorna "admin_local" sin verificar
+
+// Puerto 8080: siempre requiere token Bearer
+let state_8080 = state;     // port_80 = false (default)
+
+let addr_80 = SocketAddr::from(([0, 0, 0, 0], 80));       // accesible desde LAN
+let addr_8080 = SocketAddr::from(([127, 0, 0, 1], 8080));  // solo localhost
+```
+
+**`require_admin()` (L67-L79)**: Si `state.port_80` es true, retorna `Ok("admin_local")` sin verificar. Si es false, verifica token Bearer + `is_admin`.
+
+**`require_auth()` (L81-L89)**: Si `state.port_80` es true, retorna `Ok("admin_local")`. Si es false, verifica token Bearer.
+
+---
+
 ## 🌐 Endpoints REST
 
 ### Agente y Chat
@@ -127,6 +200,36 @@ pub struct ActiveAgentStatus {
 | `GET` | `/api/study/projects` | `study_get_projects` | Listar proyectos de estudio del usuario |
 | `POST` | `/api/study/projects/:id/members` | `study_add_member` | Agregar miembro a proyecto |
 | `POST` | `/api/study/build-prompt` | `study_build_prompt` | Construir system prompt personalizado con perfil |
+
+---
+
+## ☁️ Cloudflare Tunnel — Flujo de Conexión
+
+```
+Usuario en internet (navegador)
+  │
+  ▼
+https://iaf.midominio.com  ⟵ Cloudflare proxy + SSL automático + DDoS protection
+  │
+  ▼
+cloudflared (túnel encriptado TLS de extremo a extremo)
+  │
+  ▼
+http://127.0.0.1:8080  ⟵ IAF Server (puerto 8080, port_80 = false)
+  │
+  ▼
+require_auth() → Token Bearer → Login (password o Ed25519)
+```
+
+### Configuración ingress (cloudflared_config.yml)
+```yaml
+tunnel: iaf-tunnel
+credentials-file: C:\Users\...\.cloudflared\iaf-tunnel.json
+ingress:
+  - hostname: iaf.midominio.com
+    service: http://127.0.0.1:8080    # SOLO puerto 8080
+  - service: http_status:404           # Rechaza todo lo demás
+```
 
 ---
 
