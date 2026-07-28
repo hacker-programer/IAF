@@ -121,8 +121,8 @@ pub async fn run_agent_loop(
     }
 
     let mut messages = vec![
+        json!({ "role": "system", "content": system_prompt }),
     ];
-
     // Cargar todo el historial del chat excepto el ÃƒÆ’Ã‚Âºltimo mensaje (que es el nuevo prompt del usuario)
     let len = session_messages.len();
     if len > 0 {
