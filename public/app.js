@@ -913,23 +913,25 @@ function startAgentMonitoring() {
 
             // Mostrar mensajes informativos en el chat
             if (res.info_messages && Array.isArray(res.info_messages)) {
+            // Mostrar mensajes informativos en el chat
+            if (res.info_messages && Array.isArray(res.info_messages)) {
                 // Solo mostrar los mensajes nuevos (no duplicados)
                 const shownKey = '_shownInfoMsgs';
                 if (!window[shownKey]) window[shownKey] = new Set();
                 res.info_messages.forEach(msg => {
                     if (!window[shownKey].has(msg)) {
                         window[shownKey].add(msg);
-                        addMessage('agent', 'ℹ️ ' + msg, 'info-msg');
+                        // BUG-002 FIX: Distinguir notificaciones [NOTIF] de respuestas de texto normales
+                        if (msg.startsWith('[NOTIF] ')) {
+                            addMessage('agent', 'ℹ️ ' + msg.slice(8), 'info-msg');
+                        } else {
+                            // Respuesta de texto normal del agente (sin clase extra)
+                            addMessage('agent', msg);
+                        }
                     }
                 });
                 // Limpiar el set si crece demasiado
                 if (window[shownKey].size > 200) window[shownKey] = new Set();
-            }
-
-            // Mostrar pregunta del agente (banner inline, ya no es modal)
-            if (res.esperando_respuesta_usuario && res.pregunta_usuario && !agentQuestionShown) {
-                agentQuestionShown = true;
-                showAgentQuestionBanner(res.pregunta_usuario);
             }
 
             // Mostrar plan del agente (modal)
