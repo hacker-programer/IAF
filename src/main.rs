@@ -47,7 +47,7 @@ fn deepseek_key() -> &'static str {
 }
 
 const DEFAULT_GLOBAL_SYSTEM_PROMPT: &str = include_str!("../prompts/default_system_prompt.txt");
-const STUDY_SYSTEM_PROMPT: &str = include_str!("../prompts/study_system_prompt.txt");
+pub const STUDY_SYSTEM_PROMPT: &str = include_str!("../prompts/study_system_prompt.txt");
 
 // ============================================================================
 // Helpers de Autenticaci├│n
