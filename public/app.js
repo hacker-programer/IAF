@@ -485,148 +485,124 @@ document.getElementById('createUserBtn').onclick = async () => {
 
     if (isAdmin) {
         const createRes = await apiCall('/api/admin/users', 'POST', payload);
-        if (createRes.status !== 'ok') return alert('Error creando admin: ' + createRes.message);
-        const adminUsername = createRes.user.username;
-        const keyRes = await apiCall('/api/auth/keygen', 'GET');
-        if (keyRes.status === 'ok' && keyRes.public_key) {
-            await apiCall(`/api/admin/users/${adminUsername}/access`, 'PUT', {
-                modo_estudio: payload.modo_estudio,
-                modo_programador: payload.modo_programador,
-                editar_system_prompt_global: payload.editar_system_prompt_global,
-                editar_system_prompt_local: payload.editar_system_prompt_local,
-            });
-            const pwd = document.getElementById('newPassword').value;
-            if (pwd) {
-                await apiCall(`/api/admin/users/${adminUsername}/password`, 'PUT', { new_password: pwd });
-            }
-            alert('Admin ' + adminUsername + ' creado.\n\nClave privada:\n' + keyRes.private_key + '\n\nClave publica:\n' + keyRes.public_key + '\n\nGUARDA ESTAS CLAVES. NO SE MOSTRARAN DE NUEVO.');
+        if (createRes.status === 'ok') {
+            document.getElementById('newUsername').value = '';
+            document.getElementById('newIsAdmin').checked = false;
+            showInfoToast('✅ Admin creado exitosamente.');
+            await refreshUsersTable();
         } else {
-            alert('Admin creado pero no se pudo generar claves. Crea manualmente las claves.');
+            alert('Error: ' + (createRes.message || 'Error al crear admin.'));
         }
     } else {
         const pwd = document.getElementById('newPassword').value;
+        if (!pwd) return alert('Password requerido para usuarios normales.');
         payload.password = pwd;
         const createRes = await apiCall('/api/admin/users', 'POST', payload);
         if (createRes.status === 'ok') {
-            alert('Usuario ' + username + ' creado exitosamente.');
+            document.getElementById('newUsername').value = '';
+            document.getElementById('newPassword').value = '';
+            document.getElementById('newPasswordConfirm').value = '';
+            showInfoToast('✅ Usuario creado exitosamente.');
+            await refreshUsersTable();
         } else {
-            alert('Error: ' + createRes.message);
+            alert('Error: ' + (createRes.message || 'Error al crear usuario.'));
         }
     }
-
-    await refreshUsersTable();
-};
-
-function toggleAdminCreateMode() {
-    const isAdmin = document.getElementById('newIsAdmin').checked;
-    document.getElementById('uploadPemBtn').classList.toggle('hidden', !isAdmin);
-    document.getElementById('generateKeysBtn').classList.toggle('hidden', !isAdmin);
-    document.getElementById('newPublicKeyContainer').classList.toggle('hidden', !isAdmin);
-}
-
-// ---- Upload PEM file ----
-document.getElementById('uploadPemBtn').onclick = () => {
-    document.getElementById('pemFileInput').click();
-};
-
-document.getElementById('pemFileInput').onchange = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    const text = await file.text();
-    document.getElementById('newPublicKey').value = text.trim();
-};
-
-// ---- Generate Keys ----
-document.getElementById('generateKeysBtn').onclick = async () => {
-    const res = await apiCall('/api/auth/keygen', 'GET');
-    if (res.status === 'ok') {
-        document.getElementById('newPublicKey').value = res.public_key;
-        alert('Claves generadas. Guarda la clave privada:\n\n' + res.private_key + '\n\nESTA ES LA UNICA VEZ QUE LA VERAS.');
-    }
-};
-
-// ---- Download Scripts ----
-function downloadScript(name) {
-    const url = '/api/scripts/' + name;
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = name + '.ps1';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-}
-
-// ============================================================================
-// STUDY PROFILE — carga y guardado con IDs correctos del HTML
-// ============================================================================
-
-async function loadStudyProfile() {
-    try {
-        const res = await apiCall('/api/study/profile');
-        if (res.status !== 'ok') return;
-
-        const profile = res.profile || {};
-        document.getElementById('profileAge').value = profile.age || '';
-        document.getElementById('profileGames').value = (profile.favorite_games || []).join(', ');
-        document.getElementById('profileHobbies').value = (profile.hobbies || []).join(', ');
-        document.getElementById('profileNeuro').value = (profile.neurological_conditions || []).join(', ');
-
-        const phaseDiv = document.getElementById('studyPhase');
-        if (phaseDiv && res.phase) {
-            const phaseNames = { Exploration: '🔍 Exploración', Exploitation: '🎯 Explotación', NotStarted: '🆕 No iniciado' };
-            phaseDiv.textContent = 'Fase: ' + (phaseNames[res.phase] || res.phase);
-            if (res.engagement !== undefined) {
-                phaseDiv.textContent += ' | Engagement: ' + Math.round(res.engagement * 100) + '%';
-            }
-        }
-    } catch(e) {}
-}
-
-document.getElementById('saveProfileBtn').onclick = async () => {
-    const payload = {
-        age: parseInt(document.getElementById('profileAge').value) || null,
-        favorite_games: document.getElementById('profileGames').value.split(',').map(s => s.trim()).filter(Boolean),
-        hobbies: document.getElementById('profileHobbies').value.split(',').map(s => s.trim()).filter(Boolean),
-        neurological_conditions: document.getElementById('profileNeuro').value.split(',').map(s => s.trim()).filter(Boolean),
-    };
-    const res = await apiCall('/api/study/profile', 'POST', payload);
-    if (res.status === 'ok') {
-        showInfoToast('✅ Perfil guardado correctamente.');
-        loadStudyProfile();
-    } else {
-        alert('Error: ' + res.message);
-    }
 };
 
 // ============================================================================
-// PROJECTS — carga, fork, agregar local
+// PROYECTOS
 // ============================================================================
 
 async function loadProjects() {
-    const res = await apiCall('/api/projects');
-    if (res.status !== 'ok') return;
-    const list = document.getElementById('projectList');
-    list.innerHTML = res.projects.map(p => `
-        <div class="project-item ${activeProject === p.name ? 'active' : ''}" onclick="selectProject('${p.name}')">
-            <span>${p.name}</span>
-        </div>
-    `).join('');
-    if (activeProject && !res.projects.find(p => p.name === activeProject)) {
-        activeProject = null;
-        document.getElementById('activeProjectName').textContent = 'Ninguno (Global)';
-    if (activeProject && !res.projects.find(p => p.name === activeProject)) {
-        activeProject = null;
-        document.getElementById('activeProjectName').textContent = 'Ninguno (Global)';
+    try {
+        const res = await apiCall('/api/projects');
+        const list = document.getElementById('projectList');
+        if (!res.projects || !Array.isArray(res.projects)) return;
+        const projects = res.projects;
+        if (projects.length > 0) {
+            list.innerHTML = projects.map(p => `
+                <div class="project-item ${activeProject === p.name ? 'active' : ''}" onclick="selectProject('${p.name}')">${p.name}</div>
+            `).join('');
+        } else {
+            list.innerHTML = '<div class="console-empty">No hay proyectos. Agregá uno local o forkeá un repo.</div>';
+        }
+    } catch(e) {
+        console.error('[IAF] Error cargando proyectos:', e);
+        const list = document.getElementById('projectList');
+        if (list) list.innerHTML = '<div class="console-empty" style="color:var(--danger);">Error al cargar proyectos. Revisá la consola.</div>';
     }
 }
 
+function selectProject(name) {
+    activeProject = name;
+    document.getElementById('activeProjectName').innerText = name;
+    loadProjects();
+    loadPrompts(); // BUG-024 FIX: Reload prompts when switching projects so local prompt updates
+}
+// ---- Fork & Clone ----
+document.getElementById('forkBtn').onclick = async () => {
+    const url = document.getElementById('repoUrl').value.trim();
+    if (!url) return alert('Ingresá una URL de GitHub o usuario/repo.');
+
+    const btn = document.getElementById('forkBtn');
+    btn.disabled = true;
+    btn.textContent = 'Forkeando...';
+
+    try {
+        const res = await apiCall('/api/projects/fork', 'POST', { repo_url: url });
+        if (res.status === 'ok') {
+            document.getElementById('repoUrl').value = '';
+            showInfoToast('✅ Repo forkeado y clonado: ' + (res.project ? res.project.name : url));
+            await loadProjects();
+        } else {
+            alert('Error: ' + (res.message || 'No se pudo forkear el repo.'));
+        }
+    } catch(e) {
+        alert('Error de conexión al forkear.');
+    }
+    btn.disabled = false;
+    btn.textContent = 'Fork & Clone';
+};
+
+// ---- Agregar Carpeta Local ----
+document.getElementById('addLocalBtn').onclick = async () => {
+    const name = document.getElementById('localProjName').value.trim();
+    const path = document.getElementById('localProjPath').value.trim();
+    if (!name) return alert('Ingresá un nombre para el proyecto.');
+    if (!path) return alert('Ingresá la ruta absoluta de la carpeta.');
+
+    const btn = document.getElementById('addLocalBtn');
+    btn.disabled = true;
+    btn.textContent = 'Agregando...';
+
+    try {
+        const res = await apiCall('/api/projects/local', 'POST', { name, path });
+        if (res.status === 'ok') {
+            document.getElementById('localProjName').value = '';
+            document.getElementById('localProjPath').value = '';
+            showInfoToast('✅ Proyecto local agregado: ' + name);
+            await loadProjects();
+        } else {
+            alert('Error: ' + (res.message || 'No se pudo agregar el proyecto.'));
+        }
+    } catch(e) {
+        alert('Error de conexión al agregar proyecto.');
+    }
+    btn.disabled = false;
+    btn.textContent = 'Agregar Carpeta';
+};
 // ============================================================================
-// PROMPTS — carga, guardado y restauración de system prompts
+// ============================================================================
+// PROMPTS — alineado con IDs del HTML: globalPrompt, localPrompt,
+//           savePromptsBtn (guarda ambos), resetPromptBtn (restaura global)
+// ============================================================================
 
 async function loadPrompts() {
     try {
         const prompts = await apiCall('/api/prompts');
         if (prompts.status === 'ok') {
+            // BUG-024 FIX: Backend returns global_current, not global
             document.getElementById('globalPrompt').value = prompts.global_current || '';
             if (activeProject && prompts.projects && prompts.projects[activeProject]) {
                 document.getElementById('localPrompt').value = prompts.projects[activeProject];
@@ -637,8 +613,10 @@ async function loadPrompts() {
     } catch(e) {}
 }
 
+// savePromptsBtn: guarda ambos prompts (global y local) en una sola acción
 document.getElementById('savePromptsBtn').onclick = async () => {
     const globalContent = document.getElementById('globalPrompt').value;
+    // FIX: El backend solo acepta POST en /api/prompts/global (no PUT)
     const globalRes = await apiCall('/api/prompts/global', 'POST', { content: globalContent });
     if (globalRes.status !== 'ok') {
         alert('Error al guardar prompt global: ' + globalRes.message);
@@ -647,158 +625,226 @@ document.getElementById('savePromptsBtn').onclick = async () => {
 
     if (activeProject) {
         const localContent = document.getElementById('localPrompt').value;
+        // FIX: /api/prompts/local usa POST y recibe { project_name, content } en el body (no PUT a /api/prompts/projects/...)
         const localRes = await apiCall('/api/prompts/local', 'POST', { project_name: activeProject, content: localContent });
         if (localRes.status !== 'ok') {
             alert('Error al guardar prompt local: ' + localRes.message);
             return;
         }
-        showInfoToast('✅ System prompts guardados para ' + activeProject);
+        alert('System prompts global y local guardados para ' + activeProject + '.');
     } else {
-        showInfoToast('✅ System prompt global guardado.');
+        alert('System prompt global guardado.');
     }
 };
 
+// resetPromptBtn: restaura el prompt global al valor por defecto
 document.getElementById('resetPromptBtn').onclick = async () => {
     if (!confirm('¿Restaurar el system prompt global al valor por defecto?')) return;
     const res = await apiCall('/api/prompts/global/reset', 'POST');
     if (res.status === 'ok') {
         document.getElementById('globalPrompt').value = res.content;
-        showInfoToast('✅ System prompt global restaurado.');
-    } else {
-        alert('Error: ' + res.message);
-    }
-};
-
-
-
-function selectProject(name) {
-    activeProject = name;
-    document.getElementById('activeProjectName').textContent = name;
-    loadPrompts();
-    loadProjects();
-}
-
-document.getElementById('forkBtn').onclick = async () => {
-    const url = document.getElementById('repoUrl').value.trim();
-    if (!url) return alert('Ingresa URL del repo o usuario/repo.');
-    const res = await apiCall('/api/projects/fork', 'POST', { repo_url: url });
-    if (res.status === 'ok') {
-        showInfoToast('✅ Repo clonado: ' + res.project_name);
-        loadProjects();
-    } else {
-        alert('Error: ' + res.message);
-    }
-};
-
-document.getElementById('addLocalBtn').onclick = async () => {
-    const name = document.getElementById('localProjName').value.trim();
-    const path = document.getElementById('localProjPath').value.trim();
-    if (!name || !path) return alert('Ingresa nombre y ruta.');
-    const res = await apiCall('/api/projects/local', 'POST', { name, path });
-    if (res.status === 'ok') {
-        showInfoToast('✅ Proyecto local agregado.');
-        loadProjects();
+        alert('System prompt global restaurado.');
     } else {
         alert('Error: ' + res.message);
     }
 };
 
 // ============================================================================
-// CHAT — historial, sesiones, nuevo chat
+// STUDY PROFILE — carga desde /api/study/profile y rellena el formulario
+// ============================================================================
+
+async function loadStudyProfile() {
+    try {
+        const res = await apiCall('/api/study/profile');
+        if (res.status === 'ok' && res.profile) {
+            const p = res.profile;
+
+            // Rellenar campos del formulario de perfil
+            const ageEl = document.getElementById('profileAge');
+            const gamesEl = document.getElementById('profileGames');
+            const hobbiesEl = document.getElementById('profileHobbies');
+            const neuroEl = document.getElementById('profileNeuro');
+            const phaseEl = document.getElementById('studyPhase');
+
+            if (ageEl && p.age) ageEl.value = p.age;
+            if (gamesEl && p.favorite_games) gamesEl.value = p.favorite_games.join(', ');
+            if (hobbiesEl && p.hobbies) hobbiesEl.value = p.hobbies.join(', ');
+            if (neuroEl && p.neurological_conditions) neuroEl.value = p.neurological_conditions.join(', ');
+
+            // Mostrar info de la fase y resumen de aprendizaje
+            if (phaseEl) {
+                const phaseMap = { 'NotStarted': 'No iniciado', 'Exploration': '🔍 Exploración', 'Exploitation': '🎯 Explotación' };
+                const phaseName = phaseMap[p.phase] || p.phase || 'No definida';
+                const summary = p.learning_style_summary || '';
+                const engagement = res.engagement ? (' | Engagement: ' + Math.round(res.engagement * 100) + '%') : '';
+                phaseEl.innerHTML = '<b>Fase:</b> ' + phaseName + engagement +
+                    (summary ? '<br><b>Resumen:</b> ' + summary : '') +
+                    '<br><b>Usuario:</b> ' + (p.username || authUsername || '?');
+            }
+
+            // Mostrar en el chat que el perfil se cargó correctamente
+            console.log('[IAF] Perfil de estudio cargado:', p.username, 'fase:', p.phase);
+        } else {
+            // Perfil no encontrado, mostrar estado inicial
+            const phaseEl = document.getElementById('studyPhase');
+            if (phaseEl) phaseEl.innerHTML = '<b>Fase:</b> No iniciado — Completá el perfil y guardalo.';
+        }
+    } catch(e) {
+        console.error('[IAF] Error cargando perfil de estudio:', e);
+        const phaseEl = document.getElementById('studyPhase');
+        if (phaseEl) phaseEl.innerHTML = '<b>Error:</b> No se pudo cargar el perfil.';
+    }
+}
+
+// ---- Save Study Profile ----
+document.getElementById('saveProfileBtn').onclick = async () => {
+    const ageRaw = document.getElementById('profileAge').value.trim();
+    const gamesRaw = document.getElementById('profileGames').value.trim();
+    const hobbiesRaw = document.getElementById('profileHobbies').value.trim();
+    const neuroRaw = document.getElementById('profileNeuro').value.trim();
+
+    const payload = {};
+    if (ageRaw) payload.age = parseInt(ageRaw);
+    if (gamesRaw) payload.favorite_games = gamesRaw.split(',').map(s => s.trim()).filter(Boolean);
+    if (hobbiesRaw) payload.hobbies = hobbiesRaw.split(',').map(s => s.trim()).filter(Boolean);
+    if (neuroRaw) payload.neurological_conditions = neuroRaw.split(',').map(s => s.trim()).filter(Boolean);
+
+    try {
+        const res = await apiCall('/api/study/profile', 'POST', payload);
+        if (res.status === 'ok') {
+            showInfoToast('✅ Perfil de estudio guardado correctamente.');
+            loadStudyProfile(); // Recargar para mostrar datos actualizados
+        } else {
+            alert('Error al guardar perfil: ' + (res.message || 'Desconocido'));
+        }
+    } catch(e) {
+        alert('Error de conexión al guardar perfil.');
+    }
+};
+
+// ============================================================================
+// CHAT HISTORY
 // ============================================================================
 
 async function loadChatHistory() {
-    const res = await apiCall('/api/chats');
-    if (res.status !== 'ok') return;
-    const list = document.getElementById('chatHistoryList');
-    list.innerHTML = res.sessions.map(s => `
-        <div class="project-item ${s.id === currentSessionId ? 'active' : ''}" onclick="selectChatSession('${s.id}')">
-            <span>${s.title || 'Chat'}</span>
-            <span style="font-size:10px;color:var(--text-muted);">${s.messages_count || 0} msgs</span>
-        </div>
-    `).join('');
+    try {
+        const res = await apiCall('/api/chats');
+        const list = document.getElementById('chatHistoryList');
+        if (res.chats && Array.isArray(res.chats)) {
+            list.innerHTML = res.chats.map(c => `
+                <div class="project-item ${currentSessionId === c.id ? 'active' : ''}" onclick="selectChatSession('${c.id}')">${c.title}</div>
+            `).join('');
+        }
+    } catch(e) {}
 }
 
+// BUG-014 + BUG-015 FIX: Al seleccionar un chat existente (ej: tras recargar la página),
+// se inicia el monitoreo del agente y se cargan los steps de auditoría desde la sesión.
+async function selectChatSession(id) {
+    currentSessionId = id;
+    loadChatHistory();
+    const res = await apiCall(`/api/chats/${id}`);
+    if (res.status === 'ok') {
+        const chatArea = document.getElementById('chatArea');
+        chatArea.innerHTML = '';
+        chatArea.innerHTML = '';
+        res.session.messages.forEach(m => addMessage(m.role, m.content));
+        // BUG-002 FIX: Limpiar Set de mensajes ya mostrados al cambiar de sesión
+        window._shownInfoMsgs = new Set();
+        if (res.session.project_name) {
+            document.getElementById('activeProjectName').innerText = activeProject;
+            loadProjects();
+        }
+        // BUG-015 FIX: Cargar steps de auditoría desde la sesión persistida
+        if (res.session.steps && Array.isArray(res.session.steps) && res.session.steps.length > 0) {
+            renderConsoleSteps(res.session.steps);
+        }
+        // BUG-014 FIX: Iniciar monitoreo del agente al entrar a un chat existente
+        startAgentMonitoring();
+    }
+}
+
+// BUG-019 FIX: Al crear un nuevo chat, limpiar TODO el estado anterior
 document.getElementById('newChatBtn').onclick = () => {
     currentSessionId = null;
-    document.getElementById('chatArea').innerHTML = '<div class="message system-msg"><strong>Sistema:</strong> Nuevo chat iniciado. Selecciona un proyecto y modo para empezar.</div>';
+    // BUG-002 FIX: Limpiar Set de mensajes ya mostrados al crear nuevo chat
+    window._shownInfoMsgs = new Set();
+    document.getElementById('chatArea').innerHTML = '<div class="message system-msg"><strong>Sistema:</strong> Nuevo chat iniciado.</div>';
+    if (agentMonitorInterval) {
+        clearInterval(agentMonitorInterval);
+        agentMonitorInterval = null;
+    }
+    document.getElementById('interruptBtn').classList.add('hidden');
+    const consoleArea = document.getElementById('consoleArea');
+    if (consoleArea) consoleArea.innerHTML = '';
+    agentQuestionShown = false;
+    agentPlanShown = false;
     loadChatHistory();
 };
 
-async function selectChatSession(sessionId) {
-    currentSessionId = sessionId;
-    const res = await apiCall('/api/chats/' + sessionId);
-    if (res.status !== 'ok') return;
-    const chatArea = document.getElementById('chatArea');
-    chatArea.innerHTML = '';
-    (res.messages || []).forEach(m => {
-        addMessage(m.role, m.content);
-    });
-    loadChatHistory();
-    // Iniciar monitoreo para sesiones activas
-    startAgentMonitoring();
-}
+// ---- Send Message ----
+const SEND_DEBOUNCE_MS = 500;
+let sendTimeout;
 
-// ============================================================================
-// CHAT INPUT — enviar mensajes, refinar prompt
-// ============================================================================
-
-document.getElementById('sendBtn').onclick = async () => {
+document.getElementById('sendBtn').onclick = () => {
     const text = document.getElementById('chatInput').value.trim();
     if (!text) return;
-    pendingMessageToSend = text;
-    document.getElementById('chatInput').value = '';
-
-    // Refinar prompt
-    const refineRes = await apiCall('/api/refine', 'POST', { message: text, project_name: activeProject });
-    if (refineRes.status === 'ok' && refineRes.refined) {
-        document.getElementById('refinedPromptText').value = refineRes.refined;
-        document.getElementById('refinePromptFeedback').value = '';
-        document.getElementById('refinePromptModal').classList.remove('hidden');
-    } else {
-        // No se pudo refinar, enviar directo
-        pendingMessageToSend = null;
-        await sendMessageToAgent(text, 'programming');
-    }
+    document.getElementById('sendBtn').disabled = true;
+    clearTimeout(sendTimeout);
+    sendTimeout = setTimeout(async () => {
+        try {
+            const mode = document.getElementById('modeStudy').classList.contains('active') ? 'study' : 'programming';
+            const refineRes = await apiCall('/api/prompts/refine', 'POST', {
+                prompt: text, session_id: currentSessionId, project_name: activeProject
+            });
+            if (refineRes.status === 'ok') {
+                pendingMessageToSend = text;
+                document.getElementById('refinedPromptText').value = refineRes.refined;
+                document.getElementById('refinePromptModal').classList.remove('hidden');
+            } else {
+                document.getElementById('chatInput').value = '';
+                await sendMessageToAgent(text, mode);
+            }
+        } catch(e) {
+            document.getElementById('chatInput').value = '';
+            await sendMessageToAgent(text, 'programming');
+        }
+        document.getElementById('sendBtn').disabled = false;
+    }, SEND_DEBOUNCE_MS);
 };
 
 document.getElementById('sendDirectBtn').onclick = async () => {
     const text = document.getElementById('chatInput').value.trim();
     if (!text) return;
+    const btn = document.getElementById('sendDirectBtn');
+    btn.disabled = true;
     document.getElementById('chatInput').value = '';
     const mode = document.getElementById('modeStudy').classList.contains('active') ? 'study' : 'programming';
     await sendMessageToAgent(text, mode);
+    btn.disabled = false;
 };
 
-// Enter en el chat input envía (Shift+Enter para nueva línea)
-document.getElementById('chatInput').addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
-        document.getElementById('sendBtn').click();
-    }
-});
-
-// ---- Refine Prompt Modal ----
 document.getElementById('applyRefinedPromptBtn').onclick = async () => {
-    const refined = document.getElementById('refinedPromptText').value.trim();
     document.getElementById('refinePromptModal').classList.add('hidden');
-    if (refined) {
+    if (pendingMessageToSend) {
+        const finalText = document.getElementById('refinedPromptText').value.trim() || pendingMessageToSend;
+        document.getElementById('chatInput').value = '';
+        const mode = document.getElementById('modeStudy').classList.contains('active') ? 'study' : 'programming';
+        await sendMessageToAgent(finalText, mode);
         pendingMessageToSend = null;
-        await sendMessageToAgent(refined, 'programming');
     }
 };
 
 document.getElementById('reRefinePromptBtn').onclick = async () => {
-    const btn = document.getElementById('reRefinePromptBtn');
-    btn.innerText = 'Refinando...'; btn.disabled = true;
-    const original = pendingMessageToSend;
+    const currentText = document.getElementById('refinedPromptText').value.trim();
     const feedback = document.getElementById('refinePromptFeedback').value.trim();
-    const refineRes = await apiCall('/api/refine', 'POST', {
-        message: original,
-        project_name: activeProject,
-        feedback: feedback || undefined
+    if (!currentText) return;
+    const btn = document.getElementById('reRefinePromptBtn');
+    btn.disabled = true; btn.innerText = 'Re-Refinando...';
+    const refineRes = await apiCall('/api/prompts/refine', 'POST', {
+        prompt: currentText, feedback, session_id: currentSessionId, project_name: activeProject
     });
-    if (refineRes.status === 'ok' && refineRes.refined) {
+    if (refineRes.status === 'ok') {
         document.getElementById('refinedPromptText').value = refineRes.refined;
         document.getElementById('refinePromptFeedback').value = '';
     } else { alert('Error: ' + refineRes.message); }
@@ -975,15 +1021,14 @@ document.getElementById('submitAgentResponseBtn').onclick = () => {
     responderAgente(respuesta);
 };
 
-// BUG-026 FIX: Ctrl+Enter (o Cmd+Enter en Mac) para enviar la respuesta.
-// Enter solo inserta nueva línea, permitiendo respuestas multi-línea.
+// Enter en el input de respuesta del banner inline
+// BUG-027 FIX: Enter solo envía; Shift+Enter permite salto de línea
 document.getElementById('agentQuestionResponse').addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+    if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
         document.getElementById('submitAgentResponseBtn').click();
     }
 });
-
 // BUG-025 FIX: agentPlanText → agentPlanContent (ID real en HTML).
 // agentPlanFeedback no existe en HTML, se eliminó su referencia.
 function showAgentPlanModal(plan) {
