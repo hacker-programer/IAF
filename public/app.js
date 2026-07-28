@@ -958,6 +958,8 @@ document.getElementById('interruptBtn').onclick = async () => {
 
 // ---- Agent Answer (responder a pregunta, banner inline) ----
 async function responderAgente(respuesta) {
+    // Mostrar la respuesta del usuario en el chat
+    addMessage('user', respuesta);
     document.getElementById('agentQuestionBanner').classList.add('hidden');
     agentQuestionShown = false;
     await apiCall('/api/agent/responder', 'POST', { respuesta });
