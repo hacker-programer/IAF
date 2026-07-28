@@ -931,7 +931,6 @@ function startAgentMonitoring() {
                 // Limpiar el set si crece demasiado
                 if (window[shownKey].size > 200) window[shownKey] = new Set();
             }
-            }
 
             // Mostrar pregunta del agente (banner inline, ya no es modal)
             if (res.esperando_respuesta_usuario && res.pregunta_usuario && !agentQuestionShown) {
