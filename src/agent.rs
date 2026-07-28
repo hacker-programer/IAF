@@ -656,15 +656,12 @@ pub async fn run_agent_loop(
                     detail: content.to_string(),
                     timestamp: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs(),
                 });
+                // BUG-002 FIX: Agregar respuesta de texto a info_messages para tiempo real
+                status.info_messages.push(content.to_string());
+                if status.info_messages.len() > 200 { status.info_messages.remove(0); }
                 save_chat_steps_to_disk(&state, &session_id, &status.steps);
             }
-                // BUG-002 FIX: Agregar respuesta de texto a info_messages para que el frontend
-                // la muestre en tiempo real.
-                status.info_messages.push(content.to_string());
-                if status.info_messages.len() > 200 {
-                    status.info_messages.remove(0);
-                }
-                save_chat_steps_to_disk(&state, &session_id, &status.steps);
+            
             if let Some(ref s_id) = session_id {
                 save_agent_message_to_disk(&state, s_id, "agent", &content);
             }
@@ -1370,8 +1367,8 @@ pub async fn run_agent_loop(
                             {
                                 let mut status = state.active_agent.lock().unwrap();
                                 // Agregar a info_messages para frontend (BUG-002)
-                                status.info_messages.push(mensaje.to_string());
-                                if status.info_messages.len() > 100 {
+                                status.info_messages.push(format!("[NOTIF] {}", mensaje));
+                                if status.info_messages.len() > 200 {
                                     status.info_messages.remove(0);
                                 }
                                 status.steps.push(crate::state::AuditStep {

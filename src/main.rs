@@ -1081,6 +1081,8 @@ async fn chat_endpoint(
             agent.interrupted = false;
             agent.finished = false;
             agent.final_message = None;
+            // BUG-002 FIX: Limpiar info_messages al iniciar nuevo agente
+            agent.info_messages.clear();
             // BUG FIX: Solo limpiar steps si es conversacion NUEVA. Si es existente, cargar desde sesion.
             if chat_file.is_some() {
                 if let Some(ref steps) = session.steps { agent.steps = steps.clone(); }
