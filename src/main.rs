@@ -455,13 +455,9 @@ async fn client_check() -> impl IntoResponse {
         } else {
             "Cliente encontrado. Ejecutalo con: iaf-client.exe http://127.0.0.1:8080 <username> <token>"
         }
-    }))
-}
-
 // ============================================================================
 // Endpoints Admin (gestión de usuarios)
 // ============================================================================
-
 async fn admin_list_users(
     State(state): State<AppState>,
     headers: HeaderMap,
