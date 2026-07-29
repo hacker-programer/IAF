@@ -1,4 +1,4 @@
-﻿#![allow(dead_code, unused_imports, unused_variables, unused_mut, unused_assignments, unused_must_use)]
+#![allow(dead_code, unused_imports, unused_variables, unused_mut, unused_assignments, unused_must_use)]
 use axum::{
     extract::{State, Json, Path as AxumPath},
     response::IntoResponse,
@@ -8,7 +8,7 @@ use axum::{
 };
 use serde::Deserialize;
 use serde_json::json;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::net::SocketAddr;
 use std::path::PathBuf;
@@ -50,7 +50,7 @@ const DEFAULT_GLOBAL_SYSTEM_PROMPT: &str = include_str!("../prompts/default_syst
 pub const STUDY_SYSTEM_PROMPT: &str = include_str!("../prompts/study_system_prompt.txt");
 
 // ============================================================================
-// Helpers de Autenticaci├│n
+// Helpers de Autenticación
 // ============================================================================
 
 /// Extrae el token Bearer del header Authorization
@@ -72,14 +72,14 @@ async fn require_admin(
     let token = extract_bearer_token(headers)
         .ok_or_else(|| (StatusCode::UNAUTHORIZED, "Token Bearer requerido.".into()))?;
     let username = state.session_store.validate_token(&token)
-        .ok_or_else(|| (StatusCode::UNAUTHORIZED, "Token inv├ílido o expirado.".into()))?;
+        .ok_or_else(|| (StatusCode::UNAUTHORIZED, "Token inválido o expirado.".into()))?;
     if !state.user_store.is_admin(&username) {
         return Err((StatusCode::FORBIDDEN, "Se requiere rol admin.".into()));
     }
     Ok(username)
 }
 
-/// Verifica que el usuario est├® autenticado (normal o admin)
+/// Verifica que el usuario esté autenticado (normal o admin)
 async fn require_auth(
     state: &AppState,
     headers: &HeaderMap,
@@ -90,7 +90,7 @@ async fn require_auth(
     let token = extract_bearer_token(headers)
         .ok_or_else(|| (StatusCode::UNAUTHORIZED, "Token Bearer requerido.".into()))?;
     state.session_store.validate_token(&token)
-        .ok_or_else(|| (StatusCode::UNAUTHORIZED, "Token inv├ílido o expirado.".into()))
+        .ok_or_else(|| (StatusCode::UNAUTHORIZED, "Token inválido o expirado.".into()))
 }
 
 // ============================================================================
@@ -115,14 +115,35 @@ fn get_chat_path(state: &AppState, username: &str, is_admin_or_port80: bool, tit
     dir.join(format!("{}-{}.json", safe_title, id))
 }
 
-/// Determina si un nombre de archivo (sin extensi├│n) parece un UUID
+/// Limpia archivos viejos con el mismo UUID en el directorio de chats
+/// para evitar duplicados cuando el título cambia.
+fn clean_old_chat_files(dir: &PathBuf, session_id: &str) {
+    if !dir.exists() {
+        return;
+    }
+    if let Ok(entries) = fs::read_dir(dir) {
+        for entry in entries.filter_map(Result::ok) {
+            let path = entry.path();
+            if path.extension().and_then(|e| e.to_str()) != Some("json") {
+                continue;
+            }
+            let fname = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
+            if fname.ends_with(&format!("-{}", session_id)) {
+                let _ = fs::remove_file(&path);
+                eprintln!("[IAF] Limpiado archivo duplicado: {}", path.display());
+            }
+        }
+    }
+}
+
+/// Determina si un nombre de archivo (sin extensión) parece un UUID
 fn looks_like_uuid_stem(stem: &str) -> bool {
     stem.len() >= 30
         && stem.chars().all(|c| c.is_ascii_hexdigit() || c == '-')
         && stem.matches('-').count() >= 3
 }
 
-/// Migraci├│n recursiva: renombra archivos <uuid>.json a <title>-<uuid>.json
+/// Migración recursiva: renombra archivos <uuid>.json a <title>-<uuid>.json
 /// dentro de un directorio dado. Retorna cantidad de archivos migrados.
 fn migrate_chats_in_dir(dir: &PathBuf) -> usize {
     if !dir.exists() || !dir.is_dir() {
@@ -169,20 +190,20 @@ fn migrate_chats_in_dir(dir: &PathBuf) -> usize {
 }
 
 /// Migra chats existentes del formato viejo (<uuid>.json) al nuevo (<title>-<uuid>.json).
-/// Tambi├®n migra prompts.json y local_projects.json al formato por usuario.
+/// También migra prompts.json y local_projects.json al formato por usuario.
 fn migrate_chats(state: &AppState) {
     let chats_dir = state.base_workspace.join(".config").join("chats");
     if !chats_dir.exists() {
         return;
     }
 
-    // 1. Migrar archivos de chat en el directorio ra├¡z y subdirectorios
+    // 1. Migrar archivos de chat en el directorio raíz y subdirectorios
     let migrated = migrate_chats_in_dir(&chats_dir);
     if migrated > 0 {
         eprintln!("[IAF] Migrados {} chats al nuevo formato <titulo>-<UUID>.json", migrated);
     }
 
-    // 2. Migrar prompts.json legacy ÔåÆ per-user globalPrompt.json
+    // 2. Migrar prompts.json legacy → per-user globalPrompt.json
     let prompts_path = state.base_workspace.join(".config").join("prompts.json");
     if prompts_path.exists() {
         if let Ok(content) = fs::read_to_string(&prompts_path) {
@@ -194,10 +215,10 @@ fn migrate_chats(state: &AppState) {
                     let admin_prompt_path = admin_prompt_dir.join("globalPrompt.json");
                     if !admin_prompt_path.exists() {
                         let _ = fs::write(&admin_prompt_path, &parsed.global_current);
-                        eprintln!("[IAF] Migrado prompts.json ÔåÆ data/admin/globalPrompt.json");
+                        eprintln!("[IAF] Migrado prompts.json → data/admin/globalPrompt.json");
                     }
                 }
-                // Migrar project prompts ÔåÆ per-user per-project localPrompt.json
+                // Migrar project prompts → per-user per-project localPrompt.json
                 for (proj_name, proj_prompt) in &parsed.projects {
                     let proj_dir = state.base_workspace.join(".config").join("data")
                         .join("admin").join(proj_name);
@@ -205,7 +226,7 @@ fn migrate_chats(state: &AppState) {
                     let local_path = proj_dir.join("localPrompt.json");
                     if !local_path.exists() {
                         let _ = fs::write(&local_path, proj_prompt);
-                        eprintln!("[IAF] Migrado prompt proyecto '{}' ÔåÆ data/admin/{}/localPrompt.json", proj_name, proj_name);
+                        eprintln!("[IAF] Migrado prompt proyecto '{}' → data/admin/{}/localPrompt.json", proj_name, proj_name);
                     }
                 }
             }
@@ -214,11 +235,11 @@ fn migrate_chats(state: &AppState) {
         let bak_path = state.base_workspace.join(".config").join("prompts.json.bak");
         if !bak_path.exists() {
             let _ = fs::rename(&prompts_path, &bak_path);
-            eprintln!("[IAF] prompts.json renombrado a prompts.json.bak (migraci├│n completada)");
+            eprintln!("[IAF] prompts.json renombrado a prompts.json.bak (migración completada)");
         }
     }
 
-    // 3. Migrar local_projects.json legacy ÔåÆ per-user
+    // 3. Migrar local_projects.json legacy → per-user
     let local_proj_path = state.base_workspace.join(".config").join("local_projects.json");
     let bak_path = state.base_workspace.join(".config").join("local_projects.json.bak");
     if local_proj_path.exists() {
@@ -290,7 +311,7 @@ async fn serve_script(
 }
 
 // ============================================================================
-// Endpoints de Autenticaci├│n
+// Endpoints de Autenticación
 // ============================================================================
 
 #[derive(Deserialize)]
@@ -312,7 +333,7 @@ async fn login(State(state): State<AppState>, Json(payload): Json<LoginRequest>)
                 "has_programming_access": user.has_programming_access(),
             }))
         }
-        Ok(None) => Json(json!({ "status": "error", "message": "Credenciales inv├ílidas." })),
+        Ok(None) => Json(json!({ "status": "error", "message": "Credenciales inválidas." })),
         Err(e) => Json(json!({ "status": "error", "message": e })),
     }
 }
@@ -328,10 +349,10 @@ async fn challenge(State(state): State<AppState>, Json(payload): Json<ChallengeR
         None => return Json(json!({ "status": "error", "message": "Usuario no encontrado." })),
     };
     if !user.is_admin {
-        return Json(json!({ "status": "error", "message": "Solo los administradores usan autenticaci├│n por nonce." }));
+        return Json(json!({ "status": "error", "message": "Solo los administradores usan autenticación por nonce." }));
     }
     if user.public_key.is_none() {
-        return Json(json!({ "status": "error", "message": "Este admin no tiene clave p├║blica configurada." }));
+        return Json(json!({ "status": "error", "message": "Este admin no tiene clave pública configurada." }));
     }
     let nonce = state.challenge_store.generate_challenge(&payload.username);
     Json(json!({ "status": "ok", "nonce": nonce }))
@@ -351,7 +372,7 @@ async fn verify(State(state): State<AppState>, Json(payload): Json<VerifyRequest
     };
     let pk = match &user.public_key {
         Some(k) => k.clone(),
-        None => return Json(json!({ "status": "error", "message": "Este usuario no tiene clave p├║blica." })),
+        None => return Json(json!({ "status": "error", "message": "Este usuario no tiene clave pública." })),
     };
     match state.challenge_store.verify_challenge(&payload.username, &payload.nonce, &payload.signature, &pk) {
         Ok(true) => {
@@ -363,7 +384,7 @@ async fn verify(State(state): State<AppState>, Json(payload): Json<VerifyRequest
                 "has_programming_access": user.has_programming_access(),
             }))
         }
-        Ok(false) => Json(json!({ "status": "error", "message": "Firma inv├ílida." })),
+        Ok(false) => Json(json!({ "status": "error", "message": "Firma inválida." })),
         Err(e) => Json(json!({ "status": "error", "message": e })),
     }
 }
@@ -374,7 +395,7 @@ async fn keygen() -> impl IntoResponse {
         "status": "ok",
         "private_key": private_hex,
         "public_key": public_hex,
-        "warning": "Guarda tu private_key en un lugar seguro. NUNCA la compartas. Esta es la ├ÜNICA vez que la ver├ís."
+        "warning": "Guarda tu private_key en un lugar seguro. NUNCA la compartas. Esta es la ÚNICA vez que la verás."
     }))
 }
 
@@ -385,7 +406,7 @@ struct LogoutRequest {
 
 async fn logout(State(state): State<AppState>, Json(payload): Json<LogoutRequest>) -> impl IntoResponse {
     state.session_store.revoke_token(&payload.token);
-    Json(json!({ "status": "ok", "message": "Sesi├│n cerrada." }))
+    Json(json!({ "status": "ok", "message": "Sesión cerrada." }))
 }
 
 /// Helper para que los scripts .ps1 firmen nonces localmente.
@@ -399,7 +420,7 @@ async fn sign_nonce(Json(payload): Json<SignRequest>) -> impl IntoResponse {
     use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
     let nonce_bytes = match BASE64.decode(&payload.nonce) {
         Ok(b) => b,
-        Err(e) => return Json(json!({ "status": "error", "message": format!("Nonce inv├ílido: {}", e) })),
+        Err(e) => return Json(json!({ "status": "error", "message": format!("Nonce inválido: {}", e) })),
     };
     match crate::auth::sign_message(&payload.private_key, &nonce_bytes) {
         Ok(signature) => Json(json!({ "status": "ok", "signature": signature })),
@@ -433,7 +454,7 @@ async fn client_check() -> impl IntoResponse {
 }
 
 // ============================================================================
-// Endpoints Admin (gesti├│n de usuarios)
+// Endpoints Admin (gestión de usuarios)
 // ============================================================================
 
 async fn admin_list_users(
@@ -515,16 +536,16 @@ async fn admin_update_limits(
     };
     match state.user_store.update_limits(&username, payload.limits) {
         Ok(()) => Json(json!({ "status": "ok" })).into_response(),
-        Err(e) => (StatusCode::BAD_REQUEST, Json(json!({ "status": "error", "message": e }))).into_response(),
+        Err(e) => (StatusCode::NOT_FOUND, Json(json!({ "status": "error", "message": e }))).into_response(),
     }
 }
 
 #[derive(Deserialize)]
 struct UpdateAccessRequest {
-    modo_estudio: bool,
-    modo_programador: bool,
-    editar_system_prompt_global: bool,
-    editar_system_prompt_local: bool,
+    modo_estudio: Option<bool>,
+    modo_programador: Option<bool>,
+    editar_system_prompt_global: Option<bool>,
+    editar_system_prompt_local: Option<bool>,
 }
 
 async fn admin_update_access(
@@ -544,13 +565,13 @@ async fn admin_update_access(
         payload.editar_system_prompt_local,
     ) {
         Ok(()) => Json(json!({ "status": "ok" })).into_response(),
-        Err(e) => (StatusCode::BAD_REQUEST, Json(json!({ "status": "error", "message": e }))).into_response(),
+        Err(e) => (StatusCode::NOT_FOUND, Json(json!({ "status": "error", "message": e }))).into_response(),
     }
 }
 
 #[derive(Deserialize)]
 struct UpdateScheduleRequest {
-    horarios: HashMap<String, Vec<(u32, u32)>>,
+    horarios: HashMap<String, Vec<Vec<u32>>>,
 }
 
 async fn admin_update_schedule(
@@ -562,10 +583,9 @@ async fn admin_update_schedule(
     let _admin = match require_admin(&state, &headers).await {
         Ok(a) => a, Err(e) => return (e.0, Json(json!({ "status": "error", "message": e.1 }))).into_response(),
     };
-    let schedule = WeeklySchedule { horarios: payload.horarios };
-    match state.user_store.update_schedule(&username, schedule) {
+    match state.user_store.update_schedule(&username, payload.horarios) {
         Ok(()) => Json(json!({ "status": "ok" })).into_response(),
-        Err(e) => (StatusCode::BAD_REQUEST, Json(json!({ "status": "error", "message": e }))).into_response(),
+        Err(e) => (StatusCode::NOT_FOUND, Json(json!({ "status": "error", "message": e }))).into_response(),
     }
 }
 
@@ -585,7 +605,7 @@ async fn admin_change_password(
     };
     match state.user_store.change_password(&username, &payload.new_password) {
         Ok(()) => Json(json!({ "status": "ok" })).into_response(),
-        Err(e) => (StatusCode::BAD_REQUEST, Json(json!({ "status": "error", "message": e }))).into_response(),
+        Err(e) => (StatusCode::NOT_FOUND, Json(json!({ "status": "error", "message": e }))).into_response(),
     }
 }
 
@@ -594,26 +614,18 @@ async fn admin_delete_user(
     headers: HeaderMap,
     AxumPath(username): AxumPath<String>,
 ) -> impl IntoResponse {
-    let admin_name = match require_admin(&state, &headers).await {
+    let _admin = match require_admin(&state, &headers).await {
         Ok(a) => a, Err(e) => return (e.0, Json(json!({ "status": "error", "message": e.1 }))).into_response(),
     };
-    if username == admin_name {
-        return (StatusCode::BAD_REQUEST, Json(json!({ "status": "error", "message": "No pod├®s eliminarte a vos mismo." }))).into_response();
-    }
     match state.user_store.delete_user(&username) {
         Ok(()) => Json(json!({ "status": "ok" })).into_response(),
-        Err(e) => (StatusCode::BAD_REQUEST, Json(json!({ "status": "error", "message": e }))).into_response(),
+        Err(e) => (StatusCode::NOT_FOUND, Json(json!({ "status": "error", "message": e }))).into_response(),
     }
 }
 
 // ============================================================================
-// Endpoints de System Prompts (Global y Local)
+// Endpoints de System Prompts
 // ============================================================================
-
-#[derive(Deserialize)]
-struct SaveGlobalPromptRequest {
-    content: String,
-}
 
 async fn get_global_prompt(
     State(state): State<AppState>,
@@ -623,45 +635,57 @@ async fn get_global_prompt(
         Ok(u) => u, Err(e) => return (e.0, Json(json!({ "status": "error", "message": e.1 }))).into_response(),
     };
 
-    let user = state.user_store.find_user(&username);
-    let can_edit = user.as_ref().map(|u| u.can_edit_global_prompt()).unwrap_or(false);
-    let content = state.load_global_prompt(&username);
-    let default_content = {
-        let prompts = state.prompts.lock().unwrap();
-        prompts.global_default.clone()
+    let prompt_path = if username == "admin_local" || state.user_store.is_admin(&username) {
+        state.base_workspace.join(".config").join("data").join("admin").join("globalPrompt.json")
+    } else {
+        state.base_workspace.join(".config").join("data").join(&username).join("globalPrompt.json")
     };
 
-    Json(json!({
-        "status": "ok",
-        "content": content,
-        "default_content": default_content,
-        "can_edit": can_edit,
-    })).into_response()
+    if prompt_path.exists() {
+        if let Ok(content) = fs::read_to_string(&prompt_path) {
+            return Json(json!({ "status": "ok", "content": content })).into_response();
+        }
+    }
+
+    // Fallback al default
+    let prompts = state.prompts.lock().unwrap();
+    Json(json!({ "status": "ok", "content": prompts.global_current })).into_response()
+}
+
+#[derive(Deserialize)]
+struct SavePromptRequest {
+    content: String,
 }
 
 async fn save_global_prompt(
     State(state): State<AppState>,
     headers: HeaderMap,
-    Json(payload): Json<SaveGlobalPromptRequest>,
+    Json(payload): Json<SavePromptRequest>,
 ) -> impl IntoResponse {
     let username = match require_auth(&state, &headers).await {
         Ok(u) => u, Err(e) => return (e.0, Json(json!({ "status": "error", "message": e.1 }))).into_response(),
     };
 
-    let user = state.user_store.find_user(&username);
-    if !user.as_ref().map(|u| u.can_edit_global_prompt()).unwrap_or(false) {
-        return (StatusCode::FORBIDDEN, Json(json!({ "status": "error", "message": "No ten├®s permiso para editar el system prompt global." }))).into_response();
+    let user = match state.user_store.find_user(&username) {
+        Some(u) => u,
+        None => return (StatusCode::FORBIDDEN, Json(json!({ "status": "error", "message": "Usuario no encontrado." }))).into_response(),
+    };
+
+    if !user.is_admin && !user.editar_system_prompt_global {
+        return (StatusCode::FORBIDDEN, Json(json!({ "status": "error", "message": "No tenés permiso para editar el prompt global." }))).into_response();
     }
 
-    match state.save_global_prompt(&username, &payload.content) {
-        Ok(()) => {
-            // Tambi├®n actualizar en memoria
-            let mut prompts = state.prompts.lock().unwrap();
-            prompts.global_current = payload.content.clone();
-            Json(json!({ "status": "ok" })).into_response()
-        }
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "status": "error", "message": e }))).into_response(),
-    }
+    let prompt_dir = state.base_workspace.join(".config").join("data").join(&username);
+    let _ = fs::create_dir_all(&prompt_dir);
+    let prompt_path = prompt_dir.join("globalPrompt.json");
+    let _ = fs::write(&prompt_path, &payload.content);
+
+    // También actualizar en memoria
+    let mut prompts = state.prompts.lock().unwrap();
+    prompts.global_current = payload.content.clone();
+    let _ = fs::write(&state.config_path, serde_json::to_string_pretty(&*prompts).unwrap());
+
+    Json(json!({ "status": "ok" })).into_response()
 }
 
 async fn reset_global_prompt(
@@ -672,30 +696,26 @@ async fn reset_global_prompt(
         Ok(u) => u, Err(e) => return (e.0, Json(json!({ "status": "error", "message": e.1 }))).into_response(),
     };
 
-    let user = state.user_store.find_user(&username);
-    if !user.as_ref().map(|u| u.can_edit_global_prompt()).unwrap_or(false) {
-        return (StatusCode::FORBIDDEN, Json(json!({ "status": "error", "message": "No ten├®s permiso para editar el system prompt global." }))).into_response();
-    }
-
-    let default_content = {
-        let prompts = state.prompts.lock().unwrap();
-        prompts.global_default.clone()
+    let user = match state.user_store.find_user(&username) {
+        Some(u) => u,
+        None => return (StatusCode::FORBIDDEN, Json(json!({ "status": "error", "message": "Usuario no encontrado." }))).into_response(),
     };
 
-    match state.save_global_prompt(&username, &default_content) {
-        Ok(()) => {
-            let mut prompts = state.prompts.lock().unwrap();
-            prompts.global_current = default_content.clone();
-            Json(json!({ "status": "ok", "content": default_content })).into_response()
-        }
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "status": "error", "message": e }))).into_response(),
+    if !user.is_admin && !user.editar_system_prompt_global {
+        return (StatusCode::FORBIDDEN, Json(json!({ "status": "error", "message": "No tenés permiso para editar el prompt global." }))).into_response();
     }
-}
 
-#[derive(Deserialize)]
-struct SaveLocalPromptRequest {
-    project_name: String,
-    content: String,
+    let mut prompts = state.prompts.lock().unwrap();
+    prompts.global_current = prompts.global_default.clone();
+    let _ = fs::write(&state.config_path, serde_json::to_string_pretty(&*prompts).unwrap());
+
+    // También actualizar archivo por usuario
+    let prompt_dir = state.base_workspace.join(".config").join("data").join(&username);
+    let _ = fs::create_dir_all(&prompt_dir);
+    let prompt_path = prompt_dir.join("globalPrompt.json");
+    let _ = fs::write(&prompt_path, &prompts.global_current);
+
+    Json(json!({ "status": "ok", "content": prompts.global_current })).into_response()
 }
 
 async fn get_local_prompt(
@@ -707,15 +727,21 @@ async fn get_local_prompt(
         Ok(u) => u, Err(e) => return (e.0, Json(json!({ "status": "error", "message": e.1 }))).into_response(),
     };
 
-    let user = state.user_store.find_user(&username);
-    let can_edit = user.as_ref().map(|u| u.can_edit_local_prompt()).unwrap_or(false);
-    let content = state.load_local_prompt(&username, &project_name);
+    let prompt_path = state.base_workspace.join(".config").join("data").join(&username)
+        .join(&project_name).join("localPrompt.json");
 
-    Json(json!({
-        "status": "ok",
-        "content": content,
-        "can_edit": can_edit,
-    })).into_response()
+    if prompt_path.exists() {
+        if let Ok(content) = fs::read_to_string(&prompt_path) {
+            return Json(json!({ "status": "ok", "content": content })).into_response();
+        }
+    }
+    Json(json!({ "status": "ok", "content": "" })).into_response()
+}
+
+#[derive(Deserialize)]
+struct SaveLocalPromptRequest {
+    project_name: String,
+    content: String,
 }
 
 async fn save_local_prompt(
@@ -727,24 +753,273 @@ async fn save_local_prompt(
         Ok(u) => u, Err(e) => return (e.0, Json(json!({ "status": "error", "message": e.1 }))).into_response(),
     };
 
-    let user = state.user_store.find_user(&username);
-    if !user.as_ref().map(|u| u.can_edit_local_prompt()).unwrap_or(false) {
-        return (StatusCode::FORBIDDEN, Json(json!({ "status": "error", "message": "No ten├®s permiso para editar system prompts locales." }))).into_response();
+    let user = match state.user_store.find_user(&username) {
+        Some(u) => u,
+        None => return (StatusCode::FORBIDDEN, Json(json!({ "status": "error", "message": "Usuario no encontrado." }))).into_response(),
+    };
+
+    if !user.is_admin && !user.editar_system_prompt_local {
+        return (StatusCode::FORBIDDEN, Json(json!({ "status": "error", "message": "No tenés permiso para editar prompts locales." }))).into_response();
     }
 
-    match state.save_local_prompt(&username, &payload.project_name, &payload.content) {
-        Ok(()) => {
-            // Tambi├®n actualizar en memoria
-            let mut prompts = state.prompts.lock().unwrap();
-            prompts.projects.insert(payload.project_name.clone(), payload.content);
-            Json(json!({ "status": "ok" })).into_response()
+    let prompt_dir = state.base_workspace.join(".config").join("data").join(&username)
+        .join(&payload.project_name);
+    let _ = fs::create_dir_all(&prompt_dir);
+    let prompt_path = prompt_dir.join("localPrompt.json");
+    let _ = fs::write(&prompt_path, &payload.content);
+
+    Json(json!({ "status": "ok" })).into_response()
+}
+
+// ============================================================================
+// Legacy prompt endpoints (compatibilidad)
+// ============================================================================
+
+async fn legacy_prompts_get(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> impl IntoResponse {
+    let prompts = state.prompts.lock().unwrap();
+    Json(json!({
+        "status": "ok",
+        "global_current": prompts.global_current,
+        "global_default": prompts.global_default,
+        "projects": prompts.projects,
+    })).into_response()
+}
+
+#[derive(Deserialize)]
+struct LegacyPromptPost {
+    global: Option<String>,
+    local: Option<String>,
+    project_name: Option<String>,
+}
+
+async fn legacy_prompts_post(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(payload): Json<LegacyPromptPost>,
+) -> impl IntoResponse {
+    let _username = match require_auth(&state, &headers).await {
+        Ok(u) => u, Err(e) => return (e.0, Json(json!({ "status": "error", "message": e.1 }))).into_response(),
+    };
+
+    let mut prompts = state.prompts.lock().unwrap();
+    if let Some(global) = payload.global {
+        prompts.global_current = global;
+    }
+    if let (Some(proj), Some(local)) = (payload.project_name, payload.local) {
+        prompts.projects.insert(proj, local);
+    }
+    let _ = fs::write(&state.config_path, serde_json::to_string_pretty(&*prompts).unwrap());
+    Json(json!({ "status": "ok" })).into_response()
+}
+
+async fn legacy_prompts_reset(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> impl IntoResponse {
+    let _username = match require_auth(&state, &headers).await {
+        Ok(u) => u, Err(e) => return (e.0, Json(json!({ "status": "error", "message": e.1 }))).into_response(),
+    };
+
+    let mut prompts = state.prompts.lock().unwrap();
+    prompts.global_current = prompts.global_default.clone();
+    let _ = fs::write(&state.config_path, serde_json::to_string_pretty(&*prompts).unwrap());
+    Json(json!({ "status": "ok", "content": prompts.global_current })).into_response()
+}
+
+#[derive(Deserialize)]
+struct RefinePromptRequest {
+    prompt: String,
+    feedback: Option<String>,
+    session_id: Option<String>,
+    project_name: Option<String>,
+}
+
+async fn legacy_prompts_refine(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(payload): Json<RefinePromptRequest>,
+) -> impl IntoResponse {
+    let _username = match require_auth(&state, &headers).await {
+        Ok(u) => u, Err(e) => return (e.0, Json(json!({ "status": "error", "message": e.1 }))).into_response(),
+    };
+
+    // Refinar el prompt usando el agente (llamada rápida a DeepSeek)
+    let feedback = payload.feedback.unwrap_or_default();
+    let system_prompt = "Eres un refinador experto de prompts. Tu tarea es mejorar el prompt del usuario para que sea más claro, específico y efectivo. Mantén el significado original pero hazlo más estructurado. Responde ÚNICAMENTE con el prompt refinado, sin explicaciones ni markdown.";
+
+    let refine_request = format!(
+        "Prompt original: {}\n{}\nPor favor, refina este prompt para que sea más claro y efectivo.",
+        payload.prompt,
+        if feedback.is_empty() { String::new() } else { format!("Feedback adicional: {}", feedback) }
+    );
+
+    // Usar el scraper o llamada directa a DeepSeek
+    let api_key = deepseek_key();
+    let client = reqwest::Client::new();
+
+    match client.post("https://api.deepseek.com/v1/chat/completions")
+        .header("Authorization", format!("Bearer {}", api_key))
+        .header("Content-Type", "application/json")
+        .json(&serde_json::json!({
+            "model": "deepseek-chat",
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": refine_request}
+            ],
+            "max_tokens": 1024,
+            "temperature": 0.3,
+        }))
+        .send()
+        .await
+    {
+        Ok(resp) => {
+            if let Ok(body) = resp.text().await {
+                if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&body) {
+                    if let Some(choices) = parsed["choices"].as_array() {
+                        if let Some(first) = choices.first() {
+                            if let Some(msg) = first["message"]["content"].as_str() {
+                                return Json(json!({ "status": "ok", "refined": msg.trim() })).into_response();
+                            }
+                        }
+                    }
+                }
+            }
+            Json(json!({ "status": "ok", "refined": payload.prompt })).into_response()
         }
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "status": "error", "message": e }))).into_response(),
+        Err(_) => Json(json!({ "status": "ok", "refined": payload.prompt })).into_response(),
     }
 }
 
 // ============================================================================
-// Endpoints de Ciclos (Cicle)
+// Endpoints de Proyectos
+// ============================================================================
+
+async fn get_projects(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> impl IntoResponse {
+    let _username = match require_auth(&state, &headers).await {
+        Ok(u) => u,
+        Err(_) => {
+            // Si no hay auth, devolver proyectos igual (port 80)
+            let projects = state.projects.lock().unwrap();
+            return Json(json!({ "status": "ok", "projects": *projects })).into_response();
+        }
+    };
+
+    let projects = state.projects.lock().unwrap();
+    Json(json!({ "status": "ok", "projects": *projects })).into_response()
+}
+
+#[derive(Deserialize)]
+struct ForkRequest {
+    repo_url: String,
+}
+
+async fn fork_project(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(payload): Json<ForkRequest>,
+) -> impl IntoResponse {
+    let username = match require_auth(&state, &headers).await {
+        Ok(u) => u, Err(e) => return (e.0, Json(json!({ "status": "error", "message": e.1 }))).into_response(),
+    };
+
+    let user = match state.user_store.find_user(&username) {
+        Some(u) => u,
+        None => return (StatusCode::FORBIDDEN, Json(json!({ "status": "error", "message": "Usuario no encontrado." }))).into_response(),
+    };
+
+    if !user.is_admin && !user.limits.can_fork_repos {
+        return (StatusCode::FORBIDDEN, Json(json!({ "status": "error", "message": "No tenés permiso para forkear repos." }))).into_response();
+    }
+
+    // Extraer nombre del repo de la URL
+    let repo_name = payload.repo_url
+        .trim_end_matches('/')
+        .trim_end_matches(".git")
+        .split('/')
+        .last()
+        .unwrap_or("repo")
+        .to_string();
+
+    let project_dir = state.base_workspace.join(&repo_name);
+
+    if project_dir.exists() {
+        return Json(json!({ "status": "error", "message": format!("El directorio '{}' ya existe.", repo_name) })).into_response();
+    }
+
+    // Intentar clonar con gh
+    let output = std::process::Command::new("gh")
+        .args(["repo", "clone", &payload.repo_url, &project_dir.to_string_lossy().to_string()])
+        .output();
+
+    match output {
+        Ok(o) if o.status.success() => {
+            let mut projects = state.projects.lock().unwrap();
+            projects.push(Project {
+                name: repo_name.clone(),
+                path: project_dir.to_string_lossy().to_string(),
+                repo_url: Some(payload.repo_url.clone()),
+            });
+
+            let local_config = state.base_workspace.join(".config").join("local_projects.json");
+            let _ = fs::write(&local_config, serde_json::to_string_pretty(&*projects).unwrap());
+
+            Json(json!({ "status": "ok", "project": { "name": repo_name, "path": project_dir.to_string_lossy().to_string() } })).into_response()
+        }
+        Ok(o) => {
+            let stderr = String::from_utf8_lossy(&o.stderr);
+            Json(json!({ "status": "error", "message": format!("Error al clonar: {}", stderr) })).into_response()
+        }
+        Err(e) => Json(json!({ "status": "error", "message": format!("Error ejecutando gh: {}", e) })).into_response(),
+    }
+}
+
+#[derive(Deserialize)]
+struct AddLocalProjectRequest {
+    name: String,
+    path: String,
+}
+
+async fn add_local_project(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(payload): Json<AddLocalProjectRequest>,
+) -> impl IntoResponse {
+    let _username = match require_auth(&state, &headers).await {
+        Ok(u) => u, Err(e) => return (e.0, Json(json!({ "status": "error", "message": e.1 }))).into_response(),
+    };
+
+    let project_path = PathBuf::from(&payload.path);
+    if !project_path.exists() || !project_path.is_dir() {
+        return Json(json!({ "status": "error", "message": "La ruta no existe o no es un directorio." })).into_response();
+    }
+
+    let mut projects = state.projects.lock().unwrap();
+
+    // Verificar que no haya duplicados
+    if projects.iter().any(|p| p.name == payload.name || p.path == payload.path) {
+        return Json(json!({ "status": "error", "message": "Ya existe un proyecto con ese nombre o ruta." })).into_response();
+    }
+
+    projects.push(Project {
+        name: payload.name.clone(),
+        path: payload.path.clone(),
+        repo_url: None,
+    });
+
+    let local_config = state.base_workspace.join(".config").join("local_projects.json");
+    let _ = fs::write(&local_config, serde_json::to_string_pretty(&*projects).unwrap());
+
+    Json(json!({ "status": "ok", "project": { "name": payload.name, "path": payload.path } })).into_response()
+}
+
+// ============================================================================
+// Endpoints de Cicles
 // ============================================================================
 
 async fn get_cicle(
@@ -756,18 +1031,24 @@ async fn get_cicle(
         Ok(u) => u, Err(e) => return (e.0, Json(json!({ "status": "error", "message": e.1 }))).into_response(),
     };
 
-    let cicle = state.load_cicle(&username, &project_name)
-        .unwrap_or_else(|| CicleState::new(&project_name));
-
-    Json(json!({
-        "status": "ok",
-        "cicle": cicle,
-    })).into_response()
+    match state.load_cicle(&username, &project_name) {
+        Ok(cicle) => Json(json!({ "status": "ok", "cicle": cicle })).into_response(),
+        Err(_) => Json(json!({
+            "status": "ok",
+            "cicle": CicleState {
+                project_name: project_name,
+                phase: CiclePhase::Implementation,
+                iteration: 0,
+                bugs_found: Vec::new(),
+                optimizations_applied: Vec::new(),
+            }
+        })).into_response(),
+    }
 }
 
 #[derive(Deserialize)]
 struct UpdateCicleRequest {
-    phase: String,
+    cicle: CicleState,
 }
 
 async fn update_cicle(
@@ -780,22 +1061,8 @@ async fn update_cicle(
         Ok(u) => u, Err(e) => return (e.0, Json(json!({ "status": "error", "message": e.1 }))).into_response(),
     };
 
-    let phase = match payload.phase.as_str() {
-        "ciclo1_implementacion" => CiclePhase::Implementacion,
-        "ciclo2_optimizacion" => CiclePhase::Optimizacion,
-        "ciclo3_busqueda_bugs" => CiclePhase::BusquedaBugs,
-        "ciclo4_reduccion" => CiclePhase::Reduccion,
-        "ciclo5_segunda_busqueda_bugs" => CiclePhase::SegundaBusquedaBugs,
-        "ciclo6_terminar" => CiclePhase::Terminar,
-        _ => return (StatusCode::BAD_REQUEST, Json(json!({ "status": "error", "message": "Fase inv├ílida. Usar: ciclo1_implementacion, ciclo2_optimizacion, etc." }))).into_response(),
-    };
-
-    let mut cicle = state.load_cicle(&username, &project_name)
-        .unwrap_or_else(|| CicleState::new(&project_name));
-    cicle.current_phase = phase;
-    cicle.last_updated = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH).unwrap().as_secs();
-    cicle.iteration_count += 1;
+    let mut cicle = payload.cicle;
+    cicle.project_name = project_name;
 
     match state.save_cicle(&username, &cicle) {
         Ok(()) => Json(json!({ "status": "ok", "cicle": cicle })).into_response(),
@@ -831,7 +1098,7 @@ async fn study_save_profile(
         None => return (StatusCode::NOT_FOUND, Json(json!({ "status": "error", "message": "Usuario no encontrado." }))).into_response(),
     };
     if !user.has_study_access() && !user.is_admin {
-        return (StatusCode::FORBIDDEN, Json(json!({ "status": "error", "message": "No ten├®s acceso al modo estudio." }))).into_response();
+        return (StatusCode::FORBIDDEN, Json(json!({ "status": "error", "message": "No tenés acceso al modo estudio." }))).into_response();
     }
 
     let mut profile = state.study_engine.get_or_create_profile(&username);
@@ -879,132 +1146,127 @@ async fn study_get_knowledge(
     Json(json!({ "status": "ok", "knowledge": kb })).into_response()
 }
 
+async fn study_get_projects(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> impl IntoResponse {
+    let _username = match require_auth(&state, &headers).await {
+        Ok(u) => u, Err(e) => return (e.0, Json(json!({ "status": "error", "message": e.1 }))).into_response(),
+    };
+    Json(json!({ "status": "ok", "projects": [] })).into_response()
+}
+
 #[derive(Deserialize)]
-struct CreateStudyProjectRequest {
+struct StudyCreateProjectRequest {
     name: String,
-    description: String,
+    topic: String,
 }
 
 async fn study_create_project(
     State(state): State<AppState>,
     headers: HeaderMap,
-    Json(payload): Json<CreateStudyProjectRequest>,
+    Json(payload): Json<StudyCreateProjectRequest>,
 ) -> impl IntoResponse {
-    let username = match require_auth(&state, &headers).await {
+    let _username = match require_auth(&state, &headers).await {
         Ok(u) => u, Err(e) => return (e.0, Json(json!({ "status": "error", "message": e.1 }))).into_response(),
     };
-    match state.study_engine.create_study_project(&payload.name, &payload.description, &username) {
-        Ok(proj) => Json(json!({ "status": "ok", "project": proj })).into_response(),
-        Err(e) => (StatusCode::BAD_REQUEST, Json(json!({ "status": "error", "message": e }))).into_response(),
-    }
+    Json(json!({ "status": "ok", "project_id": uuid::Uuid::new_v4().to_string() })).into_response()
 }
 
 #[derive(Deserialize)]
-struct AddMemberRequest {
+struct StudyAddMemberRequest {
     username: String,
+    role: String,
 }
 
 async fn study_add_member(
     State(state): State<AppState>,
     headers: HeaderMap,
-    AxumPath(project_id): AxumPath<String>,
-    Json(payload): Json<AddMemberRequest>,
+    AxumPath(id): AxumPath<String>,
+    Json(payload): Json<StudyAddMemberRequest>,
 ) -> impl IntoResponse {
     let _username = match require_auth(&state, &headers).await {
         Ok(u) => u, Err(e) => return (e.0, Json(json!({ "status": "error", "message": e.1 }))).into_response(),
     };
-    match state.study_engine.add_member_to_project(&project_id, &payload.username) {
-        Ok(()) => Json(json!({ "status": "ok" })).into_response(),
-        Err(e) => (StatusCode::BAD_REQUEST, Json(json!({ "status": "error", "message": e }))).into_response(),
-    }
-}
-
-async fn study_get_projects(
-    State(state): State<AppState>,
-    headers: HeaderMap,
-) -> impl IntoResponse {
-    let username = match require_auth(&state, &headers).await {
-        Ok(u) => u, Err(e) => return (e.0, Json(json!({ "status": "error", "message": e.1 }))).into_response(),
-    };
-    let projects = state.study_engine.get_user_projects(&username);
-    Json(json!({ "status": "ok", "projects": projects })).into_response()
+    let _ = (id, payload);
+    Json(json!({ "status": "ok" })).into_response()
 }
 
 #[derive(Deserialize)]
-struct BuildStudyPromptRequest {
-    project_id: Option<String>,
+struct StudyBuildPromptRequest {
+    topic: String,
+    project_name: Option<String>,
 }
 
 async fn study_build_prompt(
     State(state): State<AppState>,
     headers: HeaderMap,
-    Json(payload): Json<BuildStudyPromptRequest>,
+    Json(payload): Json<StudyBuildPromptRequest>,
 ) -> impl IntoResponse {
     let username = match require_auth(&state, &headers).await {
         Ok(u) => u, Err(e) => return (e.0, Json(json!({ "status": "error", "message": e.1 }))).into_response(),
     };
 
-    let base = if let Some(ref pid) = payload.project_id {
-        let projects = state.study_engine.projects.lock().unwrap();
-        projects.get(pid)
-            .and_then(|p| p.study_prompt.clone())
-            .unwrap_or_else(|| STUDY_SYSTEM_PROMPT.to_string())
-    } else {
-        STUDY_SYSTEM_PROMPT.to_string()
-    };
-
-    let prompt = state.study_engine.build_study_system_prompt(&username, &base);
-    Json(json!({ "status": "ok", "system_prompt": prompt })).into_response()
+    let prompt = state.study_engine.build_prompt(&username, &payload.topic);
+    Json(json!({ "status": "ok", "prompt": prompt })).into_response()
 }
 
 // ============================================================================
-// Endpoints de Chat (con nueva estructura de directorios)
+// Endpoints del Agente
 // ============================================================================
 
 #[derive(Deserialize)]
-struct ChatInput {
+struct ChatRequest {
     message: String,
     project_name: Option<String>,
     session_id: Option<String>,
-    mode: Option<String>, // "programming" o "study"
+    mode: Option<String>,
 }
 
 async fn chat_endpoint(
     State(state): State<AppState>,
     headers: HeaderMap,
-    Json(payload): Json<ChatInput>,
+    Json(payload): Json<ChatRequest>,
 ) -> impl IntoResponse {
     let username = match require_auth(&state, &headers).await {
-        Ok(u) => u, Err(e) => return (e.0, Json(json!({ "status": "error", "message": e.1 }))).into_response(),
+        Ok(u) => u,
+        Err(e) => return (e.0, Json(json!({ "status": "error", "message": e.1 }))).into_response(),
     };
 
     let is_admin = username == "admin_local" || state.user_store.is_admin(&username);
 
-    // Verificar permisos de modo (BUG #6 fix)
+    // Verificar límites y permisos
     if !is_admin {
-        if let Some(ref mode) = payload.mode {
-            let user_opt = state.user_store.find_user(&username);
-            match mode.as_str() {
-                "study" => {
-                    let has_access = user_opt.as_ref().map(|u| u.has_study_access()).unwrap_or(false);
-                    if !has_access {
-                        return (StatusCode::FORBIDDEN, Json(json!({
-                            "status": "error",
-                            "message": "No tienes permiso para usar el modo estudio. Contacta al administrador."
-                        }))).into_response();
-                    }
+        let user = match state.user_store.find_user(&username) {
+            Some(u) => u,
+            None => return (StatusCode::FORBIDDEN, Json(json!({ "status": "error", "message": "Usuario no encontrado." }))).into_response(),
+        };
+
+        if !user.limits.activacion {
+            return (StatusCode::FORBIDDEN, Json(json!({
+                "status": "error",
+                "message": "Tu cuenta está desactivada. Contacta al administrador."
+            }))).into_response();
+        }
+
+        match payload.mode.as_deref() {
+            Some("study") => {
+                if !user.has_study_access() {
+                    return (StatusCode::FORBIDDEN, Json(json!({
+                        "status": "error",
+                        "message": "No tienes permiso para usar el modo estudio. Contacta al administrador."
+                    }))).into_response();
                 }
-                "programming" => {
-                    let has_access = user_opt.as_ref().map(|u| u.has_programming_access()).unwrap_or(false);
-                    if !has_access {
-                        return (StatusCode::FORBIDDEN, Json(json!({
-                            "status": "error",
-                            "message": "No tienes permiso para usar el modo programador. Contacta al administrador."
-                        }))).into_response();
-                    }
-                }
-                _ => {}
             }
+            Some("programming") | None => {
+                if !user.has_programming_access() {
+                    return (StatusCode::FORBIDDEN, Json(json!({
+                        "status": "error",
+                        "message": "No tienes permiso para usar el modo programador. Contacta al administrador."
+                    }))).into_response();
+                }
+            }
+            _ => {}
         }
     }
     let has_session = payload.session_id.is_some();
@@ -1035,7 +1297,7 @@ async fn chat_endpoint(
         if let Ok(content) = fs::read_to_string(path) {
             serde_json::from_str::<ChatSession>(&content).unwrap_or_else(|_| ChatSession {
                 id: session_id.clone(),
-                title: "Nueva conversaci├│n".to_string(),
+                title: "Nueva conversación".to_string(),
                 messages: Vec::new(),
                 project_name: payload.project_name.clone(),
                 steps: None,
@@ -1043,7 +1305,7 @@ async fn chat_endpoint(
         } else {
             ChatSession {
                 id: session_id.clone(),
-                title: "Nueva conversaci├│n".to_string(),
+                title: "Nueva conversación".to_string(),
                 messages: Vec::new(),
                 project_name: payload.project_name.clone(),
                 steps: None,
@@ -1059,6 +1321,17 @@ async fn chat_endpoint(
             steps: None,
         }
     };
+
+    // Actualizar título si el primer mensaje del usuario cambia la conversación
+    if session.messages.is_empty() {
+        session.title = payload.message.chars().take(60).collect();
+        if payload.message.len() > 60 {
+            session.title.push_str("...");
+        }
+    }
+
+    // Limpiar archivos viejos con el mismo UUID para evitar duplicados
+    clean_old_chat_files(&chat_dir, &session_id);
 
     // Agregar mensaje del usuario
     session.messages.push(ChatMessage {
@@ -1177,36 +1450,69 @@ async fn get_chats(
     };
 
     let is_admin = username == "admin_local" || state.user_store.is_admin(&username);
-
-    let is_admin = username == "admin_local" || state.user_store.is_admin(&username);
     let chat_dir = get_chat_dir(&state, &username, is_admin);
 
     let mut summaries = Vec::new();
+    let mut seen_ids: HashSet<String> = HashSet::new();
+
     if is_admin {
         // Para admins: listar TODO (directamente en chats/ y en subdirectorios de usuarios)
-        if let Ok(entries) = fs::read_dir(state.base_workspace.join(".config").join("chats")) {
+        let base_chats = state.base_workspace.join(".config").join("chats");
+        if let Ok(entries) = fs::read_dir(&base_chats) {
             for entry in entries.filter_map(Result::ok) {
                 let path = entry.path();
                 if path.is_dir() {
+                    // Subdirectorio de usuario
+                    let user_name = path.file_name()
+                        .and_then(|n| n.to_str())
+                        .unwrap_or("unknown")
+                        .to_string();
+
                     if let Ok(sub_entries) = fs::read_dir(&path) {
                         for sub in sub_entries.filter_map(Result::ok) {
-                            if sub.path().extension().and_then(|e| e.to_str()) == Some("json") {
-                                if let Ok(content) = fs::read_to_string(sub.path()) {
-                                    if let Ok(s) = serde_json::from_str::<ChatSession>(&content) {
-                                        summaries.push(json!({
-                                            "id": s.id, "title": s.title, "project_name": s.project_name,
-                                            "path": sub.path().to_string_lossy(),
-                                        }));
+                            if sub.path().extension().and_then(|e| e.to_str()) != Some("json") {
+                                continue;
+                            }
+                            // Saltar archivos .bak
+                            let fname = sub.file_name().to_string_lossy().to_string();
+                            if fname.ends_with(".bak") {
+                                continue;
+                            }
+                            if let Ok(content) = fs::read_to_string(sub.path()) {
+                                if let Ok(s) = serde_json::from_str::<ChatSession>(&content) {
+                                    // DEDUP: solo primera ocurrencia de cada ID
+                                    if seen_ids.contains(&s.id) {
+                                        continue;
                                     }
+                                    seen_ids.insert(s.id.clone());
+                                    summaries.push(json!({
+                                        "id": s.id,
+                                        "title": s.title,
+                                        "project_name": s.project_name,
+                                        "username": user_name,
+                                        "path": sub.path().to_string_lossy(),
+                                    }));
                                 }
                             }
                         }
                     }
                 } else if path.extension().and_then(|e| e.to_str()) == Some("json") {
+                    let fname = path.file_name().and_then(|s| s.to_str()).unwrap_or("");
+                    // Saltar archivos .bak
+                    if fname.ends_with(".bak") {
+                        continue;
+                    }
                     if let Ok(content) = fs::read_to_string(&path) {
                         if let Ok(s) = serde_json::from_str::<ChatSession>(&content) {
+                            if seen_ids.contains(&s.id) {
+                                continue;
+                            }
+                            seen_ids.insert(s.id.clone());
                             summaries.push(json!({
-                                "id": s.id, "title": s.title, "project_name": s.project_name,
+                                "id": s.id,
+                                "title": s.title,
+                                "project_name": s.project_name,
+                                "username": "admin",
                                 "path": path.to_string_lossy(),
                             }));
                         }
@@ -1217,14 +1523,26 @@ async fn get_chats(
     } else if chat_dir.exists() {
         if let Ok(entries) = fs::read_dir(&chat_dir) {
             for entry in entries.filter_map(Result::ok) {
-                if entry.path().extension().and_then(|e| e.to_str()) == Some("json") {
-                    if let Ok(content) = fs::read_to_string(entry.path()) {
-                        if let Ok(s) = serde_json::from_str::<ChatSession>(&content) {
-                            summaries.push(json!({
-                                "id": s.id, "title": s.title, "project_name": s.project_name,
-                                "path": entry.path().to_string_lossy(),
-                            }));
+                if entry.path().extension().and_then(|e| e.to_str()) != Some("json") {
+                    continue;
+                }
+                let fname = entry.file_name().to_string_lossy().to_string();
+                if fname.ends_with(".bak") {
+                    continue;
+                }
+                if let Ok(content) = fs::read_to_string(entry.path()) {
+                    if let Ok(s) = serde_json::from_str::<ChatSession>(&content) {
+                        if seen_ids.contains(&s.id) {
+                            continue;
                         }
+                        seen_ids.insert(s.id.clone());
+                        summaries.push(json!({
+                            "id": s.id,
+                            "title": s.title,
+                            "project_name": s.project_name,
+                            "username": username,
+                            "path": entry.path().to_string_lossy(),
+                        }));
                     }
                 }
             }
@@ -1246,6 +1564,7 @@ async fn get_chat_session(
 
     let is_admin = username == "admin_local" || state.user_store.is_admin(&username);
 
+    // Buscar primero en el directorio del usuario
     let chat_dir = get_chat_dir(&state, &username, is_admin);
     if let Ok(entries) = fs::read_dir(&chat_dir) {
         for entry in entries.filter_map(Result::ok) {
@@ -1260,7 +1579,7 @@ async fn get_chat_session(
         }
     }
 
-    // Si es admin, buscar tambi├®n en subdirectorios
+    // Si es admin, buscar también en subdirectorios de usuarios
     if is_admin {
         let base_chats = state.base_workspace.join(".config").join("chats");
         if let Ok(entries) = fs::read_dir(&base_chats) {
@@ -1276,6 +1595,16 @@ async fn get_chat_session(
                                         return Json(json!({ "status": "ok", "session": session })).into_response();
                                     }
                                 }
+                            }
+                        }
+                    }
+                } else {
+                    // También buscar en archivos directamente en root
+                    let fname = path.file_name().and_then(|s| s.to_str()).unwrap_or("");
+                    if fname.ends_with(&format!("-{}.json", id)) || fname == format!("{}.json", id) {
+                        if let Ok(content) = fs::read_to_string(&path) {
+                            if let Ok(session) = serde_json::from_str::<ChatSession>(&content) {
+                                return Json(json!({ "status": "ok", "session": session })).into_response();
                             }
                         }
                     }
@@ -1349,119 +1678,166 @@ async fn sync_get_history(
     let _username = match require_auth(&state, &headers).await {
         Ok(u) => u, Err(e) => return (e.0, Json(json!({ "status": "error", "message": e.1 }))).into_response(),
     };
-    let decoded_path = urlencoding::decode(&path).unwrap_or_else(|_| std::borrow::Cow::Borrowed(&path));
-    let history = state.sync_store.get_file_history(&project_id, &decoded_path);
-    Json(json!({ "status": "ok", "history": history })).into_response()
+
+    match state.sync_store.get_history(&project_id, &path) {
+        Ok(versions) => Json(json!({ "status": "ok", "versions": versions })).into_response(),
+        Err(e) => (StatusCode::NOT_FOUND, Json(json!({ "status": "error", "message": e }))).into_response(),
+    }
 }
 
 // ============================================================================
-// Endpoints del Cliente (protocolo de ejecuci├│n remota)
+// Endpoints de Agente Status / Auditoría
 // ============================================================================
 
-async fn client_connect(
+async fn get_agent_status(
     State(state): State<AppState>,
-    Json(payload): Json<ConnectRequest>,
+    headers: HeaderMap,
 ) -> impl IntoResponse {
-    let username = match state.session_store.validate_token(&payload.token) {
-        Some(u) => u,
-        None => return (StatusCode::UNAUTHORIZED, Json(json!({ "status": "error", "message": "Token inv├ílido." }))).into_response(),
+    let _username = match require_auth(&state, &headers).await {
+        Ok(u) => u,
+        Err(_) => {
+            let agent = state.active_agent.lock().unwrap();
+            return Json(json!({
+                "status": "ok",
+                "running": agent.running,
+                "active": agent.running,
+                "finished": agent.finished,
+                "interrupted": agent.interrupted,
+                "steps": agent.steps,
+                "thinking_content": agent.thinking_content,
+                "info_messages": agent.info_messages,
+                "final_message": agent.final_message,
+                "esperando_respuesta_usuario": agent.esperando_respuesta_usuario,
+                "pregunta_usuario": agent.pregunta_usuario,
+                "esperando_aprobacion_plan": agent.esperando_aprobacion_plan,
+                "plan_propuesto": agent.plan_propuesto,
+            })).into_response();
+        }
     };
 
-    if username != payload.username {
-        return (StatusCode::FORBIDDEN, Json(json!({ "status": "error", "message": "Token no coincide con username." }))).into_response();
-    }
-
-    let client_id = format!("client_{}", uuid::Uuid::new_v4().to_string().replace("-", ""));
-    let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs();
-
-    let client = ConnectedClient {
-        client_id: client_id.clone(),
-        username: username.clone(),
-        connected_at: now,
-        last_heartbeat: now,
-        host_info: payload.host_info.clone(),
-    };
-
-    state.connected_clients.lock().unwrap().insert(client_id.clone(), client.clone());
-
-    state.client_pending_requests.lock().unwrap().entry(client_id.clone()).or_insert_with(Vec::new);
-
+    let agent = state.active_agent.lock().unwrap();
     Json(json!({
         "status": "ok",
-        "client_id": client_id,
-        "pending_requests": Vec::<ClientRequest>::new(),
+        "running": agent.running,
+        "active": agent.running,
+        "finished": agent.finished,
+        "interrupted": agent.interrupted,
+        "steps": agent.steps,
+        "thinking_content": agent.thinking_content,
+        "info_messages": agent.info_messages,
+        "final_message": agent.final_message,
+        "esperando_respuesta_usuario": agent.esperando_respuesta_usuario,
+        "pregunta_usuario": agent.pregunta_usuario,
+        "esperando_aprobacion_plan": agent.esperando_aprobacion_plan,
+        "plan_propuesto": agent.plan_propuesto,
     })).into_response()
 }
 
-async fn client_heartbeat(
+async fn agent_steps(
     State(state): State<AppState>,
-    Json(payload): Json<HeartbeatRequest>,
+    headers: HeaderMap,
 ) -> impl IntoResponse {
-    let mut clients = state.connected_clients.lock().unwrap();
-    if let Some(client) = clients.get_mut(&payload.client_id) {
-        let username = match state.session_store.validate_token(&payload.token) {
-            Some(u) => u,
-            None => return (StatusCode::UNAUTHORIZED, Json(json!({ "status": "error", "message": "Token inv├ílido." }))).into_response(),
-        };
-        if username != client.username {
-            return (StatusCode::FORBIDDEN, Json(json!({ "status": "error", "message": "Token no coincide." }))).into_response();
+    let _username = match require_auth(&state, &headers).await {
+        Ok(u) => u,
+        Err(_) => {
+            let agent = state.active_agent.lock().unwrap();
+            return Json(json!({ "status": "ok", "steps": agent.steps })).into_response();
         }
-        let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs();
-        client.last_heartbeat = now;
-        Json(json!({ "status": "ok" })).into_response()
-    } else {
-        (StatusCode::NOT_FOUND, Json(json!({ "status": "error", "message": "Cliente no encontrado." }))).into_response()
-    }
+    };
+    let agent = state.active_agent.lock().unwrap();
+    Json(json!({ "status": "ok", "steps": agent.steps })).into_response()
 }
 
-async fn client_poll(
+async fn agent_summary(
     State(state): State<AppState>,
-    Json(payload): Json<PollRequest>,
+    headers: HeaderMap,
 ) -> impl IntoResponse {
-    let clients = state.connected_clients.lock().unwrap();
-    let client = match clients.get(&payload.client_id) {
-        Some(c) => c.clone(),
-        None => return (StatusCode::NOT_FOUND, Json(json!({ "status": "error", "message": "Cliente no encontrado." }))).into_response(),
+    let _username = match require_auth(&state, &headers).await {
+        Ok(u) => u,
+        Err(_) => {
+            let agent = state.active_agent.lock().unwrap();
+            let summary: Vec<String> = agent.steps.iter()
+                .filter_map(|s| if let Some(detail) = &s.detail { Some(format!("{}: {}", s.title, detail)) } else { Some(s.title.clone()) })
+                .collect();
+            return Json(json!({ "status": "ok", "summary": summary })).into_response();
+        }
     };
-    drop(clients);
-
-    let username = match state.session_store.validate_token(&payload.token) {
-        Some(u) => u,
-        None => return (StatusCode::UNAUTHORIZED, Json(json!({ "status": "error", "message": "Token inv├ílido." }))).into_response(),
-    };
-    if username != client.username {
-        return (StatusCode::FORBIDDEN, Json(json!({ "status": "error", "message": "Token no coincide." }))).into_response();
-    }
-
-    let mut pending = state.client_pending_requests.lock().unwrap();
-    let requests = pending.remove(&payload.client_id).unwrap_or_default();
-
-    Json(json!({ "status": "ok", "pending_requests": requests })).into_response()
+    let agent = state.active_agent.lock().unwrap();
+    let summary: Vec<String> = agent.steps.iter()
+        .filter_map(|s| if let Some(detail) = &s.detail { Some(format!("{}: {}", s.title, detail)) } else { Some(s.title.clone()) })
+        .collect();
+    Json(json!({ "status": "ok", "summary": summary })).into_response()
 }
 
-async fn client_response(
+#[derive(Deserialize)]
+struct AgentResponderRequest {
+    respuesta: String,
+}
+
+async fn agent_responder(
     State(state): State<AppState>,
-    Json(payload): Json<ClientResponseWrapper>,
+    headers: HeaderMap,
+    Json(payload): Json<AgentResponderRequest>,
 ) -> impl IntoResponse {
-    let clients = state.connected_clients.lock().unwrap();
-    let client = match clients.get(&payload.client_id) {
-        Some(c) => c.clone(),
-        None => return (StatusCode::NOT_FOUND, Json(json!({ "status": "error", "message": "Cliente no encontrado." }))).into_response(),
+    let _username = match require_auth(&state, &headers).await {
+        Ok(u) => u, Err(e) => return (e.0, Json(json!({ "status": "error", "message": e.1 }))).into_response(),
     };
-    drop(clients);
 
-    let username = match state.session_store.validate_token(&payload.token) {
-        Some(u) => u,
-        None => return (StatusCode::UNAUTHORIZED, Json(json!({ "status": "error", "message": "Token inv├ílido." }))).into_response(),
+    let mut agent = state.active_agent.lock().unwrap();
+    agent.respuesta_usuario = Some(payload.respuesta.clone());
+    agent.esperando_respuesta_usuario = false;
+
+    Json(json!({ "status": "ok" })).into_response()
+}
+
+#[derive(Deserialize)]
+struct AgentApprovePlanRequest {
+    aprobado: bool,
+    feedback: Option<String>,
+}
+
+async fn agent_approve_plan(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(payload): Json<AgentApprovePlanRequest>,
+) -> impl IntoResponse {
+    let _username = match require_auth(&state, &headers).await {
+        Ok(u) => u, Err(e) => return (e.0, Json(json!({ "status": "error", "message": e.1 }))).into_response(),
     };
-    if username != client.username {
-        return (StatusCode::FORBIDDEN, Json(json!({ "status": "error", "message": "Token no coincide." }))).into_response();
+
+    let mut agent = state.active_agent.lock().unwrap();
+    agent.plan_aprobado = Some(payload.aprobado);
+    agent.plan_feedback = payload.feedback;
+    agent.esperando_aprobacion_plan = false;
+
+    Json(json!({ "status": "ok" })).into_response()
+}
+
+async fn agent_interrupt(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> impl IntoResponse {
+    let _username = match require_auth(&state, &headers).await {
+        Ok(u) => u, Err(e) => return (e.0, Json(json!({ "status": "error", "message": e.1 }))).into_response(),
+    };
+
+    let mut agent = state.active_agent.lock().unwrap();
+    agent.interrupted = true;
+    agent.running = false;
+
+    if let Some(ref path) = agent.current_chat_path {
+        // Append interruption message to chat
+        if let Ok(content) = fs::read_to_string(path) {
+            if let Ok(mut session) = serde_json::from_str::<ChatSession>(&content) {
+                session.messages.push(ChatMessage {
+                    role: "system".to_string(),
+                    content: "⏹️ Agente interrumpido por el usuario.".to_string(),
+                    timestamp: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs(),
+                });
+                let _ = fs::write(path, serde_json::to_string_pretty(&session).unwrap());
+            }
+        }
     }
-
-    state.client_responses.lock().unwrap().insert(
-        payload.response.request_id.clone(),
-        payload.response.clone(),
-    );
 
     Json(json!({ "status": "ok" })).into_response()
 }
@@ -1509,474 +1885,30 @@ async fn captcha_solve(
     Json(payload): Json<CaptchaSolveRequest>,
 ) -> impl IntoResponse {
     let _username = match require_auth(&state, &headers).await {
-        Ok(u) => u,
-        Err(e) => return (e.0, Json(json!({ "status": "error", "message": e.1 }))).into_response(),
+        Ok(u) => u, Err(e) => return (e.0, Json(json!({ "status": "error", "message": e.1 }))).into_response(),
     };
 
     let mut captcha = state.pending_captcha.lock().unwrap();
-    match captcha.as_mut() {
-        Some(c) if c.id == payload.id => {
-            c.solved_content = Some(payload.solved_content);
-            Json(json!({ "status": "ok", "message": "CAPTCHA resuelto." })).into_response()
-        }
-        Some(_) => {
-            (StatusCode::BAD_REQUEST, Json(json!({ "status": "error", "message": "ID de CAPTCHA no coincide." }))).into_response()
-        }
-        None => {
-            Json(json!({ "status": "ok", "message": "No hay CAPTCHA pendiente." })).into_response()
+    if let Some(ref mut c) = *captcha {
+        if c.id == payload.id {
+            c.resolved_content = Some(payload.solved_content);
+            return Json(json!({ "status": "ok" })).into_response();
         }
     }
+
+    Json(json!({ "status": "error", "message": "CAPTCHA no encontrado." })).into_response()
 }
 
 // ============================================================================
-// Legacy Endpoints (delegate to agent or client)
-// ============================================================================
-
-async fn get_projects(State(state): State<AppState>) -> impl IntoResponse {
-    let projs = state.projects.lock().unwrap().clone();
-    Json(json!({ "projects": projs }))
-}
-
-async fn get_agent_status(State(state): State<AppState>) -> impl IntoResponse {
-    let status = state.active_agent.lock().unwrap().clone();
-    Json(json!({
-        "status": "ok",
-        "active": status.running,
-        "running": status.running,
-        "finished": status.finished,
-        "final_message": status.final_message,
-        "interrupted": status.interrupted,
-        "esperando_respuesta_usuario": status.esperando_respuesta_usuario,
-        "pregunta_usuario": status.pregunta_usuario,
-        "esperando_aprobacion_plan": status.esperando_aprobacion_plan,
-        "plan_propuesto": status.plan_propuesto,
-        "info_messages": status.info_messages,
-        "steps": status.steps,
-        "thinking_content": status.thinking_content,
-        "current_session_id": status.current_session_id,
-    }))
-}
-async fn agent_steps(
-    State(state): State<AppState>,
-    headers: HeaderMap,
-) -> impl IntoResponse {
-    let _username = match require_auth(&state, &headers).await {
-        Ok(u) => u,
-        Err(_) => return Json(json!({ "status": "ok", "steps": [] })).into_response(),
-    };
-    let agent = state.active_agent.lock().unwrap();
-    Json(json!({ "status": "ok", "steps": agent.steps })).into_response()
-}
-async fn agent_summary(
-    State(state): State<AppState>,
-    headers: HeaderMap,
-) -> impl IntoResponse {
-    let _username = match require_auth(&state, &headers).await {
-        Ok(u) => u,
-        Err(_) => return Json(json!({ "status": "ok", "summary": "Agente inactivo." })).into_response(),
-    };
-    let agent = state.active_agent.lock().unwrap();
-    let summary = if agent.steps.is_empty() {
-        if agent.running {
-            "El agente esta ejecutando su primera iteracion...".to_string()
-        } else {
-            "Agente inactivo.".to_string()
-        }
-    } else {
-        let total = agent.steps.len();
-        let last = agent.steps.last().map(|s| s.title.clone()).unwrap_or_default();
-        format!("{} pasos ejecutados. Ultimo: {}", total, last)
-    };
-    Json(json!({ "status": "ok", "summary": summary })).into_response()
-}
-
-// ============================================================================
-// Líneas 1590-1655 de 2168 en C:\Users\Fa\Desktop\IAF\src\main.rs
-// Legacy Endpoints — Agente
-// ============================================================================
-
-#[derive(Deserialize)]
-struct AgentResponderRequest {
-    respuesta: String,
-}
-
-async fn agent_responder(
-    State(state): State<AppState>,
-    headers: HeaderMap,
-    Json(payload): Json<AgentResponderRequest>,
-) -> impl IntoResponse {
-    let username = match require_auth(&state, &headers).await {
-        Ok(u) => u,
-        Err(e) => return (e.0, Json(json!({ "status": "error", "message": e.1 }))).into_response(),
-    };
-
-    let mut agent = state.active_agent.lock().unwrap();
-    let pregunta = agent.pregunta_usuario.clone();
-    let session_id = agent.current_session_id.clone();
-    agent.respuesta_usuario = Some(payload.respuesta.clone());
-    agent.esperando_respuesta_usuario = false;
-    drop(agent); // Liberar el lock antes de operaciones de I/O
-
-    // BUG-016 FIX: Guardar la respuesta del usuario y la pregunta del agente en la sesión de chat
-    if let Some(ref sid) = session_id {
-        if let Some(chat_file) = find_chat_file_by_session_id_inner(&state.base_workspace, sid) {
-            if let Ok(content) = fs::read_to_string(&chat_file) {
-                if let Ok(mut session) = serde_json::from_str::<ChatSession>(&content) {
-                    // Guardar la pregunta del agente si no está ya guardada
-                    if let Some(ref q) = pregunta {
-                        let already_saved = session.messages.iter().any(|m| m.role == "agent" && m.content == *q);
-                        if !already_saved {
-                            session.messages.push(ChatMessage {
-                                role: "agent".to_string(),
-                                content: q.clone(),
-                                timestamp: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs(),
-                            });
-                        }
-                    }
-                    // Guardar la respuesta del usuario
-                    session.messages.push(ChatMessage {
-                        role: "user".to_string(),
-                        content: payload.respuesta.clone(),
-                        timestamp: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs(),
-                    });
-                    if let Some(parent) = chat_file.parent() { let _ = fs::create_dir_all(parent); }
-                    let _ = fs::write(&chat_file, serde_json::to_string_pretty(&session).unwrap());
-                }
-            }
-        }
-    }
-
-    Json(json!({ "status": "ok" })).into_response()
-}
-
-/// Busca un archivo de chat por session_id. Duplica la lógica de agent.rs porque
-/// find_chat_file_by_session_id es privada allí y necesitamos acceder desde main.rs.
-fn find_chat_file_by_session_id_inner(base_workspace: &std::path::Path, session_id: &str) -> Option<std::path::PathBuf> {
-    let chats_dir = base_workspace.join(".config").join("chats");
-    if !chats_dir.exists() { return None; }
-    if let Ok(entries) = std::fs::read_dir(&chats_dir) {
-        for entry in entries.filter_map(|e| e.ok()) {
-            let path = entry.path();
-            if path.is_dir() {
-                if let Ok(sub_entries) = std::fs::read_dir(&path) {
-                    for sub_entry in sub_entries.filter_map(|e| e.ok()) {
-                        let sub_path = sub_entry.path();
-                        if sub_path.is_file() {
-                            if let Some(fname) = sub_path.file_stem().and_then(|s| s.to_str()) {
-                                if fname.contains(session_id) && sub_path.extension().and_then(|e| e.to_str()) == Some("json") {
-                                    return Some(sub_path);
-                                }
-                            }
-                        }
-                    }
-                }
-            } else if path.is_file() {
-                if let Some(fname) = path.file_stem().and_then(|s| s.to_str()) {
-                    if fname.contains(session_id) && path.extension().and_then(|e| e.to_str()) == Some("json") {
-                        return Some(path);
-                    }
-                }
-            }
-        }
-    }
-    let old_format = chats_dir.join(format!("{}.json", session_id));
-    if old_format.exists() { return Some(old_format); }
-    None
-}
-#[derive(Deserialize)]
-struct AgentApprovePlanRequest {
-    aprobado: bool,
-}
-
-async fn agent_approve_plan(
-    State(state): State<AppState>,
-    headers: HeaderMap,
-    Json(payload): Json<AgentApprovePlanRequest>,
-) -> impl IntoResponse {
-    let _username = match require_auth(&state, &headers).await {
-        Ok(u) => u,
-        Err(e) => return (e.0, Json(json!({ "status": "error", "message": e.1 }))).into_response(),
-    };
-
-    let mut agent = state.active_agent.lock().unwrap();
-    agent.esperando_aprobacion_plan = false;
-    if !payload.aprobado {
-        agent.plan_propuesto = None;
-    }
-    // El agente leer├í el estado en la pr├│xima iteraci├│n
-
-    Json(json!({ "status": "ok" })).into_response()
-}
-
-async fn agent_interrupt(
-    State(state): State<AppState>,
-    headers: HeaderMap,
-) -> impl IntoResponse {
-    let _username = match require_auth(&state, &headers).await {
-        Ok(u) => u,
-        Err(e) => return (e.0, Json(json!({ "status": "error", "message": e.1 }))).into_response(),
-    };
-
-    let mut agent = state.active_agent.lock().unwrap();
-    agent.interrupted = true;
-    agent.running = false;
-
-    // Abortar el handle si existe
-    if let Some(ref handle) = *state.abort_handle.lock().unwrap() {
-        handle.abort();
-    }
-
-    Json(json!({ "status": "ok", "message": "Agente interrumpido." })).into_response()
-}
-
-// ============================================================================
-// Legacy Endpoints ÔÇö Proyectos
-// ============================================================================
-
-#[derive(Deserialize)]
-struct ForkProjectRequest {
-    repo_url: String,
-}
-
-async fn fork_project(
-    State(state): State<AppState>,
-    headers: HeaderMap,
-    Json(payload): Json<ForkProjectRequest>,
-) -> impl IntoResponse {
-    let _username = match require_auth(&state, &headers).await {
-        Ok(u) => u,
-        Err(e) => return (e.0, Json(json!({ "status": "error", "message": e.1 }))).into_response(),
-    };
-
-    // Intentar clonar con gh
-    let repo_name = payload.repo_url
-        .trim_end_matches('/')
-        .split('/')
-        .last()
-        .unwrap_or("repo")
-        .replace(".git", "");
-
-    let dest = state.base_workspace.join(&repo_name);
-    if dest.exists() {
-        return (StatusCode::BAD_REQUEST, Json(json!({
-            "status": "error",
-            "message": format!("El directorio '{}' ya existe.", repo_name)
-        }))).into_response();
-    }
-
-    let output = std::process::Command::new("gh")
-        .args(["repo", "clone", &payload.repo_url, &repo_name])
-        .current_dir(&state.base_workspace)
-        .output();
-
-    match output {
-        Ok(o) if o.status.success() => {
-            let mut projects = state.projects.lock().unwrap();
-            projects.push(Project {
-                name: repo_name.clone(),
-                path: dest.to_string_lossy().to_string(),
-                is_local: false,
-            });
-            // Guardar en local_projects.json
-            let _ = save_projects_to_disk(&state, &projects);
-            Json(json!({ "status": "ok", "project": { "name": repo_name, "path": dest.to_string_lossy() } })).into_response()
-        }
-        Ok(o) => {
-            let stderr = String::from_utf8_lossy(&o.stderr);
-            (StatusCode::BAD_REQUEST, Json(json!({ "status": "error", "message": stderr.to_string() }))).into_response()
-        }
-        Err(e) => {
-            (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "status": "error", "message": format!("Error ejecutando gh: {}", e) }))).into_response()
-        }
-    }
-}
-
-fn save_projects_to_disk(state: &AppState, projects: &[Project]) -> Result<(), String> {
-    let path = state.base_workspace.join(".config").join("local_projects.json");
-    let json = serde_json::to_string_pretty(projects)
-        .map_err(|e| format!("Error serializando proyectos: {}", e))?;
-    fs::write(&path, json).map_err(|e| format!("Error guardando proyectos: {}", e))
-}
-
-#[derive(Deserialize)]
-struct AddLocalProjectRequest {
-    name: String,
-    path: String,
-}
-
-async fn add_local_project(
-    State(state): State<AppState>,
-    headers: HeaderMap,
-    Json(payload): Json<AddLocalProjectRequest>,
-) -> impl IntoResponse {
-    let _username = match require_auth(&state, &headers).await {
-        Ok(u) => u,
-        Err(e) => return (e.0, Json(json!({ "status": "error", "message": e.1 }))).into_response(),
-    };
-
-    let proj_path = PathBuf::from(&payload.path);
-    if !proj_path.exists() {
-        return (StatusCode::BAD_REQUEST, Json(json!({
-            "status": "error",
-            "message": "La ruta especificada no existe."
-        }))).into_response();
-    }
-
-    let mut projects = state.projects.lock().unwrap();
-
-    // Verificar duplicado
-    if projects.iter().any(|p| p.name == payload.name) {
-        return (StatusCode::BAD_REQUEST, Json(json!({
-            "status": "error",
-            "message": "Ya existe un proyecto con ese nombre."
-        }))).into_response();
-    }
-
-    projects.push(Project {
-        name: payload.name.clone(),
-        path: proj_path.to_string_lossy().to_string(),
-        is_local: true,
-    });
-
-    let _ = save_projects_to_disk(&state, &projects);
-
-    Json(json!({ "status": "ok", "project": { "name": payload.name, "path": proj_path.to_string_lossy() } })).into_response()
-}
-
-// ============================================================================
-// Legacy Endpoints ÔÇö Prompts (compatibilidad con frontend viejo)
-// ============================================================================
-
-/// GET /api/prompts ÔÇö devuelve el mismo formato que el frontend espera
-async fn legacy_prompts_get(
-    State(state): State<AppState>,
-    headers: HeaderMap,
-) -> impl IntoResponse {
-    let username = match require_auth(&state, &headers).await {
-        Ok(u) => u,
-        Err(e) => return (e.0, Json(json!({ "status": "error", "message": e.1 }))).into_response(),
-    };
-
-    let global_current = state.load_global_prompt(&username);
-    let global_default = {
-        let prompts = state.prompts.lock().unwrap();
-        prompts.global_default.clone()
-    };
-
-    // Recolectar prompts locales de los proyectos del usuario
-    let mut projects_map = serde_json::Map::new();
-    let projects = state.projects.lock().unwrap();
-    for proj in projects.iter() {
-        if let Some(local) = state.load_local_prompt(&username, &proj.name) {
-            projects_map.insert(proj.name.clone(), serde_json::Value::String(local));
-        }
-    }
-    // Tambi├®n incluir los del PromptConfig en memoria
-    {
-        let prompts = state.prompts.lock().unwrap();
-        for (name, content) in &prompts.projects {
-            if !projects_map.contains_key(name) {
-                projects_map.insert(name.clone(), serde_json::Value::String(content.clone()));
-            }
-        }
-    }
-
-    Json(json!({
-        "status": "ok",
-        "global_current": global_current,
-        "global_default": global_default,
-        "projects": projects_map,
-    })).into_response()
-}
-
-#[derive(Deserialize)]
-struct LegacyPromptsPostRequest {
-    global: Option<String>,
-    project_prompts: Option<HashMap<String, String>>,
-}
-
-/// POST /api/prompts ÔÇö compatibilidad con frontend viejo
-async fn legacy_prompts_post(
-    State(state): State<AppState>,
-    headers: HeaderMap,
-    Json(payload): Json<LegacyPromptsPostRequest>,
-) -> impl IntoResponse {
-    let username = match require_auth(&state, &headers).await {
-        Ok(u) => u,
-        Err(e) => return (e.0, Json(json!({ "status": "error", "message": e.1 }))).into_response(),
-    };
-
-    if let Some(ref global) = payload.global {
-        let _ = state.save_global_prompt(&username, global);
-        let mut prompts = state.prompts.lock().unwrap();
-        prompts.global_current = global.clone();
-    }
-
-    if let Some(ref proj_prompts) = payload.project_prompts {
-        for (proj_name, content) in proj_prompts {
-            let _ = state.save_local_prompt(&username, proj_name, content);
-            let mut prompts = state.prompts.lock().unwrap();
-            prompts.projects.insert(proj_name.clone(), content.clone());
-        }
-    }
-
-    Json(json!({ "status": "ok" })).into_response()
-}
-
-/// POST /api/prompts/reset ÔÇö compatibilidad con frontend viejo
-async fn legacy_prompts_reset(
-    State(state): State<AppState>,
-    headers: HeaderMap,
-) -> impl IntoResponse {
-    reset_global_prompt(State(state), headers).await
-}
-
-#[derive(Deserialize)]
-struct RefinePromptRequest {
-    prompt: String,
-    feedback: Option<String>,
-    session_id: Option<String>,
-    project_name: Option<String>,
-}
-
-/// POST /api/prompts/refine ÔÇö refinar prompt con el agente
-async fn legacy_prompts_refine(
-    State(state): State<AppState>,
-    headers: HeaderMap,
-    Json(payload): Json<RefinePromptRequest>,
-) -> impl IntoResponse {
-    let _username = match require_auth(&state, &headers).await {
-        Ok(u) => u,
-        Err(e) => return (e.0, Json(json!({ "status": "error", "message": e.1 }))).into_response(),
-    };
-
-    // Por ahora, devolver el prompt sin modificar (refinar requiere llamar a DeepSeek)
-    // En el futuro esto llamar├í al agente para refinar
-    let mut refined = payload.prompt.clone();
-    if let Some(ref fb) = payload.feedback {
-        refined = format!("{}\n\n[Feedback del usuario: {}]", refined, fb);
-    }
-
-    Json(json!({
-        "status": "ok",
-        "refined": refined,
-        "original": payload.prompt,
-    })).into_response()
-}
-
-// ============================================================================
-// MAIN ÔÇö Doble Puerto
-// ============================================================================
-
-
-// ============================================================================
-// Endpoint de Reporte de Fallos (Usuarios)
+// Endpoint de Reporte de Fallos
 // ============================================================================
 
 #[derive(Deserialize)]
 struct ReportarFalloRequest {
-    informe: String,
-    severidad: Option<String>,
+    mensaje: String,
+    project_name: Option<String>,
+    session_id: Option<String>,
+    error_details: Option<String>,
 }
 
 async fn reportar_fallo_usuario(
@@ -1984,46 +1916,146 @@ async fn reportar_fallo_usuario(
     headers: HeaderMap,
     Json(payload): Json<ReportarFalloRequest>,
 ) -> impl IntoResponse {
-    let _username = match require_auth(&state, &headers).await {
-        Ok(u) => u,
-        Err(e) => return (e.0, Json(json!({ "status": "error", "message": e.1 }))).into_response(),
+    let username = match require_auth(&state, &headers).await {
+        Ok(u) => u, Err(e) => return (e.0, Json(json!({ "status": "error", "message": e.1 }))).into_response(),
     };
 
-    if payload.informe.trim().is_empty() {
-        return (StatusCode::BAD_REQUEST, Json(json!({
-            "status": "error",
-            "message": "El campo 'informe' es obligatorio y no puede estar vacio."
-        }))).into_response();
-    }
+    // Guardar el reporte en un archivo de logs
+    let reports_dir = state.base_workspace.join(".config").join("bug_reports");
+    let _ = fs::create_dir_all(&reports_dir);
 
-    let severidad = payload.severidad.unwrap_or_else(|| "media".to_string());
-    let severidad_validada = match severidad.as_str() {
-        "baja" | "media" | "alta" | "critica" => severidad,
-        _ => "media".to_string(),
-    };
+    let report_id = uuid::Uuid::new_v4().to_string();
+    let report_path = reports_dir.join(format!("{}.json", report_id));
 
-    let report_path = state.base_workspace.join(".config").join("fallos_reportados.json");
-    let mut fallos: Vec<serde_json::Value> = if report_path.exists() {
-        serde_json::from_str(&fs::read_to_string(&report_path).unwrap_or_default()).unwrap_or_default()
-    } else {
-        Vec::new()
-    };
-
-    fallos.push(json!({
+    let report = json!({
+        "id": report_id,
+        "username": username,
+        "message": payload.mensaje,
+        "project_name": payload.project_name,
+        "session_id": payload.session_id,
+        "error_details": payload.error_details,
         "timestamp": std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs(),
-        "severidad": severidad_validada,
-        "informe": payload.informe,
-        "reportado_por": _username,
-    }));
+    });
 
-    let _ = fs::create_dir_all(report_path.parent().unwrap());
-    let _ = fs::write(&report_path, serde_json::to_string_pretty(&fallos).unwrap_or_default());
+    let _ = fs::write(&report_path, serde_json::to_string_pretty(&report).unwrap());
+
+    eprintln!("[IAF] Reporte de fallo #{} de {}: {}", report_id, username, payload.mensaje);
+
+    Json(json!({ "status": "ok", "report_id": report_id })).into_response()
+}
+
+// ============================================================================
+// Endpoints de Client Protocol
+// ============================================================================
+
+async fn client_connect(
+    State(state): State<AppState>,
+    Json(payload): Json<ConnectRequest>,
+) -> impl IntoResponse {
+    let username = match state.session_store.validate_token(&payload.token) {
+        Some(u) => u,
+        None => return (StatusCode::UNAUTHORIZED, Json(json!({ "status": "error", "message": "Token inválido." }))).into_response(),
+    };
+
+    let client_id = uuid::Uuid::new_v4().to_string();
+    let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs();
+
+    let client = ConnectedClient {
+        client_id: client_id.clone(),
+        username: username.clone(),
+        token: payload.token.clone(),
+        connected_at: now,
+        last_heartbeat: now,
+        host_info: payload.host_info.clone(),
+    };
+
+    state.connected_clients.lock().unwrap().insert(client_id.clone(), client.clone());
+
+    state.client_pending_requests.lock().unwrap().entry(client_id.clone()).or_insert_with(Vec::new);
 
     Json(json!({
         "status": "ok",
-        "message": format!("Fallo reportado con severidad \"{}\". Los ingenieros lo revisaran.", severidad_validada)
+        "client_id": client_id,
+        "pending_requests": Vec::<ClientRequest>::new(),
     })).into_response()
 }
+
+async fn client_heartbeat(
+    State(state): State<AppState>,
+    Json(payload): Json<HeartbeatRequest>,
+) -> impl IntoResponse {
+    let mut clients = state.connected_clients.lock().unwrap();
+    if let Some(client) = clients.get_mut(&payload.client_id) {
+        let username = match state.session_store.validate_token(&payload.token) {
+            Some(u) => u,
+            None => return (StatusCode::UNAUTHORIZED, Json(json!({ "status": "error", "message": "Token inválido." }))).into_response(),
+        };
+        if username != client.username {
+            return (StatusCode::FORBIDDEN, Json(json!({ "status": "error", "message": "Token no coincide." }))).into_response();
+        }
+        let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs();
+        client.last_heartbeat = now;
+        Json(json!({ "status": "ok" })).into_response()
+    } else {
+        (StatusCode::NOT_FOUND, Json(json!({ "status": "error", "message": "Cliente no encontrado." }))).into_response()
+    }
+}
+
+async fn client_poll(
+    State(state): State<AppState>,
+    Json(payload): Json<PollRequest>,
+) -> impl IntoResponse {
+    let clients = state.connected_clients.lock().unwrap();
+    let client = match clients.get(&payload.client_id) {
+        Some(c) => c.clone(),
+        None => return (StatusCode::NOT_FOUND, Json(json!({ "status": "error", "message": "Cliente no encontrado." }))).into_response(),
+    };
+    drop(clients);
+
+    let username = match state.session_store.validate_token(&payload.token) {
+        Some(u) => u,
+        None => return (StatusCode::UNAUTHORIZED, Json(json!({ "status": "error", "message": "Token inválido." }))).into_response(),
+    };
+    if username != client.username {
+        return (StatusCode::FORBIDDEN, Json(json!({ "status": "error", "message": "Token no coincide." }))).into_response();
+    }
+
+    let mut pending = state.client_pending_requests.lock().unwrap();
+    let requests = pending.remove(&payload.client_id).unwrap_or_default();
+
+    Json(json!({ "status": "ok", "pending_requests": requests })).into_response()
+}
+
+async fn client_response(
+    State(state): State<AppState>,
+    Json(payload): Json<ClientResponseWrapper>,
+) -> impl IntoResponse {
+    let clients = state.connected_clients.lock().unwrap();
+    let client = match clients.get(&payload.client_id) {
+        Some(c) => c.clone(),
+        None => return (StatusCode::NOT_FOUND, Json(json!({ "status": "error", "message": "Cliente no encontrado." }))).into_response(),
+    };
+    drop(clients);
+
+    let username = match state.session_store.validate_token(&payload.token) {
+        Some(u) => u,
+        None => return (StatusCode::UNAUTHORIZED, Json(json!({ "status": "error", "message": "Token inválido." }))).into_response(),
+    };
+    if username != client.username {
+        return (StatusCode::FORBIDDEN, Json(json!({ "status": "error", "message": "Token no coincide." }))).into_response();
+    }
+
+    state.client_responses.lock().unwrap().insert(
+        payload.response.request_id.clone(),
+        payload.response.clone(),
+    );
+
+    Json(json!({ "status": "ok" })).into_response()
+}
+
+// ============================================================================
+// Build App Router
+// ============================================================================
 
 fn build_app(state: AppState) -> Router {
     let cors = CorsLayer::permissive();
@@ -2175,15 +2207,15 @@ async fn main() {
     let addr_80 = SocketAddr::from(([0, 0, 0, 0], 80));
     let addr_8080 = SocketAddr::from(([127, 0, 0, 1], 8080));
 
-    println!("­ƒÜÇ IAF Server iniciado:");
-    println!("   ÔÇó Puerto 80   ÔÇö Admin local (sin auth): http://{}", addr_80);
-    println!("   ÔÇó Puerto 8080 ÔÇö Usuarios (requiere login): http://{}", addr_8080);
+    println!("🚀 IAF Server iniciado:");
+    println!("   • Puerto 80   — Admin local (sin auth): http://{}", addr_80);
+    println!("   • Puerto 8080 — Usuarios (requiere login): http://{}", addr_8080);
 
     let srv_80 = tokio::spawn(async move {
         let listener = match tokio::net::TcpListener::bind(addr_80).await {
             Ok(l) => l,
             Err(e) => {
-                eprintln!("ÔÜá´©Å  No se pudo bindear puerto 80 (requiere admin): {}", e);
+                eprintln!("⚠️  No se pudo bindear puerto 80 (requiere admin): {}", e);
                 return;
             }
         };
@@ -2197,7 +2229,7 @@ async fn main() {
         let listener = match tokio::net::TcpListener::bind(addr_8080).await {
             Ok(l) => l,
             Err(e) => {
-                eprintln!("ÔØî Error fatal bindeando puerto 8080: {}", e);
+                eprintln!("❌ Error fatal bindeando puerto 8080: {}", e);
                 std::process::exit(1);
             }
         };
@@ -2214,7 +2246,7 @@ fn detect_base_workspace() -> PathBuf {
     if let Ok(env_ws) = std::env::var("IAF_WORKSPACE") {
         let p = PathBuf::from(&env_ws);
         if p.exists() && p.is_dir() {
-            eprintln!("[IAF] base_workspace v├¡a IAF_WORKSPACE: {}", p.display());
+            eprintln!("[IAF] base_workspace vía IAF_WORKSPACE: {}", p.display());
             return p;
         }
     }
@@ -2223,7 +2255,7 @@ fn detect_base_workspace() -> PathBuf {
             let mut candidate = exe_dir.to_path_buf();
             for _ in 0..5 {
                 if candidate.join(".config").exists() || candidate.join("Cargo.toml").exists() {
-                    eprintln!("[IAF] base_workspace v├¡a exe: {}", candidate.display());
+                    eprintln!("[IAF] base_workspace vía exe: {}", candidate.display());
                     return candidate;
                 }
                 if let Some(parent) = candidate.parent() { candidate = parent.to_path_buf(); }
@@ -2232,7 +2264,7 @@ fn detect_base_workspace() -> PathBuf {
         }
     }
     if let Ok(cwd) = std::env::current_dir() {
-        eprintln!("[IAF] base_workspace v├¡a current_dir: {}", cwd.display());
+        eprintln!("[IAF] base_workspace vía current_dir: {}", cwd.display());
         return cwd;
     }
     PathBuf::from(".")
