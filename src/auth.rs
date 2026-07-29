@@ -508,6 +508,7 @@ impl UserStore {
         user.editar_system_prompt_local = editar_local;
         drop(users);
         self.save()
+    }
 
     /// Actualiza horarios de un usuario
     pub fn update_schedule(&self, username: &str, schedule: WeeklySchedule) -> Result<(), String> {
