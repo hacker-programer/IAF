@@ -1347,19 +1347,22 @@ async fn chat_endpoint(
 
     // Limpiar archivos viejos con el mismo UUID para evitar duplicados
     clean_old_chat_files(&chat_dir, &session_id);
-
     // Agregar mensaje del usuario
     session.messages.push(ChatMessage {
         role: "user".to_string(),
         content: payload.message.clone(),
+        timestamp: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs(),
+    });
+
+    // Guardar
+    let save_path = get_chat_path(&state, &username, is_admin, &session.title, &session.id);
+    let _ = fs::create_dir_all(save_path.parent().unwrap());
+    let _ = fs::write(&save_path, serde_json::to_string_pretty(&session).unwrap());
+
     // Iniciar agente en background
     {
         let mut agent = state.active_agent.lock().unwrap();
         agent.current_chat_path = Some(save_path.to_string_lossy().to_string());
-
-        // FIX #6/#25: SIEMPRE interrumpir y relanzar el agente con el nuevo mensaje.
-        // Esto evita que mensajes se ignoren silenciosamente cuando el agente ya corría.
-        if agent.running {
             agent.interrupted = true;
             agent.running = false;
             // Abortar tokio task anterior si existe
