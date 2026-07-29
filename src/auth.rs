@@ -415,9 +415,10 @@ impl UserStore {
 
         let hash_str = match &user.password_hash {
             Some(h) => h.clone(),
-            // FIX #30: nonce user returns Ok(None) like not-found
             None => return Ok(None),
-        };
+
+        let parsed_hash = PasswordHash::new(&hash_str)
+            .map_err(|e| format!("Error interno: hash mal formado: {}", e))?;
 
         let valid = Argon2::default().verify_password(password.as_bytes(), &parsed_hash).is_ok();
 
@@ -499,11 +500,13 @@ impl UserStore {
             .find(|u| u.username == username)
             .ok_or_else(|| format!("Usuario '{}' no encontrado.", username))?;
         if !user.is_admin {
-        // FIX #27: Siempre actualizar, incluso para admins (delegación de permisos)
-        user.modo_estudio = modo_estudio;
-        user.modo_programador = modo_programador;
-        user.editar_system_prompt_global = editar_global;
-        user.editar_system_prompt_local = editar_local;
+            user.modo_estudio = modo_estudio;
+            user.modo_programador = modo_programador;
+            user.editar_system_prompt_global = editar_global;
+            user.editar_system_prompt_local = editar_local;
+        }
+        drop(users);
+        self.save()
     }
 
     /// Actualiza horarios de un usuario
