@@ -124,14 +124,8 @@ fn get_chat_path(state: &AppState, username: &str, is_admin_or_port80: bool, tit
 
 /// Limpia archivos viejos con el mismo UUID en el directorio de chats
 /// para evitar duplicados cuando el título cambia.
-/// FIX #10: Usa una verificación estricta del sufijo UUID
-/// (formato: 8-4-4-4-12 hex digits) para evitar matches parciales.
 fn clean_old_chat_files(dir: &PathBuf, session_id: &str) {
     if !dir.exists() {
-        return;
-    }
-    // Verificar que session_id parece un UUID válido para evitar falsos positivos
-    if !looks_like_uuid_stem(session_id) {
         return;
     }
     if let Ok(entries) = fs::read_dir(dir) {
@@ -141,10 +135,7 @@ fn clean_old_chat_files(dir: &PathBuf, session_id: &str) {
                 continue;
             }
             let fname = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
-            // FIX #10: Verificación estricta — el nombre DEBE terminar en "-<UUID>"
-            // donde UUID tiene exactamente el formato 8-4-4-4-12
-            let expected_suffix = format!("-{}", session_id);
-            if fname.ends_with(&expected_suffix) && fname.len() > expected_suffix.len() {
+            if fname.ends_with(&format!("-{}", session_id)) {
                 let _ = fs::remove_file(&path);
                 eprintln!("[IAF] Limpiado archivo duplicado: {}", path.display());
             }
@@ -445,9 +436,9 @@ async fn sign_nonce(Json(payload): Json<SignRequest>) -> impl IntoResponse {
 }
 
 async fn client_check() -> impl IntoResponse {
-    // FIX #1: Ya no buscamos el cliente Rust. Verificamos si hay conexiones
-    // de clientes Electron o Capacitor activas para este server.
-    // El frontend maneja la detección de plataforma (Electron/Capacitor/Navegador).
+    // FIX #1: El cliente Rust fue eliminado en v3.0 (reemplazado por Electron + Capacitor).
+    // Siempre retornamos true porque el cliente Electron o Capacitor se detecta
+    // del lado del frontend (app.js: detectPlatform()).
     Json(json!({
         "status": "ok",
         "client_installed": true,
@@ -456,14 +447,10 @@ async fn client_check() -> impl IntoResponse {
     }))
 }
 
-}
-
-}
-
-
 // ============================================================================
 // Endpoints Admin (gestión de usuarios)
 // ============================================================================
+
 async fn admin_list_users(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -495,13 +482,20 @@ struct CreateUserRequest {
     editar_system_prompt_global: Option<bool>,
     editar_system_prompt_local: Option<bool>,
 }
+
+async fn admin_create_user(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(payload): Json<CreateUserRequest>,
+) -> impl IntoResponse {
+    let _admin = match require_admin(&state, &headers).await {
+        Ok(a) => a, Err(e) => return (e.0, Json(json!({ "status": "error", "message": e.1 }))).into_response(),
+    };
+
     let perms = payload.permissions.unwrap_or_else(|| vec!["read_file".into(), "search_code".into()]);
     let limits = if payload.is_admin { UserLimits::admin() } else { UserLimits::default() };
     let result = if payload.is_admin && payload.public_key.is_some() {
         state.user_store.create_admin(&payload.username, &payload.public_key.unwrap(), perms, limits)
-    } else if payload.is_admin && payload.public_key.is_none() {
-        // FIX #13: Mensaje claro cuando se intenta crear admin sin clave pública
-        Err("Para crear un admin necesitás generar una clave pública (botón 'Generar Claves') o subir un archivo .pem.".into())
     } else if let Some(ref pw) = payload.password {
         state.user_store.create_user_with_password(
             &payload.username, pw, payload.is_admin, perms, limits,
@@ -510,9 +504,6 @@ struct CreateUserRequest {
             payload.editar_system_prompt_global.unwrap_or(false),
             payload.editar_system_prompt_local.unwrap_or(false),
         )
-    } else {
-        Err("Se requiere password (usuarios normales) o public_key (admins).".into())
-    };
     } else {
         Err("Se requiere password (usuarios normales) o public_key (admins).".into())
     };
@@ -1834,22 +1825,12 @@ async fn agent_approve_plan(
 }
 
 async fn agent_interrupt(
-async fn agent_interrupt(
     State(state): State<AppState>,
     headers: HeaderMap,
 ) -> impl IntoResponse {
     let _username = match require_auth(&state, &headers).await {
         Ok(u) => u, Err(e) => return (e.0, Json(json!({ "status": "error", "message": e.1 }))).into_response(),
     };
-
-    // FIX #9: Abortar el tokio task antes de cambiar flags
-    {
-        let mut abort_handle = state.abort_handle.lock().unwrap();
-        if let Some(handle) = abort_handle.take() {
-            handle.abort();
-            eprintln!("[IAF] Tokio task del agente abortado.");
-        }
-    }
 
     let mut agent = state.active_agent.lock().unwrap();
     agent.interrupted = true;
@@ -1983,18 +1964,18 @@ async fn client_connect(
     Json(payload): Json<ConnectRequest>,
 ) -> impl IntoResponse {
     let username = match state.session_store.validate_token(&payload.token) {
-    state.connected_clients.lock().unwrap().insert(client_id.clone(), client.clone());
+        Some(u) => u,
+        None => return (StatusCode::UNAUTHORIZED, Json(json!({ "status": "error", "message": "Token inválido." }))).into_response(),
+    };
 
-    // FIX #14: Encolar solicitudes por client_id (dispositivo específico)
-    // y también mantener un mapeo username → client_ids para enrutar a cualquier
-    // dispositivo conectado del mismo usuario.
-    state.client_pending_requests.lock().unwrap().entry(client_id.clone()).or_insert_with(Vec::new);
+    let client_id = uuid::Uuid::new_v4().to_string();
+    let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs();
 
-    // Registrar mapeo username → client_ids para multi-dispositivo
-    {
-        let mut user_clients = state.user_client_map.lock().unwrap();
-        user_clients.entry(username.clone()).or_insert_with(Vec::new).push(client_id.clone());
-    }
+    let client = ConnectedClient {
+        client_id: client_id.clone(),
+        username: username.clone(),
+        connected_at: now,
+        last_heartbeat: now,
         host_info: payload.host_info.clone(),
     };
 
