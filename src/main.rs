@@ -92,13 +92,13 @@ async fn require_auth(
     state.session_store.validate_token(&token)
         .ok_or_else(|| (StatusCode::UNAUTHORIZED, "Token inválido o expirado.".into()))
 }
-
 // ============================================================================
 // Chat Helpers (nueva estructura de almacenamiento)
 // ============================================================================
 
-// FIX #46: Usar la función unificada de utils.rs (80 chars + hash anti-colisión)
+// FIX #46: Usar la versión unificada de utils.rs (70 chars + hash anti-colisión)
 use iaf::utils::sanitize_filename;
+
 fn get_chat_dir(state: &AppState, username: &str, is_admin_or_port80: bool) -> PathBuf {
     if is_admin_or_port80 || username == "admin_local" {
         state.base_workspace.join(".config").join("chats")
@@ -113,8 +113,7 @@ fn get_chat_path(state: &AppState, username: &str, is_admin_or_port80: bool, tit
     dir.join(format!("{}-{}.json", safe_title, id))
 }
 
-/// Limpia archivos viejos con el mismo UUID en el directorio de chats.
-/// FIX #10: Verificación estricta del sufijo UUID completo.
+/// Limpia archivos viejos con el mismo UUID. FIX #10: validación estricta del sufijo.
 fn clean_old_chat_files(dir: &PathBuf, session_id: &str) {
     if !dir.exists() || !looks_like_uuid_stem(session_id) {
         return;
@@ -134,9 +133,6 @@ fn clean_old_chat_files(dir: &PathBuf, session_id: &str) {
         }
     }
 }
-/// Determina si un nombre de archivo (sin extensión) parece un UUID
-fn looks_like_uuid_stem(stem: &str) -> bool {
-    stem.len() >= 30
         && stem.chars().all(|c| c.is_ascii_hexdigit() || c == '-')
         && stem.matches('-').count() >= 3
 }
@@ -425,16 +421,34 @@ async fn sign_nonce(Json(payload): Json<SignRequest>) -> impl IntoResponse {
         Err(e) => Json(json!({ "status": "error", "message": e })),
     }
 }
-}
 
 async fn client_check() -> impl IntoResponse {
-    // FIX #1/#39: v3.0 — cliente Rust eliminado, reemplazado por Electron + Capacitor.
+    let possible_paths = vec![
+        "client/target/release/iaf-client.exe",
+        "client/target/debug/iaf-client.exe",
+        "iaf-client.exe",
+    ];
+    let mut found = Vec::new();
+    for path in &possible_paths {
+        if std::path::Path::new(path).exists() {
+            found.push(path.to_string());
+        }
+    }
+    Json(json!({
         "status": "ok",
-        "client_installed": true,
-        "message": "IAF v3.0 usa Electron (desktop) o Capacitor (Android) como cliente.",
-        "instructions": "Electron: cd electron && npm install && npm start. Capacitor: cd capacitor && .\\setup_capacitor.ps1"
+        "client_installed": !found.is_empty(),
+        "found_at": found,
+        "expected_paths": possible_paths,
+        "instructions": if found.is_empty() {
+            "Para instalar el cliente: cd client && cargo build --release. Luego: .\\client\\target\\release\\iaf-client.exe <url> <user> <token>"
+        } else {
+            "Cliente encontrado. Ejecutalo con: iaf-client.exe http://127.0.0.1:8080 <username> <token>"
+        }
     }))
 }
+
+// ============================================================================
+// Endpoints Admin (gestión de usuarios)
 // ============================================================================
 
 async fn admin_list_users(
@@ -1808,7 +1822,6 @@ async fn agent_approve_plan(
     }
 
     Json(json!({ "status": "ok" })).into_response()
-    Json(json!({ "status": "ok" })).into_response()
 }
 
 async fn agent_interrupt(
@@ -1819,18 +1832,12 @@ async fn agent_interrupt(
         Ok(u) => u, Err(e) => return (e.0, Json(json!({ "status": "error", "message": e.1 }))).into_response(),
     };
 
-    // FIX #9: Abortar el tokio task para detención inmediata del agente
-    if let Ok(mut abort_handle) = state.abort_handle.lock() {
-        if let Some(handle) = abort_handle.take() {
-            handle.abort();
-        }
-    }
-
     let mut agent = state.active_agent.lock().unwrap();
     agent.interrupted = true;
     agent.running = false;
 
     if let Some(ref path) = agent.current_chat_path {
+        // Append interruption message to chat
         if let Ok(content) = fs::read_to_string(path) {
             if let Ok(mut session) = serde_json::from_str::<ChatSession>(&content) {
                 session.messages.push(ChatMessage {
@@ -1845,6 +1852,29 @@ async fn agent_interrupt(
 
     Json(json!({ "status": "ok" })).into_response()
 }
+
+// ============================================================================
+// Endpoints de CAPTCHA
+// ============================================================================
+
+#[derive(Deserialize)]
+struct CaptchaSolveRequest {
+    id: String,
+    solved_content: String,
+}
+
+async fn captcha_status(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> impl IntoResponse {
+    let _username = match require_auth(&state, &headers).await {
+        Ok(u) => u,
+        Err(_) => {
+            // Si no hay auth en puerto 80, igual devolvemos status ok pero sin captcha
+            if state.port_80 {
+                return Json(json!({ "status": "ok", "url": null })).into_response();
+            }
+            return Json(json!({ "status": "ok", "url": null })).into_response();
         }
     };
 
