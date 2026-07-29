@@ -1,4 +1,4 @@
-﻿#![allow(dead_code, unused_imports, unused_variables)]
+#![allow(dead_code, unused_imports, unused_variables)]
 use serde_json::{json, Value};
 use std::error::Error;
 use std::process::Command;
@@ -592,6 +592,7 @@ pub async fn run_agent_loop(
             ));
         }
 
+        // FIX #31: removed dead force_none_tool_choice code
         let current_tool_choice = "auto";
 
         let mut attempts = 0;
@@ -603,10 +604,6 @@ pub async fn run_agent_loop(
                 .header("Content-Type", "application/json")
                 .json(&json!({
                     "model": "deepseek-chat",
-                    "messages": messages,
-                    "tools": tools,
-                    "tool_choice": current_tool_choice,
-                    "tool_choice": current_tool_choice,
                     "thinking": { "type": "enabled" },
                     "reasoning_effort": "high"
                 }))
