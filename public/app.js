@@ -403,15 +403,17 @@ async function refreshUsersTable() {
                 '</tr>';
         }).join('');
     } catch(e) {}
+    } catch(e) {}
 }
+
+// ============================================================================
+// EDIT USER - with schedule, activation, granular permissions
+// ============================================================================
+
+const DAY_NAMES = ['lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado', 'domingo'];
+
+function buildScheduleGrid(schedule) {
     const grid = document.getElementById('editScheduleGrid');
-    grid.innerHTML = DAY_NAMES.map(day => {
-        const ranges = (schedule && schedule.horarios && schedule.horarios[day])
-            ? schedule.horarios[day].map(r => r.join('-')).join(',')
-            : '';
-        return '<span class="day-label">' + day + '</span><input type="text" data-day="' + day + '" value="' + ranges + '" placeholder="9-12,14-18">';
-    }).join('');
-}
 
 function parseScheduleGrid() {
     const horarios = {};
