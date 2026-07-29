@@ -508,11 +508,8 @@ async fn admin_create_user(
 
 #[derive(Deserialize)]
 struct UpdateLimitsRequest {
-}
-
-#[derive(Deserialize)]
-struct UpdateLimitsRequest {
     limits: UserLimits,
+}
 }
 
 async fn admin_update_limits(
