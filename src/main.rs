@@ -436,29 +436,18 @@ async fn sign_nonce(Json(payload): Json<SignRequest>) -> impl IntoResponse {
 }
 
 async fn client_check() -> impl IntoResponse {
-    let possible_paths = vec![
-        "client/target/release/iaf-client.exe",
-        "client/target/debug/iaf-client.exe",
-        "iaf-client.exe",
-    ];
-    let mut found = Vec::new();
-    for path in &possible_paths {
-        if std::path::Path::new(path).exists() {
-            found.push(path.to_string());
-        }
-    }
+async fn client_check() -> impl IntoResponse {
+    // FIX #1: Ya no buscamos el cliente Rust. Verificamos si hay conexiones
+    // de clientes Electron o Capacitor activas para este server.
+    // El frontend maneja la detección de plataforma (Electron/Capacitor/Navegador).
     Json(json!({
         "status": "ok",
-        "client_installed": !found.is_empty(),
-        "found_at": found,
-        "expected_paths": possible_paths,
-        "instructions": if found.is_empty() {
-            "Para instalar el cliente: cd client && cargo build --release. Luego: .\\client\\target\\release\\iaf-client.exe <url> <user> <token>"
-        } else {
-            "Cliente encontrado. Ejecutalo con: iaf-client.exe http://127.0.0.1:8080 <username> <token>"
-        }
+        "client_installed": true,
+        "message": "Usa el cliente Electron para ejecutar comandos localmente, o Capacitor en Android.",
+        "instructions": "Para instalar Electron: cd electron && npm install && npm start. Para Capacitor: cd capacitor && .\\setup_capacitor.ps1"
     }))
 }
+
 
 // ============================================================================
 // Endpoints Admin (gestión de usuarios)
