@@ -18,7 +18,8 @@ pub fn sanitize_filename(name: &str) -> String {
     let base = base.trim_matches('_').to_string();
     let mut hasher = std::collections::hash_map::DefaultHasher::new();
     name.hash(&mut hasher);
-    let hash = format!("{:08x}", hasher.finish());
+    // Truncamos a 32 bits para garantizar exactamente 8 dígitos hexadecimales.
+    let hash = format!("{:08x}", (hasher.finish() & 0xFFFF_FFFF) as u32);
     if base.is_empty() { hash } else { format!("{}_{}", base, hash) }
 }
 

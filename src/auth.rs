@@ -415,13 +415,14 @@ impl UserStore {
 
         let hash_str = match &user.password_hash {
             Some(h) => h.clone(),
-            // FIX #30: nonce user returns Ok(None) like not-found
-            None => return Ok(None),
+            None => return Err("Este usuario no tiene contraseÃ±a configurada (usa nonce).".into()),
         };
+
         let parsed_hash = PasswordHash::new(&hash_str)
             .map_err(|e| format!("Error interno: hash mal formado: {}", e))?;
 
         let valid = Argon2::default().verify_password(password.as_bytes(), &parsed_hash).is_ok();
+
         if valid {
             // Verificar lÃ­mites de horario
             if !user.limits.is_active_now() && !user.is_admin {
@@ -499,12 +500,12 @@ impl UserStore {
         let user = users.users.iter_mut()
             .find(|u| u.username == username)
             .ok_or_else(|| format!("Usuario '{}' no encontrado.", username))?;
-        // FIX #27: Always update, even for admins
-        user.modo_estudio = modo_estudio;
-        user.modo_estudio = modo_estudio;
-        user.modo_programador = modo_programador;
-        user.editar_system_prompt_global = editar_global;
-        user.editar_system_prompt_local = editar_local;
+        if !user.is_admin {
+            user.modo_estudio = modo_estudio;
+            user.modo_programador = modo_programador;
+            user.editar_system_prompt_global = editar_global;
+            user.editar_system_prompt_local = editar_local;
+        }
         drop(users);
         self.save()
     }
