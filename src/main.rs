@@ -1352,35 +1352,42 @@ async fn chat_endpoint(
     session.messages.push(ChatMessage {
         role: "user".to_string(),
         content: payload.message.clone(),
-        timestamp: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs(),
-    });
-
-    // Guardar
-    let save_path = get_chat_path(&state, &username, is_admin, &session.title, &session.id);
-    let _ = fs::create_dir_all(save_path.parent().unwrap());
-    let _ = fs::write(&save_path, serde_json::to_string_pretty(&session).unwrap());
-
-    // Iniciar agente en background (BUG #4 fix)
+    // Iniciar agente en background
     {
         let mut agent = state.active_agent.lock().unwrap();
         agent.current_chat_path = Some(save_path.to_string_lossy().to_string());
-        if !agent.running {
-            agent.running = true;
-            agent.interrupted = false;
-            agent.finished = false;
-            agent.final_message = None;
-            // BUG-002 FIX: Limpiar info_messages al iniciar nuevo agente
-            agent.info_messages.clear();
-            // BUG FIX: Solo limpiar steps si es conversacion NUEVA. Si es existente, cargar desde sesion.
-            if chat_file.is_some() {
-                if let Some(ref steps) = session.steps { agent.steps = steps.clone(); }
-            } else {
-                agent.steps.clear();
+
+        // FIX #6/#25: SIEMPRE interrumpir y relanzar el agente con el nuevo mensaje.
+        // Esto evita que mensajes se ignoren silenciosamente cuando el agente ya corría.
+        if agent.running {
+            agent.interrupted = true;
+            agent.running = false;
+            // Abortar tokio task anterior si existe
+            if let Ok(mut abort_handle) = state.abort_handle.lock() {
+                if let Some(handle) = abort_handle.take() {
+                    handle.abort();
+                }
             }
-            agent.thinking_content.clear();
-            agent.esperando_respuesta_usuario = false;
-            agent.respuesta_usuario = None;
-            agent.esperando_aprobacion_plan = false;
+        }
+
+        // Iniciar el agente con el nuevo mensaje
+        agent.running = true;
+        agent.interrupted = false;
+        agent.finished = false;
+        agent.final_message = None;
+        agent.info_messages.clear();
+        if chat_file.is_some() {
+            if let Some(ref steps) = session.steps { agent.steps = steps.clone(); }
+        } else {
+            agent.steps.clear();
+        }
+        agent.thinking_content.clear();
+        agent.esperando_respuesta_usuario = false;
+        agent.respuesta_usuario = None;
+        agent.esperando_aprobacion_plan = false;
+        agent.plan_propuesto = None;
+        agent.pregunta_usuario = None;
+        agent.current_session_id = Some(session_id.clone());
             agent.plan_propuesto = None;
             agent.pregunta_usuario = None;
             agent.current_session_id = Some(session_id.clone());
