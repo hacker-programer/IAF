@@ -133,7 +133,6 @@ fn clean_old_chat_files(dir: &PathBuf, session_id: &str) {
         }
     }
 }
-}
 
 /// Migración recursiva: renombra archivos <uuid>.json a <title>-<uuid>.json
 /// dentro de un directorio dado. Retorna cantidad de archivos migrados.
