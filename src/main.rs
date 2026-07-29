@@ -90,13 +90,15 @@ async fn require_auth(
     let token = extract_bearer_token(headers)
         .ok_or_else(|| (StatusCode::UNAUTHORIZED, "Token Bearer requerido.".into()))?;
     state.session_store.validate_token(&token)
+        .ok_or_else(|| (StatusCode::UNAUTHORIZED, "Token inválido o expirado.".into()))
+}
+
 // ============================================================================
 // Chat Helpers (nueva estructura de almacenamiento)
 // ============================================================================
 
 // FIX #46: Usar la función unificada de utils.rs (80 chars + hash anti-colisión)
 use iaf::utils::sanitize_filename;
-
 fn get_chat_dir(state: &AppState, username: &str, is_admin_or_port80: bool) -> PathBuf {
     if is_admin_or_port80 || username == "admin_local" {
         state.base_workspace.join(".config").join("chats")
