@@ -1,0 +1,22 @@
+{
+  "name": "iaf-capacitor",
+  "version": "1.0.0",
+  "description": "IAF Capacitor App — Cliente Android que envuelve la UI web de IAF",
+  "scripts": {
+    "init": "npx cap init IAF com.iaf.app --web-dir=../public",
+    "add-android": "npx cap add android",
+    "sync": "npx cap sync",
+    "open": "npx cap open android",
+    "build": "npx cap copy && npx cap sync"
+  },
+  "dependencies": {
+    "@capacitor/core": "^6.0.0",
+    "@capacitor/cli": "^6.0.0",
+    "@capacitor/android": "^6.0.0",
+    "@capacitor/filesystem": "^6.0.0",
+    "@capacitor/app": "^6.0.0",
+    "@capacitor/browser": "^6.0.0",
+    "@capacitor/network": "^6.0.0",
+    "@capacitor/toast": "^6.0.0"
+  }
+}
