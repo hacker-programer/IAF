@@ -458,11 +458,12 @@ async fn client_check() -> impl IntoResponse {
 
 }
 
+}
+
 
 // ============================================================================
 // Endpoints Admin (gestión de usuarios)
 // ============================================================================
-
 async fn admin_list_users(
     State(state): State<AppState>,
     headers: HeaderMap,
