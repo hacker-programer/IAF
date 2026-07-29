@@ -1,9 +1,9 @@
-# DOCUMENTATION.md — Mapa Técnico del Proyecto IAF v2.9
+# DOCUMENTATION.md — Mapa Técnico del Proyecto IAF v3.0
 
 > **IAF (Intelligent Agent Framework)** — Framework de agente autónomo + plataforma de enseñanza en Rust + Axum.
 > Servidor HTTP doble puerto (80 auto-admin, 8080 auth), autenticación dual (password + Ed25519),
-> motor de estudio con perfilado de aprendizaje, sincronización de proyectos, cliente de ejecución remota,
-> y túnel Cloudflare para acceso remoto seguro (solo puerto 8080).
+> motor de estudio con perfilado de aprendizaje, sincronización de proyectos,
+> cliente Electron (desktop) + Capacitor (Android), túnel Cloudflare para acceso remoto seguro.
 
 ---
 
@@ -11,32 +11,103 @@
 
 | Archivo | Líneas | Rol |
 |---------|--------|-----|
-| `src/main.rs` | ~2239 | Servidor HTTP doble puerto, endpoints REST, CAPTCHA, legacy routes, migración, scripts, system prompts, ciclos, `pub const STUDY_SYSTEM_PROMPT` (L51), `port_80` flag (L2150-2190), `build_app()` (L2077) |
-| `src/agent.rs` | ~2418 | Bucle principal del agente, 26 herramientas, extract_text_from_docx(), soporte PDF/DOCX nativo, BUG-026: `if mode == "study"` carga prompt de estudio (L116-121) |
-| `src/auth.rs` | ~947 | Auth dual: contraseñas (argon2) + nonce Ed25519, permisos booleanos, WeeklySchedule, UserLimits |
-| `src/state.rs` | ~575 | AppState (con `port_80: bool`), ActiveAgentStatus (con info_messages), CicleState/CiclePhase, CaptchaRequest, ToolResultStore, SubAgentManager, ProcessRegistry |
-| `src/study.rs` | ~973 | Motor de estudio: UserLearningProfile, UserKnowledgeBase, StudyEngine, persistencia en .config/data/, `build_study_system_prompt()` (L515) |
+| `src/main.rs` | ~2000 | Servidor HTTP doble puerto, endpoints REST, CAPTCHA, migración de chats, `clean_old_chat_files()`, deduplicación, `sanitize_filename()`, `migrate_chats()` |
+| `src/agent.rs` | ~2418 | Bucle principal del agente, 26 herramientas, extract_text_from_docx(), soporte PDF/DOCX |
+| `src/auth.rs` | ~947 | Auth dual: contraseñas (argon2) + nonce Ed25519, permisos, WeeklySchedule, UserLimits |
+| `src/state.rs` | ~575 | AppState, ActiveAgentStatus, CicleState/CiclePhase, CaptchaRequest, ToolResultStore, SubAgentManager |
+| `src/study.rs` | ~973 | Motor de estudio: UserLearningProfile, UserKnowledgeBase, StudyEngine, `build_study_system_prompt()` |
 | `src/sync.rs` | ~280 | Sincronización de proyectos (push/pull/conflictos) |
-| `src/client_protocol.rs` | ~180 | Protocolo cliente-servidor para ejecución remota |
-| `src/validator.rs` | ~508 | Validación post-escritura (líneas duplicadas, delimitadores, errores comunes Rust) |
-| `src/scraper.rs` | ~170 | Búsqueda web DuckDuckGo Lite (Google bloquea scrapers) |
+| `src/client_protocol.rs` | ~180 | Protocolo cliente-servidor (ClientAction, ClientRequest, ClientResponse, ConnectedClient) |
+| `src/validator.rs` | ~508 | Validación post-escritura (líneas duplicadas, delimitadores, errores Rust) |
+| `src/scraper.rs` | ~170 | Búsqueda web DuckDuckGo Lite |
 | `src/sub_agent.rs` | ~520 | Sub-agentes paralelos (máx 8, permisos por Patrón Composite) |
 | `src/desktop.rs` | ~165 | Control de mouse/teclado (rdev) |
-| `src/lib.rs` | ~12 | Librería pública: expone utils, state, auth, study, desktop, sync + `pub const STUDY_SYSTEM_PROMPT` |
-| `src/utils.rs` | ~72 | sanitize_filename() — sanitización de nombres de archivo |
-| `scripts/generate_keys.ps1` | ~105 | Genera par de claves Ed25519 via API y las guarda como .pem |
-| `scripts/sign_nonce.ps1` | ~110 | Firma un nonce con clave privada para autenticación admin |
-| `scripts/cloudflare_tunnel.ps1` | ~180 | [v2.9] Configura y ejecuta túnel Cloudflare para puerto 8080 (modo quick + permanent) |
-| `scripts/cloudflared_config.yml` | ~45 | [v2.9] Plantilla YAML de configuración ingress para cloudflared |
-| `public/index.html` | ~298 | Frontend web con login dual, admin panel, gestión de usuarios, perfil de estudio con IDs correctos |
-| `public/app.js` | ~1066 | Lógica del frontend: auth, admin, perfil de estudio, mensajes en tiempo real, BUG-027: Ctrl+Enter para enviar respuesta |
-| `public/style.css` | ~893 | Estilos completos: .info-msg, .final-msg, .input-container, toasts, modales, consola |
-| `client/Cargo.toml` | 15 | Cliente binario independiente |
-| `client/src/main.rs` | ~350 | Ejecutor local (files, PowerShell, git, cargo) |
-| `tests/exhaustive_tests.rs` | ~1835 | Tests exhaustivos: verificación código fuente (include_str!), regresión, integración, estrés |
-| `tests/integration_tests.rs` | ~1197 | Tests reales: StudyEngine, UserStore, sanitize_filename, ActiveAgentStatus, DOCX real |
-| `tests/frontend_regression_tests.js` | ~230 | Tests de regresión del frontend (Node.js) |
-| `prompts/study_system_prompt.txt` | ~80 | System prompt para modo estudio (4 reglas de oro, anti-resúmenes, transparencia) |
+| `src/lib.rs` | ~12 | Librería pública + `pub const STUDY_SYSTEM_PROMPT` |
+| `src/utils.rs` | ~72 | sanitize_filename() |
+| `electron/main.js` | ~350 | **[v3.0]** Cliente Electron: BrowserWindow + protocolo cliente (connect→poll→execute→respond), ejecuta PowerShell/git/cargo/archivos con Node.js |
+| `electron/preload.js` | ~30 | **[v3.0]** Puente IPC contextBridge: executeLocal, setCredentials, getStatus |
+| `electron/package.json` | ~30 | **[v3.0]** Dependencias: electron, node-fetch, electron-builder |
+| `electron/README.md` | ~100 | **[v3.0]** Documentación del cliente Electron (arquitectura, build, uso) |
+| `capacitor/capacitor.config.ts` | ~75 | **[v3.0]** Config Capacitor Android: webDir=../public, plugins Filesystem/Browser/Network |
+| `capacitor/package.json` | ~20 | **[v3.0]** Dependencias: @capacitor/core, @capacitor/android, @capacitor/filesystem |
+| `capacitor/setup_capacitor.ps1` | ~90 | **[v3.0]** Script de inicialización de plataforma Android |
+| `scripts/generate_keys.ps1` | ~105 | Genera par de claves Ed25519 |
+| `scripts/sign_nonce.ps1` | ~110 | Firma nonce con clave privada |
+| `scripts/cloudflare_tunnel.ps1` | ~180 | Túnel Cloudflare (quick + permanent) |
+| `public/index.html` | ~300 | Frontend web con hamburger menu mobile, login dual, admin panel, perfil de estudio |
+| `public/app.js` | ~1165 | Lógica frontend: deduplicación client-side, initMobileNav(), username labels para admin, Ctrl+Enter |
+| `public/style.css` | ~900 | Estilos + media queries responsive (tablets ≤1024px, móviles ≤768px, small ≤400px, landscape) |
+| `tests/exhaustive_tests.rs` | ~1835 | Tests exhaustivos |
+| `tests/integration_tests.rs` | ~1197 | Tests de integración |
+| `tests/frontend_regression_tests.js` | ~230 | Tests de regresión del frontend |
+
+### ❌ Eliminado en v3.0
+| Archivo | Motivo |
+|---------|--------|
+| `client/Cargo.toml` | Reemplazado por `electron/` |
+| `client/src/main.rs` | Reemplazado por `electron/main.js` |
+| `client/target/` | Build artifacts del cliente Rust |
+
+---
+
+## 🔧 Cambios v3.0 — Electron + Capacitor + Chat Dedup + Android UX
+
+### 🖥️ Cliente Electron (reemplaza al cliente Rust)
+
+```
+┌──────────────────────────────────────────────────┐
+│              IAF Electron Client                  │
+│                                                   │
+│  ┌─────────────────────┐  ┌────────────────────┐ │
+│  │   Renderer (UI)     │  │   Main Process     │ │
+│  │   Carga UI desde    │  │   • connect/poll   │ │
+│  │   servidor IAF      │  │   • execute local  │ │
+│  │   (HTTP/HTTPS)      │  │   • heartbeat      │ │
+│  └─────────────────────┘  └────────────────────┘ │
+│               ↕ IPC (contextBridge)               │
+└──────────────────────────────────────────────────┘
+```
+
+- **`electron/main.js`**: Implementa el mismo protocolo que el cliente Rust (connect→poll→execute→respond) usando Node.js built-ins (`fs`, `child_process`, `crypto`)
+- **`electron/preload.js`**: Puente seguro entre renderer (UI web) y main process vía `contextBridge`
+- El renderer NO tiene acceso directo a Node.js — solo 3 funciones expuestas: `executeLocal`, `setCredentials`, `getStatus`
+- Comandos soportados: PowerShell, git, cargo, archivos (read/write/exists/metadata), directorios, búsqueda de código
+
+### 📱 Capacitor Android
+
+- **`capacitor/capacitor.config.ts`**: Configuración para envolver `public/` en una WebView Android
+- **Plugins**: `@capacitor/filesystem` (operaciones básicas de archivos), `@capacitor/network` (conectividad), `@capacitor/browser` (enlaces externos)
+- **Ejecución de comandos en Android**: 
+  - Usuario admin → el servidor ejecuta directamente (regla: "el servidor NUNCA ejecuta comandos, EXCEPTO SI ES ADMIN")
+  - Usuario normal → el servidor reenvía las solicitudes al cliente Electron del usuario en su PC
+  - Operaciones básicas de archivos → plugin `@capacitor/filesystem` ejecuta localmente en Android
+
+### 🐛 Chat Deduplication (BUG-028)
+
+**Síntoma**: Dos archivos `.json` con mismo UUID pero diferente título aparecían como conversaciones duplicadas.
+
+**Causa**: Al cambiar el título de una conversación, se creaba un nuevo archivo sin eliminar el viejo.
+
+**Fixes**:
+- **Backend** (`clean_old_chat_files()`): Elimina archivos viejos con el mismo UUID antes de guardar
+- **Backend** (`get_chats`): `HashSet<String>` para deduplicar por `id`, salta `.bak`
+- **Frontend** (`loadChatHistory`): Deduplicación client-side como defensa en profundidad
+- **Frontend** (`selectChatSession`): Corregida línea repetida `chatArea.innerHTML = ''`
+
+### 👑 Admin ve username en chats
+
+- **`get_chats`**: Respuesta incluye campo `username` con el dueño de cada chat
+- **`loadChatHistory`**: Muestra `(@username)` para admins viendo chats de otros usuarios
+
+### 📱 Android / Mobile Responsive
+
+- **CSS media queries**:
+  - ≤1024px: sidebar 320px, console 280px
+  - ≤768px: sidebar → drawer deslizable, console → bottom sheet, botones ≥44px touch-friendly, inputs 16px para evitar zoom iOS
+  - ≤400px: ajustes adicionales de espaciado
+  - ≤500px height (landscape): layout horizontal compacto
+- **Hamburger menu**: botón ☰ con toggle, overlay semitransparente, cierre al hacer click fuera
+- **JS** (`initMobileNav()`): Manejo completo del drawer en mobile
 
 ---
 
@@ -57,69 +128,30 @@
                     └──────────────────────────────────────┘  (https://...)
 ```
 
-### Puntos clave de seguridad
-- **Puerto 80**: `port_80 = true` → `require_admin()` y `require_auth()` retornan `Ok("admin_local")` sin verificar token. Solo accesible desde LAN.
-- **Puerto 8080**: `port_80 = false` → siempre verifica token Bearer. Bind a `127.0.0.1` (localhost). El túnel cloudflared se conecta localmente.
-- **Túnel**: El ingress YAML solo expone `127.0.0.1:8080`. El puerto 80 NO aparece en las reglas. Cualquier otra request recibe HTTP 404.
-- **Admin remoto**: Para ser admin por el túnel, se necesita autenticación Ed25519 (nonce firmado con clave privada). No hay forma de saltarse el login.
+---
 
-### Nuevos scripts
-| Script | Propósito |
-|--------|-----------|
-| `scripts/cloudflare_tunnel.ps1` | Modo quick (trycloudflare.com) y modo permanent (dominio propio) |
-| `scripts/cloudflared_config.yml` | Plantilla YAML con ingress rules (solo 8080, 404 para todo lo demás) |
+## 🔀 Arquitectura Completa v3.0
 
-### Uso rápido
-```powershell
-# Túnel efímero para pruebas
-.\scripts\cloudflare_tunnel.ps1 -Mode quick
-
-# Túnel permanente con dominio propio
-.\scripts\cloudflare_tunnel.ps1 -Mode permanent -Domain "iaf.midominio.com"
-
-# Ejecutar túnel permanente
-cloudflared tunnel run iaf-tunnel
-
-# Instalar como servicio de Windows
-cloudflared service install
+```
+                          ┌──────────────────────────┐
+                          │     IAF Server (Rust)     │
+                          │   Puerto 80 + Puerto 8080 │
+                          └─────┬──────────┬─────────┘
+                                │          │
+              ┌─────────────────┘          └──────────────┐
+              ▼                                           ▼
+   ┌─────────────────────┐                   ┌─────────────────────┐
+   │  Electron (PC)      │                   │  Capacitor (Android)│
+   │  • UI web embebida  │                   │  • WebView nativo   │
+   │  • Ejecuta comandos │                   │  • UI web empaquetada│
+   │    - PowerShell     │                   │  • Filesystem plugin │
+   │    - Git            │                   │  • Comandos vía      │
+   │    - Cargo          │                   │    servidor (admin)  │
+   │  • Poll + Heartbeat │                   │    o PC cliente      │
+   └─────────────────────┘                   └─────────────────────┘
 ```
 
-### Documentación actualizada
-- `DOCUMENTACION_CLIENTE.md`: Nueva sección "Acceso Remoto con Cloudflare Tunnel" + sección de seguridad de puertos
-- `DOCUMENTACION_INTERNA.md`: Nueva sección "Arquitectura de Doble Puerto" + "Cloudflare Tunnel" con diagramas y flujo de conexión
-
----
-
-## 🔧 Cambios v2.8 (BUG-026 + BUG-027)
-
-### BUG-026: System prompt de estudio no se cargaba — el agente usaba prompt de programación
-- **`run_agent_loop()`** (agent.rs L55-135): Recibía `mode: &str` pero NUNCA lo usaba. Siempre cargaba `global_prompt` (modo programación).
-- **Fix**: Bloque `if mode == "study"` en L116-121 que SOBREESCRIBE completamente `system_prompt` con `state.study_engine.build_study_system_prompt(username, crate::STUDY_SYSTEM_PROMPT)`.
-- **`STUDY_SYSTEM_PROMPT`** (main.rs L51): Cambiado de `const` a `pub const` para que `agent.rs` pueda acceder vía `crate::`.
-- **`lib.rs`**: Agregado `pub const STUDY_SYSTEM_PROMPT` también en la librería.
-- **Flujo completo**: Usuario selecciona modo estudio → frontend envía `mode: "study"` → `chat_endpoint` pasa `mode_bg = "study"` → `run_agent_loop` detecta `mode == "study"` → carga prompt pedagógico + perfil del estudiante.
-
-### BUG-027: Enter en respuesta a pregunta del agente no permitía saltos de línea
-- **`#agentQuestionResponse` keydown** (app.js L924-929): Antes enviaba con cualquier Enter. Ahora requiere Ctrl+Enter (o Cmd+Enter en Mac) para enviar; Enter simple inserta nueva línea.
-- **Código**: `if (e.key === 'Enter' && (e.ctrlKey || e.metaKey))` con `e.preventDefault()`.
-
----
-
-## 🔧 Cambios v2.7 (Perfil de Estudio + Mensajes en Tiempo Real)
-
-### BUG-021: Mensajes informativos en el chat (tiempo real)
-- **`addMessage(role, text, extraClass)`** (app.js ~951): Ahora acepta tercer parámetro `extraClass` para inyectar clase CSS adicional.
-- **`startAgentMonitoring()`** (app.js ~785): Los `info_messages` del backend se muestran con `addMessage('agent', 'ℹ️ ' + msg, 'info-msg')`, apareciendo en el chat con estilo azul animado. El mensaje final se muestra con `addMessage('agent', '✅ ' + msg, 'final-msg')`.
-- **Polling reducido**: De 1500ms a 1000ms para respuesta en tiempo real.
-- **CSS `.info-msg`** (style.css ~377): Fondo azul semitransparente, animación `infoMsgFadeIn`.
-- **CSS `.final-msg`** (style.css ~396): Fondo verde semitransparente, animación `finalMsgPulse`.
-
-### BUG-022: Perfil de estudio no cargaba en el frontend
-- **`loadStudyProfile()`** (app.js ~647): Ahora usa IDs correctos del HTML.
-- **`switchMode('study')`** (app.js ~279): Muestra `#studyProfileSection` y llama a `loadStudyProfile()`.
-
-### BUG-023: CSS roto — regla `.input-container` huérfana
-- Se eliminó un comentario JavaScript `//` que quedó en medio del CSS.
+**Regla de oro**: El servidor NUNCA ejecuta comandos para usuarios no-admin. Solo admin (puerto 80 o nonce verificado) ejecuta en el servidor. Para usuarios normales, el cliente Electron en su PC ejecuta los comandos.
 
 ---
 
@@ -129,23 +161,21 @@ cloudflared service install
 pub struct ActiveAgentStatus {
     pub running: bool,
     pub interrupted: bool,
-    pub finished: bool,                    // true cuando llama a finalizar_tarea
-    pub final_message: Option<String>,     // resumen final del agente
-    pub esperando_respuesta_usuario: bool, // pregunta pendiente
+    pub finished: bool,
+    pub final_message: Option<String>,
+    pub esperando_respuesta_usuario: bool,
     pub pregunta_usuario: Option<String>,
     pub respuesta_usuario: Option<String>,
-    pub esperando_aprobacion_plan: bool,   // plan pendiente
+    pub esperando_aprobacion_plan: bool,
     pub plan_propuesto: Option<String>,
-    pub info_messages: Vec<String>,        // [v2.5] notificaciones informativas en tiempo real (máx 100)
+    pub info_messages: Vec<String>,
     pub thinking_content: Vec<String>,
-    pub steps: Vec<AuditStep>,             // pasos de auditoría
+    pub steps: Vec<AuditStep>,
     pub current_session_id: Option<String>,
 }
 ```
 
----
-
-## 🔐 Autenticación Dual y Permisos
+## 🔐 Autenticación Dual
 
 | Método | Usuarios | Endpoint |
 |--------|----------|----------|
@@ -154,93 +184,38 @@ pub struct ActiveAgentStatus {
 
 ---
 
-## 🔀 Arquitectura de Doble Puerto (main.rs ~L2137-L2190)
-
-```rust
-// Puerto 80: admin local sin auth
-let mut state_80 = state.clone();
-state_80.port_80 = true;   // ← require_admin() retorna "admin_local" sin verificar
-
-// Puerto 8080: siempre requiere token Bearer
-let state_8080 = state;     // port_80 = false (default)
-
-let addr_80 = SocketAddr::from(([0, 0, 0, 0], 80));       // accesible desde LAN
-let addr_8080 = SocketAddr::from(([127, 0, 0, 1], 8080));  // solo localhost
-```
-
-**`require_admin()` (L67-L79)**: Si `state.port_80` es true, retorna `Ok("admin_local")` sin verificar. Si es false, verifica token Bearer + `is_admin`.
-
-**`require_auth()` (L81-L89)**: Si `state.port_80` es true, retorna `Ok("admin_local")`. Si es false, verifica token Bearer.
-
----
-
 ## 🌐 Endpoints REST
 
 ### Agente y Chat
 | Método | Ruta | Handler | Descripción |
 |--------|------|---------|-------------|
-| `POST` | `/api/chat` | `chat_endpoint` | Enviar mensaje al agente. Recibe `mode: "study"|"programming"`. Spawnea agente en background. |
-| `GET` | `/api/agent/status` | `get_agent_status` | Estado del agente (incluye info_messages, finished, final_message) |
+| `POST` | `/api/chat` | `chat_endpoint` | Enviar mensaje al agente |
+| `GET` | `/api/agent/status` | `get_agent_status` | Estado del agente |
 | `GET` | `/api/agent/steps` | `agent_steps` | Pasos de auditoría |
-| `GET` | `/api/agent/summary` | `agent_summary` | Resumen textual del progreso |
-| `POST` | `/api/agent/responder` | `agent_responder` | Responder a pregunta del agente |
+| `POST` | `/api/agent/responder` | `agent_responder` | Responder a pregunta |
 | `POST` | `/api/agent/aprobar_plan` | `agent_approve_plan` | Aprobar/rechazar plan |
 | `POST` | `/api/agent/interrupt` | `interrupt_agent` | Interrumpir agente |
-| `GET` | `/api/chats` | `get_chats` | Listar historial de chats |
+| `GET` | `/api/chats` | `get_chats` | Listar chats (admin ve todos con username) |
 | `GET` | `/api/chats/:id` | `get_chat_session` | Obtener chat por ID |
-| `POST` | `/api/reportar-fallo` | `reportar_fallo` | Reportar bug/fallo al sistema |
 
-### Estudio
+### Cliente (Electron / Capacitor)
 | Método | Ruta | Handler | Descripción |
 |--------|------|---------|-------------|
-| `GET` | `/api/study/profile` | `study_get_profile` | Obtener perfil (UserLearningProfile) + knowledge + engagement |
-| `POST` | `/api/study/profile` | `study_save_profile` | Guardar campos del perfil (age, favorite_games, hobbies, neurological_conditions) |
-| `GET` | `/api/study/knowledge` | `study_get_knowledge` | Obtener UserKnowledgeBase |
-| `POST` | `/api/study/projects` | `study_create_project` | Crear proyecto de estudio |
-| `GET` | `/api/study/projects` | `study_get_projects` | Listar proyectos de estudio del usuario |
-| `POST` | `/api/study/projects/:id/members` | `study_add_member` | Agregar miembro a proyecto |
-| `POST` | `/api/study/build-prompt` | `study_build_prompt` | Construir system prompt personalizado con perfil |
+| `POST` | `/api/client/connect` | `client_connect` | Registrar cliente |
+| `POST` | `/api/client/poll` | `client_poll` | Polling de solicitudes |
+| `POST` | `/api/client/response` | `client_response` | Enviar resultado |
+| `POST` | `/api/client/heartbeat` | `client_heartbeat` | Heartbeat (30s) |
+| `GET` | `/api/client/check` | `client_check` | Verificar si hay cliente |
 
 ---
 
-## ☁️ Cloudflare Tunnel — Flujo de Conexión
+## 📦 Dependencias Clave
 
-```
-Usuario en internet (navegador)
-  │
-  ▼
-https://iaf.midominio.com  ⟵ Cloudflare proxy + SSL automático + DDoS protection
-  │
-  ▼
-cloudflared (túnel encriptado TLS de extremo a extremo)
-  │
-  ▼
-http://127.0.0.1:8080  ⟵ IAF Server (puerto 8080, port_80 = false)
-  │
-  ▼
-require_auth() → Token Bearer → Login (password o Ed25519)
-```
-
-### Configuración ingress (cloudflared_config.yml)
-```yaml
-tunnel: iaf-tunnel
-credentials-file: C:\Users\...\.cloudflared\iaf-tunnel.json
-ingress:
-  - hostname: iaf.midominio.com
-    service: http://127.0.0.1:8080    # SOLO puerto 8080
-  - service: http_status:404           # Rechaza todo lo demás
-```
-
----
-
-## 📦 Dependencias (Cargo.toml)
-
-| Dependencia | Versión | Uso | Agregada en |
-|-------------|---------|-----|-------------|
-| `pdf-extract` | 0.7 | Extraer texto de PDFs | v2.5 (BUG-001) |
-| `zip` | 0.6 | Leer DOCX (formato ZIP) | v2.5 (BUG-001) |
-| `quick-xml` | 0.31 | Parsear XML dentro de DOCX | v2.5 (BUG-001) |
-| `tokio` | 1 (full) | Runtime async | v1.0 |
-| `axum` | 0.7 | Framework HTTP | v1.0 |
-| `ed25519-dalek` | 2 | Firmas Ed25519 | v1.0 |
-| `argon2` | 0.5 | Hashing de contraseñas | v1.0 |
+| Dependencia | Uso |
+|-------------|-----|
+| `axum` 0.7 | Framework HTTP |
+| `ed25519-dalek` 2 | Firmas Ed25519 |
+| `argon2` 0.5 | Hashing de contraseñas |
+| `electron` 28 | Cliente desktop (Node.js) |
+| `@capacitor/core` 6 | App Android híbrida |
+| `@capacitor/filesystem` 6 | Operaciones de archivos en Android |
