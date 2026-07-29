@@ -27,43 +27,24 @@ const config: CapacitorConfig = {
   appName: 'IAF',
   webDir: '../public',       // La UI web existente
 
-  // Desarrollo: cargar desde el servidor local
-  // Producción: empaquetar los archivos estáticos
   server: {
-    // En desarrollo, permite cargar desde el servidor IAF local
-    // cleartext: true permite HTTP (necesario para desarrollo local)
+    // FIX #33: En producción usar HTTPS. cleartext solo en desarrollo local.
     androidScheme: 'https',
-    cleartext: true,
-    // Descomentar para desarrollo contra servidor local:
-    // url: 'http://192.168.1.X:8080',
-    // hostname: 'iaf-local',
+    // cleartext: true se deshabilita en producción. Solo activar para
+    // desarrollo contra servidor local sin HTTPS.
+    // cleartext: true,
   },
 
   android: {
-    allowMixedContent: true,           // Permitir HTTP en WebView
-    captureInput: true,                // Capturar input del teclado
-    webContentsDebuggingEnabled: true, // Debugging en desarrollo
-
-    // Splash screen
-    // splashFullScreen: true,
-    // splashImmersive: true,
+    allowMixedContent: false,          // FIX #33: Bloquear HTTP mixto en producción
+    captureInput: true,
+    webContentsDebuggingEnabled: false, // Deshabilitar en producción
   },
 
   plugins: {
-    // Plugin de sistema de archivos para operaciones básicas en Android
-    Filesystem: {
-      // Permite leer/escribir en el almacenamiento interno de la app
-    },
-
-    // Plugin de navegador para abrir enlaces externos
-    Browser: {
-      // Opens external URLs in Chrome Custom Tabs
-    },
-
-    // Plugin de red para detectar conectividad
-    Network: {
-      // Monitorea cambios de conectividad
-    },
+    Filesystem: {},
+    Browser: {},
+    Network: {},
   },
 };
 
