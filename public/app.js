@@ -1130,22 +1130,23 @@ function showInfoToast(msg) {
         const t = document.createElement('div');
         t.id = 'infoToast';
         t.className = 'info-toast';
-        t.textContent = msg;
-        document.body.appendChild(t);
-        setTimeout(() => { t.classList.add('show'); }, 10);
-        setTimeout(() => { t.classList.remove('show'); setTimeout(() => { t.remove(); }, 300); }, 3000);
-        return;
+function showInfoToast(msg) {
+    // FIX #19: Reusar toast existente en lugar de crear múltiples superpuestos
+    var toast = document.getElementById('infoToast');
+    if (!toast) {
+        toast = document.createElement('div');
+        toast.id = 'infoToast';
+        toast.className = 'info-toast';
+        document.body.appendChild(toast);
     }
     toast.textContent = msg;
     toast.classList.add('show');
-    setTimeout(() => { toast.classList.remove('show'); }, 3000);
+    // Limpiar timeout anterior si existe
+    if (toast._timeout) clearTimeout(toast._timeout);
+    toast._timeout = setTimeout(function() {
+        toast.classList.remove('show');
+    }, 3000);
 }
-
-// ============================================================================
-// CONSOLE DE AUDITORÍA
-// ============================================================================
-
-function renderConsoleSteps(steps) {
     const consoleArea = document.getElementById('consoleArea');
     if (!consoleArea) return;
     if (!steps || steps.length === 0) {
