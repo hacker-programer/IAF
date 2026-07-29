@@ -374,15 +374,12 @@ document.getElementById('adminPromptsBtn').onclick = function() {
     if (s) { s.scrollIntoView({ behavior: 'smooth' }); }
     else { showInfoToast('⚠️ Sección de prompts no visible.'); }
 };
-    var modal = document.getElementById('adminUsersModal');
-    modal.classList.remove('hidden');
-    await refreshUsersTable();
+
 async function openAdminUsers() {
     var modal = document.getElementById('adminUsersModal');
     modal.classList.remove('hidden');
     await refreshUsersTable();
 }
-    var tbody = document.getElementById('usersTableBody');
     try {
         var res2 = await apiCall('/api/admin/users');
         if (res2.status !== 'ok') return;
