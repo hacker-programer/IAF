@@ -1,4 +1,4 @@
-# 🚀 IAF — Intelligent Agent Framework — Guía del Usuario
+# 🚀 IAF — Intelligent Agent Framework — Guía del Usuario (v3.1)
 
 ## ¿Qué es IAF?
 
@@ -23,13 +23,14 @@ comandos y sube cambios a GitHub, todo de forma autónoma.
 
 ---
 
-## 📱 Clientes Disponibles
+## 📱 ¿Cómo usar IAF en Windows y Android?
 
-### 🖥️ Cliente Electron (Windows/Linux/Mac) — RECOMENDADO
+### 🖥️ En Windows (RECOMENDADO: Cliente Electron)
 
-El cliente Electron es una app de escritorio nativa que:
+El cliente Electron es la mejor forma de usar IAF en Windows. Es una app de escritorio que:
+
 - **No necesita navegador** — todo está embebido en la app
-- **Ejecuta comandos localmente** (PowerShell, git, cargo) igual que el viejo cliente Rust
+- **Ejecuta comandos localmente** (PowerShell, git, cargo)
 - Se conecta automáticamente al servidor IAF
 - Guarda tus credenciales de forma segura
 
@@ -42,19 +43,26 @@ npm install
 npm start
 ```
 
-### 📱 Cliente Android (Capacitor)
+**Alternativa: Navegador** — Si sos admin, podés usar `http://localhost:80` (sin login). Si no, abrí `http://localhost:8080` e iniciá sesión. Pero **necesitás el cliente Electron corriendo** para que se ejecuten comandos.
 
-La app Android te permite:
-- Chatear con el agente desde tu celular
-- Ver el historial de conversaciones
-- Para ejecutar comandos (PowerShell, git, cargo), necesita que el cliente Electron esté corriendo en tu PC
-- Si sos admin, el servidor ejecuta comandos directamente
+### 📱 En Android
 
-```powershell
-# Setup inicial
-cd capacitor
-.\setup_capacitor.ps1
-```
+La app Android (vía Capacitor) te permite usar IAF desde tu celular o tablet:
+
+1. **Instalá la app**: Ejecutá `.\capacitor\setup_capacitor.ps1` y compilá el APK
+2. **Conectate al servidor**: Ingresá la IP de tu PC y el puerto 8080 (ej: `http://192.168.1.50:8080`)
+3. **Iniciá sesión** con tu usuario y contraseña
+
+**¿Android ejecuta comandos?**
+
+✅ **SÍ** — La app Android incluye el plugin **ShellExecutor** que permite ejecutar comandos shell nativos como:
+- `ls`, `cat`, `grep`, `find`, `curl`, `mkdir`, `rm`, `cp`, `mv`, `echo`, `ps`, `df`, `du`, `wc`, `sed`, `awk`, `tar`, `gzip`, `date`, `whoami`, `uname`...
+
+❌ **NO incluye** PowerShell, git, cargo ni rustc (son herramientas de desarrollo). Para esos comandos necesitás:
+- Un cliente Electron corriendo en tu PC Windows
+- O instalar [Termux](https://termux.dev/) en Android y agregar `pkg install rust git`
+
+> **Resumen**: Con solo la app Android podés hacer tareas básicas (leer/escribir archivos, comandos shell, analizar datos con grep/awk/sed). Para tareas de desarrollo pesado (compilar Rust, git push), necesitás un cliente Electron en PC.
 
 ---
 
@@ -72,14 +80,17 @@ IAF usa **dos puertos** con niveles de seguridad distintos:
 
 > ⚠️ **Importante**: Nunca expongas el puerto 80 a internet. Cualquiera que acceda a él tendrá control total del sistema sin necesidad de contraseña.
 
-### Regla de seguridad: ¿quién ejecuta comandos?
+### ¿Quién ejecuta comandos? (v3.1)
 
-| Usuario | Desde navegador/Android | Desde Electron |
-|---------|------------------------|----------------|
-| **Admin** | El servidor ejecuta | Electron ejecuta localmente |
-| **Normal** | ❌ Necesita cliente Electron en PC | Electron ejecuta localmente |
+| Usuario | Desde Electron (PC) | Desde Android | Desde Navegador |
+|---------|---------------------|---------------|-----------------|
+| **Admin** | Electron ejecuta localmente | ShellExecutor ejecuta shell nativo + servidor ejecuta para comandos pesados | Servidor ejecuta (puerto 80) |
+| **Normal** | Electron ejecuta localmente | ShellExecutor ejecuta shell nativo (ls, cat, grep...) | ❌ Necesita cliente Electron o Android |
 
-**El servidor NUNCA ejecuta comandos para usuarios no-admin.** Si sos usuario normal y querés usar IAF desde el navegador o Android, necesitás tener el cliente Electron corriendo en tu PC.
+**Regla de oro**: El servidor NUNCA ejecuta comandos para usuarios no-admin. Para usuarios normales:
+- **Windows**: cliente Electron ejecuta todo localmente (PowerShell, git, cargo)
+- **Android**: ShellExecutor nativo para comandos shell básicos. Para git/cargo → Electron en PC
+- **Navegador**: Solo funciona si hay un cliente Electron conectado
 
 ---
 
@@ -148,6 +159,7 @@ Al abrir `http://localhost:8080` verás:
 - **Panel izquierdo**: Lista de proyectos y chats anteriores.
 - **Panel central**: El chat donde hablás con el asistente.
 - **Panel derecho**: Consola de monitoreo (muestra qué está haciendo).
+- **Barra superior**: Estado del cliente (Electron conectado, Android, sin cliente).
 
 En **celulares/tablets**, el panel izquierdo se oculta y se abre con el botón ☰.
 
@@ -240,6 +252,13 @@ Revisá que el archivo `.env` tenga las claves correctas y reiniciá el servidor
 2. Revisá que hayas hecho login en la UI del Electron primero
 3. Las credenciales se guardan en `%APPDATA%/iaf-electron/config.json`
 
+### "Cliente no detectado" (SOLUCIONADO en v3.1)
+
+Este mensaje era un bug de la versión anterior que buscaba un cliente que ya no existía. En v3.1:
+- Si usás **Electron**, el estado se detecta automáticamente y muestra ✅ "Electron conectado"
+- Si usás **Android**, muestra 📱 "App Android — shell disponible"
+- Si usás el **navegador**, verifica si hay clientes conectados y te dice cómo instalar Electron
+
 ### Conversaciones duplicadas en el historial
 
 Solucionado en v3.0. Si ves duplicados de antes, se limpiarán automáticamente al abrir la conversación.
@@ -267,11 +286,23 @@ Si tu computadora es más potente, IAF se adapta automáticamente para aprovecha
 
 Sí, de dos formas:
 1. **Navegador**: Si configuraste el túnel Cloudflare, accedé desde cualquier navegador
-2. **App Android**: Con Capacitor, tenés una app nativa (requiere cliente Electron en PC para comandos)
+2. **App Android**: Con Capacitor, tenés una app nativa con comandos shell (ls, cat, grep...) incluidos
+
+### ¿Android puede ejecutar comandos?
+
+✅ **Sí, desde v3.1**. La app Android incluye el plugin ShellExecutor que ejecuta comandos shell nativos (ls, cat, grep, find, curl, mkdir, rm, etc.). Para comandos de desarrollo (git, cargo, rustc) necesitás instalar Termux o tener un cliente Electron en PC.
 
 ### ¿Necesito el cliente Electron?
 
-Si solo usás IAF desde la misma PC donde corre el servidor y sos admin (puerto 80), no. En cualquier otro caso, **sí** — el cliente Electron es quien ejecuta PowerShell, git y cargo en tu PC.
+Depende de cómo uses IAF:
+
+| Si usás... | ¿Necesitás Electron? |
+|------------|---------------------|
+| Windows, como admin (puerto 80) | No — el servidor ejecuta todo |
+| Windows, como usuario normal | **Sí** — Electron ejecuta PowerShell, git, cargo |
+| Android, tareas básicas | No — ShellExecutor cubre ls, cat, grep, etc. |
+| Android, desarrollo Rust | **Sí** — Electron en PC, o instalá Termux |
+| Navegador web, como usuario normal | **Sí** — Electron debe estar corriendo en tu PC |
 
 ---
 
