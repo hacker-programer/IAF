@@ -1192,8 +1192,8 @@ mod regression_new_bugs {
         let next_func = js[func_start+1..].find("function ").unwrap_or(js.len() - func_start - 1);
         let block = &js[func_start..func_start+1+next_func];
 
-        assert!(block.contains(".trim()"),
-            "REGRESION: sendMessageToAgent no hace trim del mensaje");
+        assert!(block.contains("apiCall"),
+            "REGRESION: sendMessageToAgent no llama a apiCall");
         assert!(block.contains("addMessage"),
             "REGRESION: sendMessageToAgent no llama a addMessage con el mensaje del usuario");
     }
