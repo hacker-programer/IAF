@@ -1,0 +1,13 @@
+    Checking iaf v0.1.0 (C:\Users\Fa\Desktop\IAF)
+error: unexpected closing delimiter: `}`
+   --> src\main.rs:428:1
+    |
+417 | async fn sign_nonce(Json(payload): Json<SignRequest>) -> impl IntoResponse {
+    |                                                                            - this opening brace...
+...
+427 | }
+    | - ...matches this closing brace
+428 | }
+    | ^ unexpected closing delimiter
+
+error: could not compile `iaf` (bin "iaf") due to 1 previous error

@@ -1,0 +1,11 @@
+﻿    Checking iaf v0.1.0 (C:\Users\Fa\Desktop\IAF)
+error: mismatched closing delimiter: `)`
+   --> src\main.rs:500:51
+    |
+500 |     } else if let Some(ref pw) = payload.password {
+    |                                                   ^ unclosed delimiter
+...
+505 |         )
+    |         ^ mismatched closing delimiter
+
+error: could not compile `iaf` (bin "iaf") due to 1 previous error

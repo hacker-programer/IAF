@@ -1,0 +1,16 @@
+    Checking iaf v0.1.0 (C:\Users\Fa\Desktop\IAF)
+error: no rules expected `"messages"`
+   --> src\agent.rs:608:21
+    |
+607 |                     "model": "deepseek-chat" // FIX #26: correct model name,
+    |                                             - help: missing comma here
+608 |                     "messages": messages,
+    |                     ^^^^^^^^^^ no rules expected this token in macro call
+    |
+note: while trying to match `,`
+   --> C:\Users\Fa\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde_json-1.0.150\src\macros.rs:302:14
+    |
+302 |     ($e:expr , $($tt:tt)*) => {};
+    |              ^
+
+error: could not compile `iaf` (bin "iaf") due to 1 previous error

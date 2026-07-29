@@ -1,0 +1,14 @@
+    Checking iaf v0.1.0 (C:\Users\Fa\Desktop\IAF)
+error: unexpected closing delimiter: `}`
+   --> src\sub_agent.rs:143:9
+    |
+118 | pub fn is_path_allowed(file_path: &str, allowed_paths: &[String]) -> bool {
+    |                                                                           - this opening brace...
+...
+141 | }
+    | - ...matches this closing brace
+142 |             return true;
+143 |         }
+    |         ^ unexpected closing delimiter
+
+error: could not compile `iaf` (bin "iaf") due to 1 previous error

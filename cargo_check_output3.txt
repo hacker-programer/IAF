@@ -1,0 +1,8 @@
+﻿cargo :     Blocking waiting for file lock on package cache
+En línea: 1 Carácter: 40
++ Set-Location C:\Users\Fa\Desktop\IAF ; cargo check 2>&1 | Out-File -F ...
++                                        ~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (    Blocking wa...n package cache:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1m 14s

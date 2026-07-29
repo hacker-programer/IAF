@@ -1,0 +1,8 @@
+﻿cargo :     Checking iaf v0.1.0 (C:\Users\Fa\Desktop\IAF)
+En línea: 1 Carácter: 30
++ cd C:\Users\Fa\Desktop\IAF ; cargo check 2>&1 | Out-File C:\Users\Fa\ ...
++                              ~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (    Checking ia...Fa\Desktop\IAF):String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 19.80s

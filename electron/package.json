@@ -18,6 +18,12 @@
       "target": "nsis",
       "icon": "icon.ico"
     },
+    "mac": {
+      "target": "dmg"
+    },
+    "linux": {
+      "target": ["AppImage", "deb"]
+    },
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true

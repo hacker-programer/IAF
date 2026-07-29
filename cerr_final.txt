@@ -1,0 +1,14 @@
+    Checking iaf v0.1.0 (C:\Users\Fa\Desktop\IAF)
+error: this file contains an unclosed delimiter
+   --> src\sub_agent.rs:566:3
+    |
+118 | pub fn is_path_allowed(file_path: &str, allowed_paths: &[String]) -> bool {
+    |                                                                           - unclosed delimiter
+...
+144 | async fn run_sub_agent(
+    |                       - unclosed delimiter
+...
+566 | }
+    |  ^
+
+error: could not compile `iaf` (bin "iaf") due to 1 previous error

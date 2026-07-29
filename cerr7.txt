@@ -1,0 +1,27 @@
+    Checking iaf v0.1.0 (C:\Users\Fa\Desktop\IAF)
+error: expected `;`, found keyword `let`
+   --> src\auth.rs:422:55
+    |
+422 |         let parsed_hash = PasswordHash::new(&hash_str)
+    |                                                       ^ help: add `;` here
+423 |         let valid = Argon2::default().verify_password(password.as_bytes(), &parsed_hash).is_ok();
+    |         --- unexpected token
+
+error[E0308]: mismatched types
+   --> src\auth.rs:423:76
+    |
+423 |         let valid = Argon2::default().verify_password(password.as_bytes(), &parsed_hash).is_ok();
+    |                                       ---------------                      ^^^^^^^^^^^^ expected `&PasswordHash<'_>`, found `&Result<PasswordHash<'_>, Error>`
+    |                                       |
+    |                                       arguments to this method are incorrect
+    |
+    = note: expected reference `&PasswordHash<'_>`
+               found reference `&Result<PasswordHash<'_>, argon2::password_hash::Error>`
+note: method defined here
+   --> C:\Users\Fa\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\password-hash-0.5.0\src\traits.rs:53:8
+    |
+ 53 |     fn verify_password(&self, password: &[u8], hash: &PasswordHash<'_>) -> Result<()>;
+    |        ^^^^^^^^^^^^^^^
+
+For more information about this error, try `rustc --explain E0308`.
+error: could not compile `iaf` (lib) due to 2 previous errors

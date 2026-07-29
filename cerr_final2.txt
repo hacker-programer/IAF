@@ -1,0 +1,2 @@
+    Checking iaf v0.1.0 (C:\Users\Fa\Desktop\IAF)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 4.64s

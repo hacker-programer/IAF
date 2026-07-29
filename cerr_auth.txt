@@ -1,0 +1,70 @@
+    Checking iaf v0.1.0 (C:\Users\Fa\Desktop\IAF)
+error: `self` parameter is only allowed in associated functions
+   --> src\auth.rs:502:9
+    |
+502 |         &self,
+    |         ^^^^^ not semantically valid as function parameter
+    |
+    = note: associated functions are those in `impl` or `trait` definitions
+
+error[E0401]: can't use `Self` from outer item
+  |
+  = note: nested items are independent from their parent item for everything except for privacy and name resolution
+help: refer to the type directly here instead
+ --> src\lib.rs:1:1
+  |
+1 | UserStore// IAF Library — expone módulos públicos para tests de integración
+  | +++++++++
+
+warning: variable does not need to be mutable
+   --> src\auth.rs:498:13
+    |
+498 |         let mut users = self.users.lock();
+    |             ----^^^^^
+    |             |
+    |             help: remove this `mut`
+    |
+    = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `username`
+   --> src\auth.rs:492:9
+    |
+492 |         username: &str,
+    |         ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_username`
+    |
+    = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `modo_estudio`
+   --> src\auth.rs:493:9
+    |
+493 |         modo_estudio: bool,
+    |         ^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_modo_estudio`
+
+warning: unused variable: `modo_programador`
+   --> src\auth.rs:494:9
+    |
+494 |         modo_programador: bool,
+    |         ^^^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_modo_programador`
+
+warning: unused variable: `editar_global`
+   --> src\auth.rs:495:9
+    |
+495 |         editar_global: bool,
+    |         ^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_editar_global`
+
+warning: unused variable: `editar_local`
+   --> src\auth.rs:496:9
+    |
+496 |         editar_local: bool,
+    |         ^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_editar_local`
+
+error[E0596]: cannot borrow `*child` as mutable, as it is behind a `&` reference
+   --> src\desktop.rs:144:19
+    |
+144 |             match child.try_wait() {
+    |                   ^^^^^ `child` is a `&` reference, so it cannot be borrowed as mutable
+
+Some errors have detailed explanations: E0401, E0596.
+For more information about an error, try `rustc --explain E0401`.
+warning: `iaf` (lib) generated 6 warnings
+error: could not compile `iaf` (lib) due to 3 previous errors; 6 warnings emitted

@@ -1,0 +1,19 @@
+﻿cargo :     Checking iaf v0.1.0 (C:\Users\Fa\Desktop\IAF)
+En línea: 1 Carácter: 30
++ cd C:\Users\Fa\Desktop\IAF ; cargo check 2>&1 | Out-File C:\Users\Fa\ ...
++                              ~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (    Checking ia...Fa\Desktop\IAF):String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+error: unexpected closing delimiter: `}`
+   --> src\main.rs:455:5
+    |
+445 | async fn client_check() -> impl IntoResponse {
+    |                                              - this opening brace...
+...
+454 | }
+    | - ...matches this closing brace
+455 |     }))
+    |     ^ unexpected closing delimiter
+
+error: could not compile `iaf` (bin "iaf") due to 1 previous error

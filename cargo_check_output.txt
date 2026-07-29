@@ -1,0 +1,264 @@
+﻿cargo :     Checking iaf v0.1.0 (C:\Users\Fa\Desktop\IAF)
+En línea: 1 Carácter: 40
++ Set-Location C:\Users\Fa\Desktop\IAF ; cargo check 2>&1 | Out-File -F ...
++                                        ~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (    Checking ia...Fa\Desktop\IAF):String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+error[E0308]: arguments to this method are incorrect
+   --> src\main.rs:560:28
+    |
+560 |     match state.user_store.update_access(
+    |                            ^^^^^^^^^^^^^
+    |
+note: expected `bool`, found `Option<bool>`
+   --> src\main.rs:562:9
+    |
+562 |         payload.modo_estudio,
+    |         ^^^^^^^^^^^^^^^^^^^^
+    = note: expected type `bool`
+               found enum `std::option::Option<bool>`
+note: expected `bool`, found `Option<bool>`
+   --> src\main.rs:563:9
+    |
+563 |         payload.modo_programador,
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^
+    = note: expected type `bool`
+               found enum `std::option::Option<bool>`
+note: expected `bool`, found `Option<bool>`
+   --> src\main.rs:564:9
+    |
+564 |         payload.editar_system_prompt_global,
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    = note: expected type `bool`
+               found enum `std::option::Option<bool>`
+note: expected `bool`, found `Option<bool>`
+   --> src\main.rs:565:9
+    |
+565 |         payload.editar_system_prompt_local,
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    = note: expected type `bool`
+               found enum `std::option::Option<bool>`
+note: method defined here
+   --> src\auth.rs:491:12
+    |
+491 |     pub fn update_access(
+    |            ^^^^^^^^^^^^^
+...
+494 |         modo_estudio: bool,
+    |         ------------------
+495 |         modo_programador: bool,
+    |         ----------------------
+496 |         editar_global: bool,
+    |         -------------------
+497 |         editar_local: bool,
+    |         ------------------
+help: consider using `Option::expect` to unwrap the `std::option::Option<bool>` value, panicking if the value is an `Option::None`
+    |
+562 |         payload.modo_estudio.expect("REASON"),
+    |                             +++++++++++++++++
+help: consider using `Option::expect` to unwrap the `std::option::Option<bool>` value, panicking if the value is an `Option::None`
+    |
+563 |         payload.modo_programador.expect("REASON"),
+    |                                 +++++++++++++++++
+help: consider using `Option::expect` to unwrap the `std::option::Option<bool>` value, panicking if the value is an `Option::None`
+    |
+564 |         payload.editar_system_prompt_global.expect("REASON"),
+    |                                            +++++++++++++++++
+help: consider using `Option::expect` to unwrap the `std::option::Option<bool>` value, panicking if the value is an `Option::None`
+    |
+565 |         payload.editar_system_prompt_local.expect("REASON"),
+    |                                           +++++++++++++++++
+
+error[E0308]: mismatched types
+   --> src\main.rs:586:55
+    |
+586 |     match state.user_store.update_schedule(&username, payload.horarios) {
+    |                            ---------------            ^^^^^^^^^^^^^^^^ expected `WeeklySchedule`, found `HashMap<String, Vec<Vec<u32>>>`
+    |                            |
+    |                            arguments to this method are incorrect
+    |
+    = note: expected struct `auth::WeeklySchedule`
+               found struct `HashMap<std::string::String, Vec<Vec<u32>>>`
+note: method defined here
+   --> src\auth.rs:514:12
+    |
+514 |     pub fn update_schedule(&self, username: &str, schedule: WeeklySchedule) -> Result<(), String> {
+    |            ^^^^^^^^^^^^^^^                        ------------------------
+
+error[E0560]: struct `state::Project` has no field named `repo_url`
+   --> src\main.rs:966:17
+    |
+966 |                 repo_url: Some(payload.repo_url.clone()),
+    |                 ^^^^^^^^ `state::Project` does not have this field
+    |
+    = note: available fields are: `is_local`
+
+error[E0560]: struct `state::Project` has no field named `repo_url`
+    --> src\main.rs:1012:9
+     |
+1012 |         repo_url: None,
+     |         ^^^^^^^^ `state::Project` does not have this field
+     |
+     = note: available fields are: `is_local`
+
+error[E0308]: mismatched types
+    --> src\main.rs:1035:9
+     |
+1034 |     match state.load_cicle(&username, &project_name) {
+     |           ------------------------------------------ this expression has type `std::option::Option<state::CicleState>`
+1035 |         Ok(cicle) => Json(json!({ "status": "ok", "cicle": cicle })).into_response(),
+     |         ^^^^^^^^^ expected `Option<CicleState>`, found `Result<_, _>`
+     |
+     = note: expected enum `std::option::Option<state::CicleState>`
+                found enum `Result<_, _>`
+
+error[E0308]: mismatched types
+    --> src\main.rs:1036:9
+     |
+1034 |     match state.load_cicle(&username, &project_name) {
+     |           ------------------------------------------ this expression has type `std::option::Option<state::CicleState>`
+1035 |         Ok(cicle) => Json(json!({ "status": "ok", "cicle": cicle })).into_response(),
+1036 |         Err(_) => Json(json!({
+     |         ^^^^^^ expected `Option<CicleState>`, found `Result<_, _>`
+     |
+     = note: expected enum `std::option::Option<state::CicleState>`
+                found enum `Result<_, _>`
+
+error[E0560]: struct `state::CicleState` has no field named `phase`
+    --> src\main.rs:1040:17
+     |
+1040 |                 phase: CiclePhase::Implementation,
+     |                 ^^^^^ `state::CicleState` does not have this field
+     |
+     = note: available fields are: `current_phase`, `iteration_count`, `started_at`, `last_updated`
+
+error[E0599]: no variant, associated function, or constant named `Implementation` found for enum `state::CiclePhase` in the current scope
+    --> src\main.rs:1040:36
+     |
+1040 |                 phase: CiclePhase::Implementation,
+     |                                    ^^^^^^^^^^^^^^ variant, associated function, or constant not found in `state::CiclePhase`
+     |
+    ::: src\state.rs:35:1
+     |
+  35 | pub enum CiclePhase {
+     | ------------------- variant, associated function, or constant `Implementation` not found for this enum
+     |
+help: there is a variant with a similar name
+     |
+1040 -                 phase: CiclePhase::Implementation,
+1040 +                 phase: CiclePhase::Implementacion,
+     |
+
+error[E0560]: struct `state::CicleState` has no field named `iteration`
+    --> src\main.rs:1041:17
+     |
+1041 |                 iteration: 0,
+     |                 ^^^^^^^^^ `state::CicleState` does not have this field
+     |
+     = note: available fields are: `current_phase`, `iteration_count`, `started_at`, `last_updated`
+
+error[E0560]: struct `state::CicleState` has no field named `bugs_found`
+    --> src\main.rs:1042:17
+     |
+1042 |                 bugs_found: Vec::new(),
+     |                 ^^^^^^^^^^ `state::CicleState` does not have this field
+     |
+     = note: available fields are: `current_phase`, `iteration_count`, `started_at`, `last_updated`
+
+error[E0560]: struct `state::CicleState` has no field named `optimizations_applied`
+    --> src\main.rs:1043:17
+     |
+1043 |                 optimizations_applied: Vec::new(),
+     |                 ^^^^^^^^^^^^^^^^^^^^^ `state::CicleState` does not have this field
+     |
+     = note: available fields are: `current_phase`, `iteration_count`, `started_at`, `last_updated`
+
+error[E0599]: no method named `build_prompt` found for struct `study::StudyEngine` in the current scope
+    --> src\main.rs:1210:37
+     |
+1210 |     let prompt = state.study_engine.build_prompt(&username, &payload.topic);
+     |                                     ^^^^^^^^^^^^ method not found in `study::StudyEngine`
+     |
+    ::: src\study.rs:158:1
+     |
+ 158 | pub struct StudyEngine {
+     | ---------------------- method `build_prompt` not found for this struct
+
+error[E0599]: no method named `get_history` found for struct `sync::SyncStore` in the current scope
+    --> src\main.rs:1682:28
+     |
+1682 |     match state.sync_store.get_history(&project_id, &path) {
+     |                            ^^^^^^^^^^^
+     |
+    ::: src\sync.rs:78:1
+     |
+  78 | pub struct SyncStore {
+     | -------------------- method `get_history` not found for this struct
+     |
+help: there is a method `get_file_history` with a similar name
+     |
+1682 |     match state.sync_store.get_file_history(&project_id, &path) {
+     |                                +++++
+
+error[E0308]: mismatched types
+    --> src\main.rs:1760:40
+     |
+1760 | ...   .filter_map(|s| if let Some(detail) = &s.detail { Some(format!("{}: {}", s.title, detail)) } else { Some(s.title.clone()) })
+     |                              ^^^^^^^^^^^^   --------- this expression has type `&std::string::String`
+     |                              |
+     |                              expected `String`, found `Option<_>`
+     |
+     = note: expected struct `std::string::String`
+                  found enum `std::option::Option<_>`
+
+error[E0308]: mismatched types
+    --> src\main.rs:1767:32
+     |
+1767 |         .filter_map(|s| if let Some(detail) = &s.detail { Some(format!("{}: {}", s.title, detail)) } else { Some(s.title.clone()) })
+     |                                ^^^^^^^^^^^^   --------- this expression has type `&std::string::String`
+     |                                |
+     |                                expected `String`, found `Option<_>`
+     |
+     = note: expected struct `std::string::String`
+                  found enum `std::option::Option<_>`
+
+error[E0609]: no field `plan_aprobado` on type `std::sync::MutexGuard<'_, state::ActiveAgentStatus>`
+    --> src\main.rs:1809:11
+     |
+1809 |     agent.plan_aprobado = Some(payload.aprobado);
+     |           ^^^^^^^^^^^^^ unknown field
+     |
+     = note: available fields are: `running`, `interrupted`, `finished`, `final_message`, `esperando_respuesta_usuario` ... and 9 others
+
+error[E0609]: no field `plan_feedback` on type `std::sync::MutexGuard<'_, state::ActiveAgentStatus>`
+    --> src\main.rs:1810:11
+     |
+1810 |     agent.plan_feedback = payload.feedback;
+     |           ^^^^^^^^^^^^^ unknown field
+     |
+     = note: available fields are: `running`, `interrupted`, `finished`, `final_message`, `esperando_respuesta_usuario` ... and 9 others
+
+error[E0609]: no field `resolved_content` on type `&mut state::CaptchaRequest`
+    --> src\main.rs:1894:15
+     |
+1894 |             c.resolved_content = Some(payload.solved_content);
+     |               ^^^^^^^^^^^^^^^^ unknown field
+     |
+help: a field with a similar name exists
+     |
+1894 -             c.resolved_content = Some(payload.solved_content);
+1894 +             c.solved_content = Some(payload.solved_content);
+     |
+
+error[E0560]: struct `client_protocol::ConnectedClient` has no field named `token`
+    --> src\main.rs:1966:9
+     |
+1966 |         token: payload.token.clone(),
+     |         ^^^^^ `client_protocol::ConnectedClient` does not have this field
+     |
+     = note: all struct fields are already assigned
+
+Some errors have detailed explanations: E0308, E0560, E0599, E0609.
+For more information about an error, try `rustc --explain E0308`.
+error: could not compile `iaf` (bin "iaf") due to 19 previous errors

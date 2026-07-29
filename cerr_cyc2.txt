@@ -1,0 +1,8 @@
+    Checking iaf v0.1.0 (C:\Users\Fa\Desktop\IAF)
+error: unexpected closing delimiter: `}`
+ --> src\main.rs:2:1
+  |
+2 | }
+  | ^ unexpected closing delimiter
+
+error: could not compile `iaf` (bin "iaf") due to 1 previous error

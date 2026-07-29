@@ -1,0 +1,4 @@
+[IAF] base_workspace v├¡a current_dir: C:\Users\Fa\Desktop\Auto IAF\IAF
+[IAF StudyEngine] Cargados 2 perfiles desde disco.
+[IAF] Puerto 80 escuchando...
+ÔØî Error fatal bindeando puerto 8080: Solo se permite un uso de cada dirección de socket (protocolo/dirección de red/puerto) (os error 10048)

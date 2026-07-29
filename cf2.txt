@@ -1,0 +1,96 @@
+﻿    Checking iaf v0.1.0 (C:\Users\Fa\Desktop\IAF)
+error: right curly brace `}` before `else` in a `let...else` statement not allowed
+   --> src\main.rs:508:5
+    |
+508 |     } else {
+    |     ^
+    |
+help: wrap the expression in parentheses
+    |
+494 ~     let result = (if payload.is_admin && payload.public_key.is_some() {
+495 |         state.user_store.create_admin(&payload.username, &payload.public_key.unwrap(), perms, limits)
+...
+507 |     } else {
+508 ~     }) else {
+    |
+
+error[E0308]: `if` and `else` have incompatible types
+   --> src\main.rs:507:12
+    |
+499 |       } else if let Some(ref pw) = payload.password {
+    |              -------------------------------------- `if` and `else` have incompatible types
+500 | /         state.user_store.create_user_with_password(
+501 | |             &payload.username, pw, payload.is_admin, perms, limits,
+502 | |             payload.modo_estudio.unwrap_or(false),
+503 | |             payload.modo_programador.unwrap_or(false),
+504 | |             payload.editar_system_prompt_global.unwrap_or(false),
+505 | |             payload.editar_system_prompt_local.unwrap_or(false),
+506 | |         )
+    | |_________- expected because of this
+507 |       } else {
+    |  ____________^
+508 | |     } else {
+    | |_____^ expected `Result<UserAccount, String>`, found `()`
+    |
+    = note:   expected enum `Result<UserAccount, std::string::String>`
+            found unit type `()`
+
+error[E0308]: `else` clause of `let...else` does not diverge
+   --> src\main.rs:508:12
+    |
+508 |       } else {
+    |  ____________^
+509 | |         Err("Se requiere password (usuarios normales) o public_key (admins).".into())
+510 | |     };
+    | |_____^ expected `!`, found `Result<_, _>`
+    |
+    = note: expected type `!`
+               found enum `Result<_, _>`
+    = help: try adding a diverging expression, such as `return` or `panic!(..)`
+    = help: ...or use `match` instead of `let...else`
+
+error[E0277]: the trait bound `fn(..., ..., ..., ...) -> ... {admin_update_limits}: Handler<_, _>` is not satisfied
+    --> src\main.rs:2105:57
+     |
+2105 |         .route("/api/admin/users/:username/limits", put(admin_update_limits))
+     |                                                     --- ^^^^^^^^^^^^^^^^^^^ the trait `Handler<_, _>` is not implemented for fn item `fn(State<AppState>, HeaderMap, ..., ...) -> ... {admin_update_limits}`
+     |                                                     |
+     |                                                     required by a bound introduced by this call
+     |
+     = note: Consider using `#[axum::debug_handler]` to improve the error message
+help: the following other types implement trait `Handler<T, S>`
+    --> C:\Users\Fa\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\axum-0.7.9\src\routing\method_routing.rs:1309:1
+     |
+1309 | / impl<S> Handler<(), S> for MethodRouter<S>
+1310 | | where
+1311 | |     S: Clone + 'static,
+     | |_______________________^ `MethodRouter<S>` implements `Handler<(), S>`
+     |
+    ::: C:\Users\Fa\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\axum-0.7.9\src\handler\mod.rs:303:1
+     |
+ 303 | / impl<H, S, T, L> Handler<T, S> for Layered<L, H, T, S>
+ 304 | | where
+ 305 | |     L: Layer<HandlerService<H, T, S>> + Clone + Send + 'static,
+ 306 | |     H: Handler<T, S>,
+...    |
+ 310 | |     T: 'static,
+ 311 | |     S: 'static,
+     | |_______________^ `Layered<L, H, T, S>` implements `Handler<T, S>`
+note: required by a bound in `put`
+    --> C:\Users\Fa\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\axum-0.7.9\src\routing\method_routing.rs:166:16
+     |
+ 166 |             H: Handler<T, S>,
+     |                ^^^^^^^^^^^^^ required by this bound in `put`
+...
+ 444 | top_level_handler_fn!(put, PUT);
+     | -------------------------------
+     | |                     |
+     | |                     required by a bound in this function
+     | in this macro invocation
+     = note: the full name for the type has been written to 'C:\Users\Fa\AppData\Local\Temp\auto-cargo-target\debug\deps\iaf-c4c482f01703a78c.long-type-3115605795875186808.txt'
+     = note: consider using `--verbose` to print the full type name to the console
+     = note: this error originates in the macro `top_level_handler_fn` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+Some errors have detailed explanations: E0277, E0308.
+For more information about an error, try `rustc --explain E0277`.
+error: could not compile `iaf` (bin "iaf") due to 4 previous errors

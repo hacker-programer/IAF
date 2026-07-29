@@ -1,0 +1,31 @@
+    Checking iaf v0.1.0 (C:\Users\Fa\Desktop\IAF)
+error: expected `;`, found keyword `let`
+   --> src\auth.rs:422:55
+    |
+422 |         let parsed_hash = PasswordHash::new(&hash_str)
+    |                                                       ^ help: add `;` here
+423 |
+424 |         let valid = Argon2::default().verify_password(password.as_bytes(), &parsed_hash).is_ok();
+    |         --- unexpected token
+
+error: this file contains an unclosed delimiter
+   --> src\desktop.rs:154:6
+    |
+ 83 | impl DesktopController {
+    |                        - unclosed delimiter
+...
+108 |     pub fn type_text(&self, text: &str) -> Result<(), SimulateError> {
+    |                                                                      - unclosed delimiter
+...
+111 |         for ch in text.chars() {
+    |                                - unclosed delimiter
+112 |             match ch {
+    |                      - unclosed delimiter
+...
+121 |                 _ => {
+    |                      - unclosed delimiter
+...
+154 |     }
+    |      ^
+
+error: could not compile `iaf` (lib) due to 2 previous errors

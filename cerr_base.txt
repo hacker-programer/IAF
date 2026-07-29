@@ -1,0 +1,17 @@
+    Checking iaf v0.1.0 (C:\Users\Fa\Desktop\IAF)
+error: this file contains an unclosed delimiter
+   --> src\scraper.rs:171:3
+    |
+115 | ) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
+    |                                                               - unclosed delimiter
+...
+151 |         for _ in 0..20 {
+    |                        - this delimiter might not be properly closed...
+...
+164 | }
+    | - ...as it matches this but it has different indentation
+...
+171 | }
+    |  ^
+
+error: could not compile `iaf` (bin "iaf") due to 1 previous error

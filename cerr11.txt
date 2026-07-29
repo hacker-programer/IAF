@@ -1,0 +1,13 @@
+    Checking iaf v0.1.0 (C:\Users\Fa\Desktop\IAF)
+error: unexpected closing delimiter: `)`
+   --> src\main.rs:455:6
+    |
+447 | ) -> impl IntoResponse {
+    |                        - this delimiter might not be properly closed...
+...
+455 |     }).collect();
+    |     -^ unexpected closing delimiter
+    |     |
+    |     ...as it matches this but it has different indentation
+
+error: could not compile `iaf` (bin "iaf") due to 1 previous error

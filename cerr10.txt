@@ -1,0 +1,35 @@
+    Checking iaf v0.1.0 (C:\Users\Fa\Desktop\IAF)
+error: mismatched closing delimiter: `}`
+   --> src\main.rs:444:26
+    |
+444 | async fn admin_list_users(
+    |                          ^ unclosed delimiter
+...
+455 | }
+    | ^ mismatched closing delimiter
+
+error: this file contains an unclosed delimiter
+    --> src\main.rs:2278:3
+     |
+1822 | ) -> impl IntoResponse {
+     |                        - unclosed delimiter
+...
+1831 |     if let Some(ref path) = agent.current_chat_path {
+     |                                                     - unclosed delimiter
+1832 |         // Append interruption message to chat
+1833 |         if let Ok(content) = fs::read_to_string(path) {
+     |                                                       - unclosed delimiter
+1834 |             if let Ok(mut session) = serde_json::from_str::<ChatSession>(&content) {
+     |                                                                                    - unclosed delimiter
+1835 |                 session.messages.push(ChatMessage {
+     |                                      - unclosed delimiter
+...
+1850 |     if let Some(ref path) = agent.current_chat_path {
+     |                                                     - this delimiter might not be properly closed...
+1851 | }
+     | - ...as it matches this but it has different indentation
+...
+2278 | }
+     |  ^
+
+error: could not compile `iaf` (bin "iaf") due to 2 previous errors

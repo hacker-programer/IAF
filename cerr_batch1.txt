@@ -1,0 +1,13 @@
+    Checking iaf v0.1.0 (C:\Users\Fa\Desktop\IAF)
+error: unexpected closing delimiter: `)`
+   --> src\auth.rs:514:14
+    |
+278 | impl UserStore {
+    |                - the nearest open delimiter
+...
+514 |             ));
+    |             -^ unexpected closing delimiter
+    |             |
+    |             missing open `(` for this delimiter
+
+error: could not compile `iaf` (lib) due to 1 previous error

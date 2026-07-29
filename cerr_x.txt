@@ -1,0 +1,13 @@
+    Checking iaf v0.1.0 (C:\Users\Fa\Desktop\IAF)
+error: unexpected closing delimiter: `}`
+   --> src\main.rs:513:1
+    |
+509 |     match result {
+    |                  - this opening brace...
+...
+512 |     }
+    |     - ...matches this closing brace
+513 | }
+    | ^ unexpected closing delimiter
+
+error: could not compile `iaf` (bin "iaf") due to 1 previous error
