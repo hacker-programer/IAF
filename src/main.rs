@@ -124,25 +124,26 @@ fn clean_old_chat_files(dir: &PathBuf, session_id: &str) {
     if let Ok(entries) = fs::read_dir(dir) {
         for entry in entries.filter_map(Result::ok) {
             let path = entry.path();
+/// Limpia archivos viejos con el mismo UUID. FIX #10: validación estricta del sufijo.
+fn clean_old_chat_files(dir: &PathBuf, session_id: &str) {
+    if !dir.exists() || !looks_like_uuid_stem(session_id) {
+        return;
+    }
+    if let Ok(entries) = fs::read_dir(dir) {
+        for entry in entries.filter_map(Result::ok) {
+            let path = entry.path();
             if path.extension().and_then(|e| e.to_str()) != Some("json") {
                 continue;
             }
             let fname = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
-            if fname.ends_with(&format!("-{}", session_id)) {
+            let expected_suffix = format!("-{}", session_id);
+            if fname.ends_with(&expected_suffix) && fname.len() > expected_suffix.len() {
                 let _ = fs::remove_file(&path);
                 eprintln!("[IAF] Limpiado archivo duplicado: {}", path.display());
             }
         }
     }
 }
-
-/// Determina si un nombre de archivo (sin extensión) parece un UUID
-fn looks_like_uuid_stem(stem: &str) -> bool {
-    stem.len() >= 30
-        && stem.chars().all(|c| c.is_ascii_hexdigit() || c == '-')
-        && stem.matches('-').count() >= 3
-}
-
 /// Migración recursiva: renombra archivos <uuid>.json a <title>-<uuid>.json
 /// dentro de un directorio dado. Retorna cantidad de archivos migrados.
 fn migrate_chats_in_dir(dir: &PathBuf) -> usize {
