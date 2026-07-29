@@ -92,10 +92,12 @@ async fn require_auth(
     state.session_store.validate_token(&token)
         .ok_or_else(|| (StatusCode::UNAUTHORIZED, "Token inválido o expirado.".into()))
 }
+
 // ============================================================================
 // Chat Helpers (nueva estructura de almacenamiento)
 // ============================================================================
 
+/// Sanitiza un string para usarlo como nombre de archivo
 // FIX #22/#46: Using unified sanitize_filename from utils.rs (hash anti-collision)
 use iaf::utils::sanitize_filename;
 
@@ -113,9 +115,10 @@ fn get_chat_path(state: &AppState, username: &str, is_admin_or_port80: bool, tit
     dir.join(format!("{}-{}.json", safe_title, id))
 }
 
-/// Limpia archivos viejos con el mismo UUID. FIX #10: validación estricta del sufijo.
+/// Limpia archivos viejos con el mismo UUID en el directorio de chats
+/// para evitar duplicados cuando el título cambia.
 fn clean_old_chat_files(dir: &PathBuf, session_id: &str) {
-    if !dir.exists() || !looks_like_uuid_stem(session_id) {
+    if !dir.exists() {
         return;
     }
     if let Ok(entries) = fs::read_dir(dir) {
@@ -125,8 +128,7 @@ fn clean_old_chat_files(dir: &PathBuf, session_id: &str) {
                 continue;
             }
             let fname = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
-            let expected_suffix = format!("-{}", session_id);
-            if fname.ends_with(&expected_suffix) && fname.len() > expected_suffix.len() {
+            if fname.ends_with(&format!("-{}", session_id)) {
                 let _ = fs::remove_file(&path);
                 eprintln!("[IAF] Limpiado archivo duplicado: {}", path.display());
             }
@@ -142,6 +144,13 @@ fn looks_like_uuid_stem(stem: &str) -> bool {
 }
 
 /// Migración recursiva: renombra archivos <uuid>.json a <title>-<uuid>.json
+/// dentro de un directorio dado. Retorna cantidad de archivos migrados.
+fn migrate_chats_in_dir(dir: &PathBuf) -> usize {
+    if !dir.exists() || !dir.is_dir() {
+        return 0;
+    }
+    let entries: Vec<_> = match fs::read_dir(dir) {
+        Ok(e) => e.filter_map(Result::ok).collect(),
         Err(_) => return 0,
     };
     let mut migrated = 0;
