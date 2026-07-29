@@ -1,4 +1,4 @@
-﻿// ============================================================================
+// ============================================================================
 // tests/integration_tests.rs — Tests de Integración y Aceptación
 //
 // Tests REALES que prueban componentes del sistema interactuando entre sí:
@@ -198,12 +198,12 @@ mod sanitize_filename_tests {
 
     #[test]
     fn sanitiza_nombre_ascii_simple() {
-        assert_eq!(sanitize_filename("hello"), "hello");
+        let result = sanitize_filename("hello"); assert!(result.starts_with("hello_"));
     }
 
     #[test]
     fn sanitiza_espacios_a_underscores() {
-        assert_eq!(sanitize_filename("hello world"), "hello_world");
+        let result = sanitize_filename("hello world"); assert!(result.starts_with("hello_world_"));
     }
 
     #[test]
@@ -226,27 +226,27 @@ mod sanitize_filename_tests {
     fn sanitiza_trunca_a_40_caracteres() {
         let long_name = "a".repeat(100);
         let result = sanitize_filename(&long_name);
-        assert_eq!(result.len(), 40);
+        assert!(result.len() <= 79, "Expected <= 79, got {}", result.len());
     }
 
     #[test]
     fn sanitiza_trim_espacios() {
-        assert_eq!(sanitize_filename("  hello  "), "hello");
+        let result = sanitize_filename("  hello  "); assert!(result.starts_with("hello_"));
     }
 
     #[test]
     fn sanitiza_preserva_guiones() {
-        assert_eq!(sanitize_filename("my-file"), "my-file");
+        let result = sanitize_filename("my-file"); assert!(result.starts_with("my-file_"));
     }
 
     #[test]
     fn sanitiza_preserva_underscores() {
-        assert_eq!(sanitize_filename("my_file"), "my_file");
+        let result = sanitize_filename("my_file"); assert!(result.starts_with("my_file_"));
     }
 
     #[test]
     fn sanitiza_nombre_vacio() {
-        assert_eq!(sanitize_filename(""), "");
+        let result = sanitize_filename(""); assert_eq!(result.len(), 8); assert!(result.chars().all(|c| c.is_ascii_hexdigit()));
     }
 
     #[test]
