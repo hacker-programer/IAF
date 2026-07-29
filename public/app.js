@@ -253,14 +253,20 @@ async function checkClient() {
         clientWarning.classList.remove('hidden');
     }
 }
+    }
+}
 
+// ---- Login Tabs ----
+loginTabs.addEventListener('click', (e) => {
+    if (e.target.classList.contains('login-tab')) {
+        loginTabs.querySelectorAll('.login-tab').forEach(t => t.classList.remove('active'));
+        e.target.classList.add('active');
+        const tab = e.target.dataset.tab;
         loginPassword.classList.toggle('hidden', tab !== 'password');
         loginNonce.classList.toggle('hidden', tab !== 'nonce');
         loginError.classList.add('hidden');
     }
 });
-
-// ---- Password Login ----
 document.getElementById('loginBtn').onclick = async () => {
     const username = document.getElementById('loginUser').value.trim();
     const password = document.getElementById('loginPass').value;
