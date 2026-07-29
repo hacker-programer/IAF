@@ -1,0 +1,33 @@
+{
+  "name": "iaf-electron",
+  "version": "1.0.0",
+  "description": "IAF Electron Client — ejecuta comandos localmente (PowerShell, git, cargo) y se conecta al servidor IAF",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder",
+    "pack": "electron-builder --dir"
+  },
+  "build": {
+    "appId": "com.iaf.electron-client",
+    "productName": "IAF Client",
+    "directories": {
+      "output": "dist"
+    },
+    "win": {
+      "target": "nsis",
+      "icon": "icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  },
+  "dependencies": {
+    "node-fetch": "^2.7.0"
+  },
+  "devDependencies": {
+    "electron": "^28.0.0",
+    "electron-builder": "^24.9.1"
+  }
+}
