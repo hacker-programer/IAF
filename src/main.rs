@@ -133,8 +133,6 @@ fn clean_old_chat_files(dir: &PathBuf, session_id: &str) {
         }
     }
 }
-        && stem.chars().all(|c| c.is_ascii_hexdigit() || c == '-')
-        && stem.matches('-').count() >= 3
 }
 
 /// Migración recursiva: renombra archivos <uuid>.json a <title>-<uuid>.json
