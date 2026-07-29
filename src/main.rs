@@ -131,14 +131,16 @@ fn clean_old_chat_files(dir: &PathBuf, session_id: &str) {
                 eprintln!("[IAF] Limpiado archivo duplicado: {}", path.display());
             }
         }
-    }
+}
+
+/// Determina si un nombre de archivo (sin extensión) parece un UUID
+fn looks_like_uuid_stem(stem: &str) -> bool {
+    stem.len() >= 30
+        && stem.chars().all(|c| c.is_ascii_hexdigit() || c == '-')
+        && stem.matches('-').count() >= 3
 }
 
 /// Migración recursiva: renombra archivos <uuid>.json a <title>-<uuid>.json
-/// dentro de un directorio dado. Retorna cantidad de archivos migrados.
-fn migrate_chats_in_dir(dir: &PathBuf) -> usize {
-    if !dir.exists() || !dir.is_dir() {
-        return 0;
     }
     let entries: Vec<_> = match fs::read_dir(dir) {
         Ok(e) => e.filter_map(Result::ok).collect(),
