@@ -510,8 +510,8 @@ async fn admin_create_user(
 struct UpdateLimitsRequest {
     limits: UserLimits,
 }
-}
 
+async fn admin_update_limits(
 async fn admin_update_limits(
     State(state): State<AppState>,
     headers: HeaderMap,
