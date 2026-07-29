@@ -353,12 +353,17 @@ async function apiCall(endpoint, method = 'GET', body = null) {
 }
 
 // ---- Mode Toggle ----
-document.getElementById('modeProgramming').onclick = () => switchMode('programming');
-document.getElementById('modeStudy').onclick = () => switchMode('study');
-
-function switchMode(mode) {
-    document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
-    document.getElementById(mode === 'study' ? 'modeStudy' : 'modeProgramming').classList.add('active');
+// ---- Admin Panel ----
+document.getElementById('adminUsersBtn').onclick = openAdminUsers;
+// FIX #7: scroll to the prompt section using the correct selector
+document.getElementById('adminPromptsBtn').onclick = function() {
+    var section = document.querySelector('.config-section');
+    if (section) {
+        section.scrollIntoView({ behavior: 'smooth' });
+    } else {
+        showInfoToast('⚠️ Sección de prompts no visible.');
+    }
+};
     document.getElementById('activeMode').textContent = mode === 'study' ? '📚 Estudiar' : '💻 Programar';
     studyProfileSection.classList.toggle('hidden', mode !== 'study');
     if (mode === 'study') {
