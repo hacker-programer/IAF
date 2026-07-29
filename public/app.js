@@ -1058,11 +1058,24 @@ async function aprobarPlan(aprobado, feedback) {
     await apiCall('/api/agent/aprobar_plan', 'POST', { aprobado: aprobado, feedback: feedback || '' });
 }
 
-// ============================================================================
-// UI HELPERS
-// ============================================================================
+document.getElementById('approvePlanBtn').onclick = () => { aprobarPlan(true, ''); };
+document.getElementById('rejectPlanBtn').onclick = () => { aprobarPlan(false, ''); };
 
-function showAgentQuestionBanner(pregunta) {
+// FIX #5: Handler para el botón Resumir en la consola de auditoría
+document.getElementById('summarizeStepsBtn').onclick = async function() {
+    try {
+        var res = await apiCall('/api/agent/summary');
+        if (res.status === 'ok' && res.summary) {
+            addMessage('agent', '📋 **Resumen:** ' + res.summary);
+        } else {
+            showInfoToast('⚠️ No hay pasos para resumir.');
+        }
+    } catch(e) {
+        showInfoToast('⚠️ Error obteniendo resumen.');
+    }
+};
+
+function addMessage(role, text, extraClass) {
     const banner = document.getElementById('agentQuestionBanner');
     document.getElementById('agentQuestionPrompt').textContent = pregunta;
     document.getElementById('agentQuestionResponse').value = '';
