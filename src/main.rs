@@ -436,7 +436,6 @@ async fn sign_nonce(Json(payload): Json<SignRequest>) -> impl IntoResponse {
 }
 
 async fn client_check() -> impl IntoResponse {
-async fn client_check() -> impl IntoResponse {
     // FIX #1: Ya no buscamos el cliente Rust. Verificamos si hay conexiones
     // de clientes Electron o Capacitor activas para este server.
     // El frontend maneja la detección de plataforma (Electron/Capacitor/Navegador).
@@ -446,6 +445,8 @@ async fn client_check() -> impl IntoResponse {
         "message": "Usa el cliente Electron para ejecutar comandos localmente, o Capacitor en Android.",
         "instructions": "Para instalar Electron: cd electron && npm install && npm start. Para Capacitor: cd capacitor && .\\setup_capacitor.ps1"
     }))
+}
+
 }
 
 
