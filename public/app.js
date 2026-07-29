@@ -807,18 +807,20 @@ async function loadChatHistory() {
         }
     } catch(e) {}
 }
-
 async function selectChatSession(id) {
+    var previousId = currentSessionId;
     currentSessionId = id;
     loadChatHistory();
-    const res = await apiCall('/api/chats/' + id);
+    var res;
+    try {
+        res = await apiCall('/api/chats/' + id);
+    } catch(e) {
+        // FIX #17: restore previous sessionId on failure
+        currentSessionId = previousId;
+        loadChatHistory();
+        return;
+    }
     if (res.status === 'ok') {
-        const chatArea = document.getElementById('chatArea');
-        chatArea.innerHTML = '';
-        res.session.messages.forEach(m => addMessage(m.role, m.content));
-        window._shownInfoMsgs = new Set();
-        if (res.session.project_name) {
-            document.getElementById('activeProjectName').innerText = res.session.project_name;
             activeProject = res.session.project_name;
             loadProjects();
         }
