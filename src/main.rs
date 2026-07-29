@@ -1831,9 +1831,14 @@ async fn agent_interrupt(
     };
 
     let mut agent = state.active_agent.lock().unwrap();
-    agent.interrupted = true;
-    agent.running = false;
+    // FIX #9: Abortar el tokio task para detención inmediata
+    if let Ok(mut abort_handle) = state.abort_handle.lock() {
+        if let Some(handle) = abort_handle.take() {
+            handle.abort();
+        }
+    }
 
+    let mut agent = state.active_agent.lock().unwrap();
     if let Some(ref path) = agent.current_chat_path {
         // Append interruption message to chat
         if let Ok(content) = fs::read_to_string(path) {
