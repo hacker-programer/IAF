@@ -415,9 +415,8 @@ impl UserStore {
 
         let hash_str = match &user.password_hash {
             Some(h) => h.clone(),
-            // FIX #30: nonce user returns Ok(None) like not-found
-            None => return Ok(None),
-        };
+            None => return Err("Este usuario no tiene contraseÃ±a configurada (usa nonce).".into()),
+            None => return Ok(None), // FIX #30
 
         let parsed_hash = PasswordHash::new(&hash_str)
             .map_err(|e| format!("Error interno: hash mal formado: {}", e))?;
@@ -425,15 +424,14 @@ impl UserStore {
         let valid = Argon2::default().verify_password(password.as_bytes(), &parsed_hash).is_ok();
 
         if valid {
-            // Verificar límites de horario
+            // Verificar lÃ­mites de horario
             if !user.limits.is_active_now() && !user.is_admin {
-                return Err("Tu cuenta no está activa en este horario.".into());
+                return Err("Tu cuenta no estÃ¡ activa en este horario.".into());
             }
             Ok(Some(user))
         } else {
             Ok(None)
         }
-    }
     }
 
     /// Cambia la contraseÃ±a de un usuario. SOLO admin.
@@ -502,12 +500,12 @@ impl UserStore {
         let user = users.users.iter_mut()
             .find(|u| u.username == username)
             .ok_or_else(|| format!("Usuario '{}' no encontrado.", username))?;
-        // FIX #27: Always update flags, even for admins (delegation)
-        // FIX #27: Always update, even for admins (delegation)
-        user.modo_estudio = modo_estudio;
-        user.modo_programador = modo_programador;
-        user.editar_system_prompt_global = editar_global;
-        user.editar_system_prompt_local = editar_local;
+        if !user.is_admin {
+            user.modo_estudio = modo_estudio;
+            user.modo_programador = modo_programador;
+            user.editar_system_prompt_global = editar_global;
+            user.editar_system_prompt_local = editar_local;
+        }
         drop(users);
         self.save()
     }
