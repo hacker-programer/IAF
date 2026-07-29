@@ -377,11 +377,11 @@ document.getElementById('adminPromptsBtn').onclick = function() {
     var modal = document.getElementById('adminUsersModal');
     modal.classList.remove('hidden');
     await refreshUsersTable();
+async function openAdminUsers() {
+    var modal = document.getElementById('adminUsersModal');
+    modal.classList.remove('hidden');
+    await refreshUsersTable();
 }
-
-// FIX #18: Helper para escapar HTML (XSS)
-
-async function refreshUsersTable() {
     var tbody = document.getElementById('usersTableBody');
     try {
         var res2 = await apiCall('/api/admin/users');
