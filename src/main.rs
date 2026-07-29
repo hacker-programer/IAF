@@ -92,12 +92,21 @@ async fn require_auth(
     state.session_store.validate_token(&token)
         .ok_or_else(|| (StatusCode::UNAUTHORIZED, "Token inválido o expirado.".into()))
 }
+
 // ============================================================================
 // Chat Helpers (nueva estructura de almacenamiento)
 // ============================================================================
 
-// FIX #22/#46: Using unified sanitize_filename from utils.rs (hash anti-collision)
-use iaf::utils::sanitize_filename;
+/// Sanitiza un string para usarlo como nombre de archivo
+fn sanitize_filename(title: &str) -> String {
+    title
+        .chars()
+        .map(|c| if c.is_alphanumeric() || c == '-' || c == '_' { c } else { '_' })
+        .take(80)
+        .collect::<String>()
+        .trim_matches('_')
+        .to_string()
+}
 
 fn get_chat_dir(state: &AppState, username: &str, is_admin_or_port80: bool) -> PathBuf {
     if is_admin_or_port80 || username == "admin_local" {
@@ -113,9 +122,10 @@ fn get_chat_path(state: &AppState, username: &str, is_admin_or_port80: bool, tit
     dir.join(format!("{}-{}.json", safe_title, id))
 }
 
-/// Limpia archivos viejos con el mismo UUID. FIX #10: validación estricta del sufijo.
+/// Limpia archivos viejos con el mismo UUID en el directorio de chats
+/// para evitar duplicados cuando el título cambia.
 fn clean_old_chat_files(dir: &PathBuf, session_id: &str) {
-    if !dir.exists() || !looks_like_uuid_stem(session_id) {
+    if !dir.exists() {
         return;
     }
     if let Ok(entries) = fs::read_dir(dir) {
@@ -125,8 +135,7 @@ fn clean_old_chat_files(dir: &PathBuf, session_id: &str) {
                 continue;
             }
             let fname = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
-            let expected_suffix = format!("-{}", session_id);
-            if fname.ends_with(&expected_suffix) && fname.len() > expected_suffix.len() {
+            if fname.ends_with(&format!("-{}", session_id)) {
                 let _ = fs::remove_file(&path);
                 eprintln!("[IAF] Limpiado archivo duplicado: {}", path.display());
             }
@@ -426,14 +435,28 @@ async fn sign_nonce(Json(payload): Json<SignRequest>) -> impl IntoResponse {
     }
 }
 
-
 async fn client_check() -> impl IntoResponse {
-    // FIX #1/#39: v3.0 — Electron + Capacitor, no Rust client
+    let possible_paths = vec![
+        "client/target/release/iaf-client.exe",
+        "client/target/debug/iaf-client.exe",
+        "iaf-client.exe",
+    ];
+    let mut found = Vec::new();
+    for path in &possible_paths {
+        if std::path::Path::new(path).exists() {
+            found.push(path.to_string());
+        }
+    }
     Json(json!({
         "status": "ok",
-        "client_installed": true,
-        "message": "IAF v3.0 usa Electron (desktop) o Capacitor (Android).",
-        "instructions": "Electron: cd electron && npm install && npm start. Capacitor: cd capacitor && .\\setup_capacitor.ps1"
+        "client_installed": !found.is_empty(),
+        "found_at": found,
+        "expected_paths": possible_paths,
+        "instructions": if found.is_empty() {
+            "Para instalar el cliente: cd client && cargo build --release. Luego: .\\client\\target\\release\\iaf-client.exe <url> <user> <token>"
+        } else {
+            "Cliente encontrado. Ejecutalo con: iaf-client.exe http://127.0.0.1:8080 <username> <token>"
+        }
     }))
 }
 
@@ -448,6 +471,10 @@ async fn admin_list_users(
     let admin = match require_admin(&state, &headers).await {
         Ok(a) => a, Err(e) => return (e.0, Json(json!({ "status": "error", "message": e.1 }))).into_response(),
     };
+    let _ = admin;
+    let users = state.user_store.list_users();
+    // Agregar campos calculados que el frontend espera (has_study_access, has_programming_access)
+    let users_json: Vec<serde_json::Value> = users.iter().map(|u| {
         let mut v = serde_json::to_value(u).unwrap_or(json!({}));
         v["has_study_access"] = json!(u.has_study_access());
         v["has_programming_access"] = json!(u.has_programming_access());
@@ -494,12 +521,10 @@ async fn admin_create_user(
         Err("Se requiere password (usuarios normales) o public_key (admins).".into())
     };
 
-    let result = if payload.is_admin && payload.public_key.is_some() {
-        state.user_store.create_admin(&payload.username, &payload.public_key.unwrap(), perms, limits)
-    } else if payload.is_admin && payload.public_key.is_none() {
-        // FIX #13: Error claro cuando admin no tiene clave publica
-        Err("Para crear un admin necesitas generar claves (boton Generar Claves) o subir un .pem.".into())
-    } else if let Some(ref pw) = payload.password {
+    match result {
+        Ok(user) => Json(json!({ "status": "ok", "user": user })).into_response(),
+        Err(e) => (StatusCode::BAD_REQUEST, Json(json!({ "status": "error", "message": e }))).into_response(),
+    }
 }
 
 #[derive(Deserialize)]
@@ -1344,33 +1369,27 @@ async fn chat_endpoint(
     {
         let mut agent = state.active_agent.lock().unwrap();
         agent.current_chat_path = Some(save_path.to_string_lossy().to_string());
-        // FIX #6/#25: Always interrupt and restart agent for new messages
-        if agent.running {
-            agent.interrupted = true;
-            agent.running = false;
-            if let Ok(mut abort_handle) = state.abort_handle.lock() {
-                if let Some(handle) = abort_handle.take() {
-                    handle.abort();
-                }
+        if !agent.running {
+            agent.running = true;
+            agent.interrupted = false;
+            agent.finished = false;
+            agent.final_message = None;
+            // BUG-002 FIX: Limpiar info_messages al iniciar nuevo agente
+            agent.info_messages.clear();
+            // BUG FIX: Solo limpiar steps si es conversacion NUEVA. Si es existente, cargar desde sesion.
+            if chat_file.is_some() {
+                if let Some(ref steps) = session.steps { agent.steps = steps.clone(); }
+            } else {
+                agent.steps.clear();
             }
-        }
-        agent.running = true;
-        agent.interrupted = false;
-        agent.finished = false;
-        agent.final_message = None;
-        agent.info_messages.clear();
-        if chat_file.is_some() {
-            if let Some(ref steps) = session.steps { agent.steps = steps.clone(); }
-        } else {
-            agent.steps.clear();
-        }
-        agent.thinking_content.clear();
-        agent.esperando_respuesta_usuario = false;
-        agent.respuesta_usuario = None;
-        agent.esperando_aprobacion_plan = false;
-        agent.plan_propuesto = None;
-        agent.pregunta_usuario = None;
-        agent.current_session_id = Some(session_id.clone());
+            agent.thinking_content.clear();
+            agent.esperando_respuesta_usuario = false;
+            agent.respuesta_usuario = None;
+            agent.esperando_aprobacion_plan = false;
+            agent.plan_propuesto = None;
+            agent.pregunta_usuario = None;
+            agent.current_session_id = Some(session_id.clone());
+
             let state_bg = state.clone();
             let session_bg = session.clone();
             let sid_bg = session_id.clone();
@@ -1838,18 +1857,13 @@ async fn agent_interrupt(
                     role: "system".to_string(),
                     content: "⏹️ Agente interrumpido por el usuario.".to_string(),
                     timestamp: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs(),
-    // FIX #9: Abortar tokio task para detencion inmediata
-    if let Ok(mut abort_handle) = state.abort_handle.lock() {
-        if let Some(handle) = abort_handle.take() {
-            handle.abort();
+                });
+                let _ = fs::write(path, serde_json::to_string_pretty(&session).unwrap());
+            }
         }
     }
 
-    let mut agent = state.active_agent.lock().unwrap();
-    agent.interrupted = true;
-    agent.running = false;
-
-    if let Some(ref path) = agent.current_chat_path {
+    Json(json!({ "status": "ok" })).into_response()
 }
 
 // ============================================================================

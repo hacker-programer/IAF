@@ -114,31 +114,21 @@ pub fn spawn_sub_agent(
     ))
 }
 
-/// FIX #29: Usa canonicalizacion para prevenir path traversal.
+/// Verifica que una ruta está dentro de los paths permitidos.
+/// Si allowed_paths está vacío, se permite todo.
 pub fn is_path_allowed(file_path: &str, allowed_paths: &[String]) -> bool {
-    if allowed_paths.is_empty() { return true; }
-    let canonical = match std::fs::canonicalize(file_path) {
-        Ok(p) => p,
-        Err(_) => {
-            let path = Path::new(file_path);
-            if let Some(parent) = path.parent() {
-                match std::fs::canonicalize(parent) {
-                    Ok(p) => p.join(path.file_name().unwrap_or_default()),
-                    Err(_) => return false,
-                }
-            } else { return false; }
-        }
-    };
-    let canonical_str = canonical.to_string_lossy().to_lowercase();
-    for allowed in allowed_paths {
-        if let Ok(allowed_canon) = std::fs::canonicalize(Path::new(allowed)) {
-            if canonical_str.starts_with(&allowed_canon.to_string_lossy().to_lowercase()) {
-                return true;
-            }
-        }
+    if allowed_paths.is_empty() {
+        return true;
     }
-    false
-}
+    let path = Path::new(file_path);
+    let normalized = path.to_string_lossy().to_lowercase();
+
+    for allowed in allowed_paths {
+        let allowed_norm = allowed.to_lowercase();
+        if normalized.starts_with(&allowed_norm) {
+            return true;
+        }
+        if allowed_norm.contains(&normalized) || normalized.contains(&allowed_norm) {
             return true;
         }
     }
@@ -164,9 +154,9 @@ async fn run_sub_agent(
          RESTRICCIONES:\n\
          - Solo puedes modificar archivos en: {}\n\
          - Tienes un máximo de 15 iteraciones.\n\
-    let max_iterations = 15;
-    let mut iteration = 0;
-    let start_time = std::time::Instant::now(); // FIX #44: global timeout
+         - Cuando termines (éxito o fallo), DEBES llamar a finalizar_tarea.\n\
+         - No puedes spawnear otros sub-agentes.\n\
+         - Reporta tus hallazgos de forma concisa.\n\
          \n\
          REGLAS:\n\
          - Antes de actuar, piensa en <thinking> tags.\n\

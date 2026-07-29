@@ -109,6 +109,7 @@ async fn search_duckduckgo(query: &str) -> Result<String, Box<dyn std::error::Er
 }
 
 /// Fallback: búsqueda en Google (probablemente falle por CAPTCHA/bloqueo).
+/// FIX #24: CAPTCHA timeout reduced from 60s to 10s.
 async fn search_google(
     query: &str,
     pending_captcha: Arc<Mutex<Option<CaptchaRequest>>>,
@@ -134,7 +135,8 @@ async fn search_google(
             });
         }
 
-        for _ in 0..20 { // FIX #24: 10s max instead of 60s
+        // FIX #24: 10s max instead of 60s
+        for _ in 0..20 {
             tokio::time::sleep(Duration::from_millis(500)).await;
             let current = pending_captcha.lock().unwrap();
             if let Some(ref req) = *current {
@@ -147,8 +149,8 @@ async fn search_google(
         }
         return Err("Google CAPTCHA triggered - timeout after 10s. Using DuckDuckGo as fallback.".into());
     }
-        // FIX #24: 10 segundos maximo (20 iteraciones x 500ms) en vez de 60s
-        for _ in 0..20 {
+
+    let mut results = Vec::new();
     let re = Regex::new(r#"<h3[^>]*>(.*?)</h3>"#)?;
     for cap in re.captures_iter(&body) {
         let title = cap[1].replace("href=\"", "").replace("</a>", "");
