@@ -9,7 +9,6 @@ fn char_to_key_map() -> &'static HashMap<char, (Key, bool)> {
     MAP.get_or_init(|| {
         let mut m = HashMap::new();
 
-        // Letras minúsculas (sin shift)
         let letters = [
             ('a', Key::KeyA), ('b', Key::KeyB), ('c', Key::KeyC), ('d', Key::KeyD),
             ('e', Key::KeyE), ('f', Key::KeyF), ('g', Key::KeyG), ('h', Key::KeyH),
@@ -20,11 +19,10 @@ fn char_to_key_map() -> &'static HashMap<char, (Key, bool)> {
             ('y', Key::KeyY), ('z', Key::KeyZ),
         ];
         for (ch, key) in letters {
-            m.insert(ch, (key, false)); // minúscula: sin shift
-            m.insert(ch.to_ascii_uppercase(), (key, true)); // mayúscula: con shift
+            m.insert(ch, (key, false));
+            m.insert(ch.to_ascii_uppercase(), (key, true));
         }
 
-        // Números
         let digits = [
             ('0', Key::Num0), ('1', Key::Num1), ('2', Key::Num2), ('3', Key::Num3),
             ('4', Key::Num4), ('5', Key::Num5), ('6', Key::Num6), ('7', Key::Num7),
@@ -34,7 +32,6 @@ fn char_to_key_map() -> &'static HashMap<char, (Key, bool)> {
             m.insert(ch, (key, false));
         }
 
-        // Símbolos comunes (sin shift)
         m.insert(' ', (Key::Space, false));
         m.insert('.', (Key::Dot, false));
         m.insert(',', (Key::Comma, false));
@@ -48,7 +45,6 @@ fn char_to_key_map() -> &'static HashMap<char, (Key, bool)> {
         m.insert(']', (Key::RightBracket, false));
         m.insert('`', (Key::BackQuote, false));
 
-        // Símbolos con shift
         m.insert('_', (Key::Minus, true));
         m.insert(':', (Key::SemiColon, true));
         m.insert('"', (Key::Quote, true));
@@ -77,7 +73,7 @@ fn char_to_key_map() -> &'static HashMap<char, (Key, bool)> {
 
 #[derive(Debug)]
 pub struct DesktopController {
-    pub children: Mutex<Vec<Child>>, // store Child to keep alive
+    pub children: Mutex<Vec<Child>>,
 }
 
 impl DesktopController {
@@ -85,12 +81,10 @@ impl DesktopController {
         Self { children: Mutex::new(Vec::new()) }
     }
 
-    /// Move mouse to (x, y) absolute screen coordinates.
     pub fn move_mouse(&self, x: i32, y: i32) -> Result<(), SimulateError> {
         simulate(&EventType::MouseMove { x: x as f64, y: y as f64 })
     }
 
-    /// Click mouse button (left, right, middle).
     pub fn click(&self, button: &str) -> Result<(), SimulateError> {
         let btn = match button.to_lowercase().as_str() {
             "left" => Button::Left,
@@ -102,9 +96,6 @@ impl DesktopController {
         simulate(&EventType::ButtonRelease(btn))
     }
 
-    /// Type a string as keyboard events.
-    /// Usa un HashMap estático precomputado (LUT) en lugar de match verboso.
-    /// Soporta letras (a-z, A-Z), números (0-9), espacio, puntuación común y símbolos con shift.
     pub fn type_text(&self, text: &str) -> Result<(), SimulateError> {
         let map = char_to_key_map();
 
@@ -130,7 +121,13 @@ impl DesktopController {
                             simulate(&EventType::KeyRelease(key))?;
                         }
                     }
-    /// FIX #28: Reap zombies before adding new child + reap method
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// FIX #28: Reap zombies before adding new child to prevent accumulation.
     pub fn launch_executable(&self, path: &str) -> Result<u32, Box<dyn std::error::Error>> {
         self.reap_zombies();
         let child = Command::new(path).spawn()?;
@@ -152,3 +149,4 @@ impl DesktopController {
             if remove { children.remove(i); } else { i += 1; }
         }
     }
+}
