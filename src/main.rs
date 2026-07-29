@@ -98,14 +98,22 @@ async fn require_auth(
 // ============================================================================
 
 /// Sanitiza un string para usarlo como nombre de archivo
+/// Sanitiza un string para usarlo como nombre de archivo.
+/// FIX #22: Agrega un hash de 8 caracteres al final para evitar colisiones
+/// cuando dos títulos difieren solo después del carácter 80.
 fn sanitize_filename(title: &str) -> String {
-    title
+    use std::hash::{Hash, Hasher};
+    let base: String = title
         .chars()
         .map(|c| if c.is_alphanumeric() || c == '-' || c == '_' { c } else { '_' })
-        .take(80)
-        .collect::<String>()
-        .trim_matches('_')
-        .to_string()
+        .take(70)
+        .collect();
+    let base = base.trim_matches('_').to_string();
+    // Calcular hash corto del título completo para desambiguar
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    title.hash(&mut hasher);
+    let hash = format!("{:08x}", hasher.finish());
+    format!("{}_{}", base, hash)
 }
 
 fn get_chat_dir(state: &AppState, username: &str, is_admin_or_port80: bool) -> PathBuf {

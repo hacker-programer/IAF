@@ -129,17 +129,6 @@ function copyNonceCmd(event) {
     }
 }
 
-// FIX #4: Descargar scripts PowerShell desde el panel admin
-function downloadScript(name) {
-    var a = document.createElement('a');
-    a.href = '/api/scripts/' + name;
-    a.download = name + '.ps1';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    showInfoToast('📥 Descargando ' + name + '.ps1...');
-}
-
 async function init() {
     detectPlatform();
 
@@ -353,17 +342,12 @@ async function apiCall(endpoint, method = 'GET', body = null) {
 }
 
 // ---- Mode Toggle ----
-// ---- Admin Panel ----
-document.getElementById('adminUsersBtn').onclick = openAdminUsers;
-// FIX #7: scroll to the prompt section using the correct selector
-document.getElementById('adminPromptsBtn').onclick = function() {
-    var section = document.querySelector('.config-section');
-    if (section) {
-        section.scrollIntoView({ behavior: 'smooth' });
-    } else {
-        showInfoToast('⚠️ Sección de prompts no visible.');
-    }
-};
+document.getElementById('modeProgramming').onclick = () => switchMode('programming');
+document.getElementById('modeStudy').onclick = () => switchMode('study');
+
+function switchMode(mode) {
+    document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById(mode === 'study' ? 'modeStudy' : 'modeProgramming').classList.add('active');
     document.getElementById('activeMode').textContent = mode === 'study' ? '📚 Estudiar' : '💻 Programar';
     studyProfileSection.classList.toggle('hidden', mode !== 'study');
     if (mode === 'study') {
@@ -714,25 +698,20 @@ async function loadPrompts() {
         if (prompts.status === 'ok') {
             document.getElementById('globalPrompt').value = prompts.global_current || '';
             if (activeProject && prompts.projects && prompts.projects[activeProject]) {
+                document.getElementById('localPrompt').value = prompts.projects[activeProject];
+            } else {
+                document.getElementById('localPrompt').value = '';
+            }
+        }
+    } catch(e) {}
+}
+
 document.getElementById('savePromptsBtn').onclick = async () => {
-    var globalContent = document.getElementById('globalPrompt').value;
-    var globalRes = await apiCall('/api/prompts/global', 'POST', { content: globalContent });
-
-    var localOk = true;
+    const globalContent = document.getElementById('globalPrompt').value;
+    const globalRes = await apiCall('/api/prompts/global', 'POST', { content: globalContent });
     if (activeProject && document.getElementById('localPrompt').value.trim()) {
-        var localContent = document.getElementById('localPrompt').value;
-        var localRes = await apiCall('/api/prompts/local', 'POST', { project_name: activeProject, content: localContent });
-        localOk = localRes.status === 'ok';
-    }
-
-    if (globalRes.status === 'ok' && localOk) {
-        showInfoToast('✅ Ambos prompts guardados.');
-    } else if (globalRes.status !== 'ok') {
-        alert('Error al guardar prompt global: ' + (globalRes.message || ''));
-    } else {
-        alert('Error al guardar prompt local.');
-    }
-};
+        const localContent = document.getElementById('localPrompt').value;
+        await apiCall('/api/prompts/local', 'POST', { project_name: activeProject, content: localContent });
     }
     if (globalRes.status === 'ok') {
         showInfoToast('✅ Prompts guardados.');
@@ -1058,24 +1037,11 @@ async function aprobarPlan(aprobado, feedback) {
     await apiCall('/api/agent/aprobar_plan', 'POST', { aprobado: aprobado, feedback: feedback || '' });
 }
 
-document.getElementById('approvePlanBtn').onclick = () => { aprobarPlan(true, ''); };
-document.getElementById('rejectPlanBtn').onclick = () => { aprobarPlan(false, ''); };
+// ============================================================================
+// UI HELPERS
+// ============================================================================
 
-// FIX #5: Handler para el botón Resumir en la consola de auditoría
-document.getElementById('summarizeStepsBtn').onclick = async function() {
-    try {
-        var res = await apiCall('/api/agent/summary');
-        if (res.status === 'ok' && res.summary) {
-            addMessage('agent', '📋 **Resumen:** ' + res.summary);
-        } else {
-            showInfoToast('⚠️ No hay pasos para resumir.');
-        }
-    } catch(e) {
-        showInfoToast('⚠️ Error obteniendo resumen.');
-    }
-};
-
-function addMessage(role, text, extraClass) {
+function showAgentQuestionBanner(pregunta) {
     const banner = document.getElementById('agentQuestionBanner');
     document.getElementById('agentQuestionPrompt').textContent = pregunta;
     document.getElementById('agentQuestionResponse').value = '';
@@ -1130,23 +1096,22 @@ function showInfoToast(msg) {
         const t = document.createElement('div');
         t.id = 'infoToast';
         t.className = 'info-toast';
-function showInfoToast(msg) {
-    // FIX #19: Reusar toast existente en lugar de crear múltiples superpuestos
-    var toast = document.getElementById('infoToast');
-    if (!toast) {
-        toast = document.createElement('div');
-        toast.id = 'infoToast';
-        toast.className = 'info-toast';
-        document.body.appendChild(toast);
+        t.textContent = msg;
+        document.body.appendChild(t);
+        setTimeout(() => { t.classList.add('show'); }, 10);
+        setTimeout(() => { t.classList.remove('show'); setTimeout(() => { t.remove(); }, 300); }, 3000);
+        return;
     }
     toast.textContent = msg;
     toast.classList.add('show');
-    // Limpiar timeout anterior si existe
-    if (toast._timeout) clearTimeout(toast._timeout);
-    toast._timeout = setTimeout(function() {
-        toast.classList.remove('show');
-    }, 3000);
+    setTimeout(() => { toast.classList.remove('show'); }, 3000);
 }
+
+// ============================================================================
+// CONSOLE DE AUDITORÍA
+// ============================================================================
+
+function renderConsoleSteps(steps) {
     const consoleArea = document.getElementById('consoleArea');
     if (!consoleArea) return;
     if (!steps || steps.length === 0) {
