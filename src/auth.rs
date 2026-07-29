@@ -487,6 +487,7 @@ impl UserStore {
     }
 
     /// Actualiza accesos del usuario (modo programador, modo estudio, editar prompts)
+    /// Actualiza accesos del usuario (modo programador, modo estudio, editar prompts)
     /// FIX #27: Permite modificar flags incluso en admins (para delegación de permisos)
     pub fn update_access(
         &self,
@@ -508,26 +509,6 @@ impl UserStore {
         drop(users);
         self.save()
     }
-        drop(users);
-        self.save()
-    }
-        drop(users);
-        self.save()
-    }
-
-    pub fn delete_user(&self, username: &str) -> Result<(), String> {
-        let mut users = self.users.lock();
-        let idx = users.users.iter()
-            .position(|u| u.username == username)
-            .ok_or_else(|| format!("Usuario '{}' no encontrado.", username))?;
-        users.users.remove(idx);
-        drop(users);
-        self.save()
-    }
-
-    fn validate_public_key_hex(hex_key: &str) -> Result<(), String> {
-        if hex_key.len() != 64 {
-            return Err(format!(
                 "Clave pÃºblica invÃ¡lida: debe ser 64 caracteres hex (32 bytes). Tiene {}.",
                 hex_key.len()
             ));
