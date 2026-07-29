@@ -114,34 +114,27 @@ pub fn spawn_sub_agent(
     ))
 }
 
-/// FIX #29: Usa canonicalizacion para prevenir path traversal.
+/// Verifica que una ruta está dentro de los paths permitidos.
+/// Si allowed_paths está vacío, se permite todo.
 pub fn is_path_allowed(file_path: &str, allowed_paths: &[String]) -> bool {
-    if allowed_paths.is_empty() { return true; }
-    let canonical = match std::fs::canonicalize(file_path) {
-        Ok(p) => p,
-        Err(_) => {
-            let path = Path::new(file_path);
-            if let Some(parent) = path.parent() {
-                match std::fs::canonicalize(parent) {
-                    Ok(p) => p.join(path.file_name().unwrap_or_default()),
-                    Err(_) => return false,
-                }
-            } else { return false; }
-        }
-    };
-    let canonical_str = canonical.to_string_lossy().to_lowercase();
+    if allowed_paths.is_empty() {
+        return true;
+    }
+    let path = Path::new(file_path);
+    let normalized = path.to_string_lossy().to_lowercase();
+
     for allowed in allowed_paths {
-        if let Ok(allowed_canon) = std::fs::canonicalize(Path::new(allowed)) {
-            if canonical_str.starts_with(&allowed_canon.to_string_lossy().to_lowercase()) {
-                return true;
-            }
+        let allowed_norm = allowed.to_lowercase();
+        if normalized.starts_with(&allowed_norm) {
+            return true;
+        }
+        if allowed_norm.contains(&normalized) || normalized.contains(&allowed_norm) {
+            return true;
         }
     }
 
-
-/// Ejecuta un sub-agente con un conjunto limitado de iteraciones.
-/// FIX #44: Timeout global de 10 minutos.
-async fn run_sub_agent(
+    false
+}
 
 /// Ejecuta un sub-agente con un conjunto limitado de iteraciones.
 async fn run_sub_agent(
