@@ -18,6 +18,43 @@ comandos y sube cambios a GitHub, todo de forma autónoma.
 - 📦 **Subir cambios a GitHub** automáticamente
 - 📸 **Analizar imágenes** (capturas de pantalla, diseños, etc.)
 - 🔗 **Clonar y forkear repositorios** de GitHub
+- 📱 **Acceder desde Android** con la app Capacitor
+- 🖥️ **Cliente Electron** nativo para Windows (no necesita navegador)
+
+---
+
+## 📱 Clientes Disponibles
+
+### 🖥️ Cliente Electron (Windows/Linux/Mac) — RECOMENDADO
+
+El cliente Electron es una app de escritorio nativa que:
+- **No necesita navegador** — todo está embebido en la app
+- **Ejecuta comandos localmente** (PowerShell, git, cargo) igual que el viejo cliente Rust
+- Se conecta automáticamente al servidor IAF
+- Guarda tus credenciales de forma segura
+
+```powershell
+# Instalar
+cd electron
+npm install
+
+# Iniciar
+npm start
+```
+
+### 📱 Cliente Android (Capacitor)
+
+La app Android te permite:
+- Chatear con el agente desde tu celular
+- Ver el historial de conversaciones
+- Para ejecutar comandos (PowerShell, git, cargo), necesita que el cliente Electron esté corriendo en tu PC
+- Si sos admin, el servidor ejecuta comandos directamente
+
+```powershell
+# Setup inicial
+cd capacitor
+.\setup_capacitor.ps1
+```
 
 ---
 
@@ -35,15 +72,20 @@ IAF usa **dos puertos** con niveles de seguridad distintos:
 
 > ⚠️ **Importante**: Nunca expongas el puerto 80 a internet. Cualquiera que acceda a él tendrá control total del sistema sin necesidad de contraseña.
 
+### Regla de seguridad: ¿quién ejecuta comandos?
+
+| Usuario | Desde navegador/Android | Desde Electron |
+|---------|------------------------|----------------|
+| **Admin** | El servidor ejecuta | Electron ejecuta localmente |
+| **Normal** | ❌ Necesita cliente Electron en PC | Electron ejecuta localmente |
+
+**El servidor NUNCA ejecuta comandos para usuarios no-admin.** Si sos usuario normal y querés usar IAF desde el navegador o Android, necesitás tener el cliente Electron corriendo en tu PC.
+
 ---
 
 ## 🌐 Acceso Remoto con Cloudflare Tunnel
 
 Si necesitás acceder a IAF desde fuera de tu red local (desde el trabajo, la universidad o el celular), podés usar un túnel de Cloudflare que **solo expone el puerto 8080** (el que requiere login).
-
-### ¿Qué es Cloudflare Tunnel?
-
-Es un servicio gratuito de Cloudflare que crea un "puente" seguro entre tu PC e internet, sin necesidad de abrir puertos en tu router ni configurar IPs públicas.
 
 ### Modo rápido (pruebas, sin dominio propio)
 
@@ -59,26 +101,11 @@ Esto genera una URL temporal como `https://gato-aleatorio.trycloudflare.com`. Id
 .\scripts\cloudflare_tunnel.ps1 -Mode permanent -Domain "iaf.midominio.com"
 ```
 
-Esto configura un túnel con nombre, enruta tu dominio y genera el archivo de configuración `scripts\cloudflared_config.yml`.
-
 Luego podés ejecutar el túnel cuando quieras:
 
 ```powershell
 cloudflared tunnel run iaf-tunnel
 ```
-
-O instalarlo como servicio de Windows (se inicia solo al prender la PC):
-
-```powershell
-cloudflared service install
-```
-
-### Seguridad del túnel
-
-- ✅ Solo expone el puerto **8080** (NUNCA el puerto 80)
-- ✅ El puerto 8080 **siempre requiere login**
-- ✅ Los administradores necesitan firma digital Ed25519 (más segura que una contraseña)
-- ✅ Cloudflare proporciona protección DDoS y certificado SSL automático
 
 ---
 
@@ -94,32 +121,21 @@ cloudflared service install
 | Rust | Instalado (via rustup) |
 | Git | Instalado |
 | GitHub CLI (`gh`) | Instalado y autenticado |
-
-### Requisitos para túnel (opcional)
-
-| Componente | Mínimo |
-|------------|--------|
-| cloudflared | Instalado (`winget install Cloudflare.cloudflared`) |
-| Dominio Cloudflare | Solo para modo permanente |
-
-### Claves API necesarias
-
-El asistente necesita estas claves para funcionar. Las configurás una sola vez:
-
-1. **DeepSeek API Key** — Es la más importante. Se configura en el archivo `.env` del proyecto.
-2. **OpenRouter API Key** — Para análisis multimodal de imágenes (opcional pero recomendado).
-
-Consultá con el desarrollador para obtener estas claves o generá las tuyas propias en:
-- DeepSeek: https://platform.deepseek.com/api_keys
-- OpenRouter: https://openrouter.ai/keys
+| Node.js 18+ | Para cliente Electron y Capacitor |
 
 ### Puesta en marcha
 
-1. Asegurate de tener Rust, Git y GitHub CLI instalados.
+1. Asegurate de tener Rust, Git, GitHub CLI y Node.js instalados.
 2. Colocá tus claves API en el archivo `.env`.
 3. Ejecutá `cargo run --release` en la carpeta del proyecto.
-4. Abrí tu navegador en `http://localhost:8080`.
+4. Abrí tu navegador en `http://localhost:8080` **o** iniciá el cliente Electron:
+   ```powershell
+   cd electron
+   npm install
+   npm start
+   ```
 5. (Opcional) Para acceso remoto, ejecutá el script de túnel Cloudflare.
+6. (Opcional) Para Android, ejecutá `.\capacitor\setup_capacitor.ps1`.
 
 ---
 
@@ -132,6 +148,8 @@ Al abrir `http://localhost:8080` verás:
 - **Panel izquierdo**: Lista de proyectos y chats anteriores.
 - **Panel central**: El chat donde hablás con el asistente.
 - **Panel derecho**: Consola de monitoreo (muestra qué está haciendo).
+
+En **celulares/tablets**, el panel izquierdo se oculta y se abre con el botón ☰.
 
 ### 2. Agregar un proyecto
 
@@ -158,6 +176,20 @@ El asistente se detendrá de forma segura.
 Todas tus conversaciones se guardan automáticamente. Para continuar una anterior, 
 seleccionala de la lista "Historial de Chats".
 
+### 6. Modos: Programar vs Estudiar
+
+- **💻 Programar**: El asistente escribe código y ejecuta comandos autónomamente.
+- **📚 Estudiar**: El asistente te enseña de forma personalizada según tu perfil de aprendizaje.
+
+---
+
+## 👑 Para administradores
+
+Los administradores pueden:
+- Ver conversaciones de **todos** los usuarios (con etiqueta `@username`)
+- Gestionar usuarios, permisos, límites y horarios desde el panel Admin
+- Usar autenticación por firma digital Ed25519 (más segura que contraseña)
+
 ---
 
 ## ¿Cómo funciona la autenticación?
@@ -174,11 +206,6 @@ Los administradores usan un sistema más seguro: **firma digital**.
 2. Lo firmás con tu clave privada usando el script `sign_nonce.ps1`
 3. El servidor verifica la firma con tu clave pública
 
-Esto significa que:
-- No hay contraseña que pueda ser robada
-- Un atacante necesitaría tu archivo de clave privada (que solo está en tu PC)
-- Es el mismo sistema que usan las criptomonedas
-
 ---
 
 ## Consejos para obtener mejores resultados
@@ -189,15 +216,7 @@ Esto significa que:
 
 ❌ **Malo**: "Hacé algo con matemáticas."
 
-### Describí el resultado esperado
-
-✅ **Bueno**: "Quiero que la página de login tenga un fondo azul oscuro, el logo centrado y un formulario de email/contraseña con bordes redondeados."
-
-❌ **Malo**: "Mejorá la página de login."
-
 ### Dividí tareas grandes en pasos
-
-Si tenés un proyecto complejo, dividilo en tareas más pequeñas:
 
 1. "Configurá el proyecto con Rust y Axum."
 2. "Agregá el endpoint de usuarios."
@@ -215,20 +234,15 @@ Probá presionando "Interrumpir" y luego enviá tu mensaje de nuevo.
 
 Revisá que el archivo `.env` tenga las claves correctas y reiniciá el servidor.
 
-### Cambios no deseados en mi código
+### El cliente Electron no conecta
 
-Todos los cambios se versionan en Git. Podés revertirlos con `git log` y `git revert`.
+1. Verificá que el servidor IAF esté corriendo en `127.0.0.1:8080`
+2. Revisá que hayas hecho login en la UI del Electron primero
+3. Las credenciales se guardan en `%APPDATA%/iaf-electron/config.json`
 
-### El asistente no encuentra mi proyecto
+### Conversaciones duplicadas en el historial
 
-Asegurate de que la carpeta del proyecto exista y tenga un repositorio Git inicializado.
-
-### El túnel Cloudflare no funciona
-
-1. Verificá que `cloudflared` esté instalado: `cloudflared --version`
-2. Verificá que el servidor IAF esté corriendo en `127.0.0.1:8080`
-3. Para modo permanente, verificá que tu dominio esté configurado en Cloudflare
-4. Revisá que no haya firewall bloqueando `cloudflared`
+Solucionado en v3.0. Si ves duplicados de antes, se limpiarán automáticamente al abrir la conversación.
 
 ---
 
@@ -249,15 +263,15 @@ y cualquier lenguaje de programación.
 Está diseñado para funcionar en computadoras de gama baja (4 GB de RAM, 2 núcleos). 
 Si tu computadora es más potente, IAF se adapta automáticamente para aprovecharla.
 
-### ¿Mis datos están seguros?
-
-IAF se ejecuta 100% en tu computadora. Las únicas conexiones externas son a las APIs 
-(DeepSeek, Google, OpenRouter) y a GitHub para subir cambios.
-
 ### ¿Puedo usar IAF desde mi celular?
 
-Sí, si configuraste el túnel Cloudflare, podés acceder desde cualquier navegador web a 
-tu dominio (ej: `https://iaf.midominio.com`). Necesitarás tu usuario y contraseña.
+Sí, de dos formas:
+1. **Navegador**: Si configuraste el túnel Cloudflare, accedé desde cualquier navegador
+2. **App Android**: Con Capacitor, tenés una app nativa (requiere cliente Electron en PC para comandos)
+
+### ¿Necesito el cliente Electron?
+
+Si solo usás IAF desde la misma PC donde corre el servidor y sos admin (puerto 80), no. En cualquier otro caso, **sí** — el cliente Electron es quien ejecuta PowerShell, git y cargo en tu PC.
 
 ---
 
