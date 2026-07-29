@@ -413,10 +413,9 @@ impl UserStore {
             None => return Ok(None),
         };
 
-        // FIX #30: Usuario con nonce -> Ok(None) igual que usuario no encontrado
         let hash_str = match &user.password_hash {
             Some(h) => h.clone(),
-            None => return Ok(None),
+            None => return Err("Este usuario no tiene contraseÃ±a configurada (usa nonce).".into()),
         };
 
         let parsed_hash = PasswordHash::new(&hash_str)
@@ -425,15 +424,17 @@ impl UserStore {
         let valid = Argon2::default().verify_password(password.as_bytes(), &parsed_hash).is_ok();
 
         if valid {
-            // Verificar límites de horario
+            // Verificar lÃ­mites de horario
             if !user.limits.is_active_now() && !user.is_admin {
-                return Err("Tu cuenta no está activa en este horario.".into());
+                return Err("Tu cuenta no estÃ¡ activa en este horario.".into());
             }
             Ok(Some(user))
         } else {
             Ok(None)
         }
     }
+
+    /// Cambia la contraseÃ±a de un usuario. SOLO admin.
     pub fn change_password(&self, username: &str, new_password: &str) -> Result<(), String> {
         if new_password.len() < 8 {
             return Err("La contraseÃ±a debe tener al menos 8 caracteres.".into());
@@ -485,8 +486,6 @@ impl UserStore {
         drop(users);
         self.save()
     }
-
-    /// Actualiza accesos del usuario (modo programador, modo estudio, editar prompts)
     /// Actualiza accesos del usuario (modo programador, modo estudio, editar prompts)
     /// FIX #27: Permite modificar flags incluso en admins (para delegación de permisos)
     pub fn update_access(
@@ -509,6 +508,14 @@ impl UserStore {
         drop(users);
         self.save()
     }
+
+    pub fn delete_user(&self, username: &str) -> Result<(), String> {
+        self.save()
+    }
+
+    fn validate_public_key_hex(hex_key: &str) -> Result<(), String> {
+        if hex_key.len() != 64 {
+            return Err(format!(
                 "Clave pÃºblica invÃ¡lida: debe ser 64 caracteres hex (32 bytes). Tiene {}.",
                 hex_key.len()
             ));
