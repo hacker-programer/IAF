@@ -592,9 +592,7 @@ pub async fn run_agent_loop(
             ));
         }
 
-
-        let force_none_tool_choice = false;
-        let current_tool_choice = if force_none_tool_choice { "none" } else { "auto" };
+        let current_tool_choice = "auto";
 
         let mut attempts = 0;
         let res_val: Value = loop {
@@ -604,9 +602,10 @@ pub async fn run_agent_loop(
                 .header("Authorization", format!("Bearer {}", deepseek_key))
                 .header("Content-Type", "application/json")
                 .json(&json!({
-                    "model": "deepseek-v4-pro",
+                    "model": "deepseek-chat",
                     "messages": messages,
                     "tools": tools,
+                    "tool_choice": current_tool_choice,
                     "tool_choice": current_tool_choice,
                     "thinking": { "type": "enabled" },
                     "reasoning_effort": "high"
