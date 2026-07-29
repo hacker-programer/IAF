@@ -90,17 +90,11 @@ async fn require_auth(
     let token = extract_bearer_token(headers)
         .ok_or_else(|| (StatusCode::UNAUTHORIZED, "Token Bearer requerido.".into()))?;
     state.session_store.validate_token(&token)
-        .ok_or_else(|| (StatusCode::UNAUTHORIZED, "Token inválido o expirado.".into()))
-}
-
-// ============================================================================
-// Chat Helpers (nueva estructura de almacenamiento)
-// ============================================================================
 // ============================================================================
 // Chat Helpers (nueva estructura de almacenamiento)
 // ============================================================================
 
-// FIX #46: Usar la función unificada de utils.rs (con hash anti-colisión)
+// FIX #46: Usar la función unificada de utils.rs (80 chars + hash anti-colisión)
 use iaf::utils::sanitize_filename;
 
 fn get_chat_dir(state: &AppState, username: &str, is_admin_or_port80: bool) -> PathBuf {
@@ -431,15 +425,34 @@ async fn sign_nonce(Json(payload): Json<SignRequest>) -> impl IntoResponse {
 }
 
 async fn client_check() -> impl IntoResponse {
-    // FIX #1/#39: v3.0 — cliente Rust eliminado. El frontend detecta
-    // la plataforma (Electron/Capacitor/Navegador) automáticamente.
+    let possible_paths = vec![
+        "client/target/release/iaf-client.exe",
+        "client/target/debug/iaf-client.exe",
+        "iaf-client.exe",
+    ];
+    let mut found = Vec::new();
+    for path in &possible_paths {
+        if std::path::Path::new(path).exists() {
+            found.push(path.to_string());
+        }
+    }
     Json(json!({
         "status": "ok",
-        "client_installed": true,
-        "message": "IAF v3.0 usa Electron (desktop) o Capacitor (Android) como cliente.",
-        "instructions": "Electron: cd electron && npm install && npm start. Capacitor: cd capacitor && .\\setup_capacitor.ps1"
+        "client_installed": !found.is_empty(),
+        "found_at": found,
+        "expected_paths": possible_paths,
+        "instructions": if found.is_empty() {
+            "Para instalar el cliente: cd client && cargo build --release. Luego: .\\client\\target\\release\\iaf-client.exe <url> <user> <token>"
+        } else {
+            "Cliente encontrado. Ejecutalo con: iaf-client.exe http://127.0.0.1:8080 <username> <token>"
+        }
     }))
 }
+
+// ============================================================================
+// Endpoints Admin (gestión de usuarios)
+// ============================================================================
+
 async fn admin_list_users(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -502,12 +515,12 @@ async fn admin_create_user(
         Err(e) => (StatusCode::BAD_REQUEST, Json(json!({ "status": "error", "message": e }))).into_response(),
     }
 }
-    let result = if payload.is_admin && payload.public_key.is_some() {
-        state.user_store.create_admin(&payload.username, &payload.public_key.unwrap(), perms, limits)
-    } else if payload.is_admin && payload.public_key.is_none() {
-        // FIX #13: Error claro cuando admin no tiene clave pública
-        Err("Para crear un admin necesitás generar claves (botón 'Generar Claves') o subir un .pem.".into())
-    } else if let Some(ref pw) = payload.password {
+
+#[derive(Deserialize)]
+struct UpdateLimitsRequest {
+    limits: UserLimits,
+}
+
 async fn admin_update_limits(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -1832,24 +1845,26 @@ async fn agent_interrupt(
                 session.messages.push(ChatMessage {
                     role: "system".to_string(),
                     content: "⏹️ Agente interrumpido por el usuario.".to_string(),
-async fn agent_interrupt(
-    State(state): State<AppState>,
-    headers: HeaderMap,
-) -> impl IntoResponse {
-    let _username = match require_auth(&state, &headers).await {
-        Ok(u) => u, Err(e) => return (e.0, Json(json!({ "status": "error", "message": e.1 }))).into_response(),
-    };
-
-    // FIX #9: Abortar el tokio task para detención inmediata
-    if let Ok(mut abort_handle) = state.abort_handle.lock() {
-        if let Some(handle) = abort_handle.take() {
-            handle.abort();
+                    timestamp: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs(),
+                });
+                let _ = fs::write(path, serde_json::to_string_pretty(&session).unwrap());
+            }
         }
     }
 
-    let mut agent = state.active_agent.lock().unwrap();
-    agent.interrupted = true;
-    agent.running = false;
+    Json(json!({ "status": "ok" })).into_response()
+}
+
+// ============================================================================
+// Endpoints de CAPTCHA
+// ============================================================================
+
+#[derive(Deserialize)]
+struct CaptchaSolveRequest {
+    id: String,
+    solved_content: String,
+}
+
 async fn captcha_status(
     State(state): State<AppState>,
     headers: HeaderMap,
