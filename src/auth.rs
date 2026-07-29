@@ -487,16 +487,6 @@ impl UserStore {
     }
 
     /// Actualiza accesos del usuario (modo programador, modo estudio, editar prompts)
-    pub fn update_access(
-        &self,
-        username: &str,
-        modo_estudio: bool,
-        modo_programador: bool,
-        editar_global: bool,
-        editar_local: bool,
-    ) -> Result<(), String> {
-        let mut users = self.users.lock();
-    /// Actualiza accesos del usuario (modo programador, modo estudio, editar prompts)
     /// FIX #27: Permite modificar flags incluso en admins (para delegación de permisos)
     pub fn update_access(
         &self,
@@ -515,6 +505,9 @@ impl UserStore {
         user.modo_programador = modo_programador;
         user.editar_system_prompt_global = editar_global;
         user.editar_system_prompt_local = editar_local;
+        drop(users);
+        self.save()
+    }
         drop(users);
         self.save()
     }
