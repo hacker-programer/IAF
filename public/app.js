@@ -267,11 +267,9 @@ loginTabs.addEventListener('click', (e) => {
         loginError.classList.add('hidden');
     }
 });
-document.getElementById('loginBtn').onclick = async () => {
-    const username = document.getElementById('loginUser').value.trim();
-    const password = document.getElementById('loginPass').value;
-    if (!username || !password) return showLoginError('Usuario y contraseña requeridos.');
 
+// ---- Password Login ----
+document.getElementById('loginBtn').onclick = async () => {
     try {
         const res = await apiCall('/api/auth/login', 'POST', { username, password });
         if (res.status === 'ok') {
