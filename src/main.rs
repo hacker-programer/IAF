@@ -178,7 +178,6 @@ fn looks_like_uuid_stem(stem: &str) -> bool {
                 }
             }
         }
-    }
     migrated
 }
 
