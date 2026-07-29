@@ -25,6 +25,27 @@ const { execSync, exec, spawn } = require('child_process');
 const crypto = require('crypto');
 
 // ============================================================================
+// Seguridad: validación de entrada para prevenir inyección de comandos
+// ============================================================================
+
+/// Solo permite caracteres seguros en subcomandos y argumentos
+/// (letras, números, guiones, underscore, punto, espacios, slash)
+const SAFE_ARG_REGEX = /^[a-zA-Z0-9_\-\s.\/\\:+=,@~]+$/;
+
+function validateSafeArg(value, context) {
+    if (typeof value !== 'string' || value.length === 0) return true; // empty is ok
+    if (value.length > 500) {
+        console.error(`[IAF-Electron] BLOQUEO: ${context} excede 500 caracteres: ${value.substring(0,80)}...`);
+        return false;
+    }
+    if (!SAFE_ARG_REGEX.test(value)) {
+        console.error(`[IAF-Electron] BLOQUEO: ${context} contiene caracteres no permitidos: ${value}`);
+        return false;
+    }
+    return true;
+}
+
+// ============================================================================
 // Configuración
 // ============================================================================
 
@@ -130,8 +151,13 @@ function executePowerShell(params) {
     const command = params.command;
     const workDir = params.work_dir || process.cwd();
 
+    // FIX #3: Usar Base64 encoding para evitar escapes frágiles.
+    // PowerShell acepta -EncodedCommand con Base64 UTF-16LE.
+    const utf16le = Buffer.from(command, 'utf16le');
+    const base64Cmd = utf16le.toString('base64');
+
     try {
-        const result = execSync(`powershell -NoProfile -Command "${command.replace(/"/g, '\\"')}"`, {
+        const result = execSync(`powershell -NoProfile -EncodedCommand ${base64Cmd}`, {
             cwd: workDir,
             maxBuffer: 10 * 1024 * 1024, // 10 MB
             timeout: (params.timeout_secs || 120) * 1000,
@@ -198,16 +224,27 @@ function executeFileMetadata(params) {
 }
 
 function executeGit(params) {
-    const subcommand = params.subcommand || '';
-    const args = params.args || '';
+    const subcommand = (params.subcommand || '').trim();
+    const args = (params.args || '').trim();
     const workDir = params.work_dir || process.cwd();
 
+    // FIX #2: Validar que subcommand y args solo contengan caracteres seguros
+    if (subcommand && !validateSafeArg(subcommand, 'git subcommand')) {
+        throw new Error(`Comando git bloqueado por seguridad: subcommand contiene caracteres no permitidos`);
+    }
+    if (args && !validateSafeArg(args, 'git args')) {
+        throw new Error(`Comando git bloqueado por seguridad: args contienen caracteres no permitidos`);
+    }
+
     try {
-        const result = execSync(`git ${subcommand} ${args}`, {
+        const cmd = ['git', subcommand].filter(Boolean).join(' ');
+        const fullCmd = args ? `${cmd} ${args}` : cmd;
+        const result = execSync(fullCmd, {
             cwd: workDir,
             maxBuffer: 5 * 1024 * 1024,
             timeout: 60 * 1000,
             encoding: 'utf-8',
+            windowsHide: true,
         });
         return { stdout: result, stderr: '', exit_code: 0 };
     } catch (e) {
@@ -220,16 +257,27 @@ function executeGit(params) {
 }
 
 function executeCargo(params) {
-    const subcommand = params.subcommand || '';
-    const args = params.args || '';
+    const subcommand = (params.subcommand || '').trim();
+    const args = (params.args || '').trim();
     const workDir = params.work_dir || process.cwd();
 
+    // FIX #2: Validar que subcommand y args solo contengan caracteres seguros
+    if (subcommand && !validateSafeArg(subcommand, 'cargo subcommand')) {
+        throw new Error(`Comando cargo bloqueado por seguridad: subcommand contiene caracteres no permitidos`);
+    }
+    if (args && !validateSafeArg(args, 'cargo args')) {
+        throw new Error(`Comando cargo bloqueado por seguridad: args contienen caracteres no permitidos`);
+    }
+
     try {
-        const result = execSync(`cargo ${subcommand} ${args}`, {
+        const cmd = ['cargo', subcommand].filter(Boolean).join(' ');
+        const fullCmd = args ? `${cmd} ${args}` : cmd;
+        const result = execSync(fullCmd, {
             cwd: workDir,
             maxBuffer: 10 * 1024 * 1024,
             timeout: 300 * 1000, // 5 minutos para builds
             encoding: 'utf-8',
+            windowsHide: true,
         });
         return { stdout: result, stderr: '', exit_code: 0 };
     } catch (e) {
@@ -471,22 +519,16 @@ function createWindow() {
             nodeIntegration: false,
             contextIsolation: true,
         },
-        // Auto-hide menu bar on Windows/Linux
         autoHideMenuBar: true,
     });
 
-    // Cargar la UI desde el servidor
     const serverUrl = config.serverUrl || 'http://127.0.0.1:8080';
     mainWindow.loadURL(serverUrl);
-
-    // O alternativamente, cargar desde archivos locales si el servidor no está disponible
-    // mainWindow.loadFile(path.join(__dirname, '..', 'public', 'index.html'));
 
     mainWindow.on('closed', () => {
         mainWindow = null;
     });
 
-    // Abrir DevTools solo en desarrollo
     if (process.argv.includes('--dev')) {
         mainWindow.webContents.openDevTools();
     }
@@ -496,7 +538,6 @@ function createWindow() {
 // IPC Handlers (comunicación entre main process y renderer/preload)
 // ============================================================================
 
-// La UI (renderer) solicita al main process que ejecute algo directamente
 ipcMain.handle('execute-local', async (event, action, params) => {
     const req = {
         request_id: crypto.randomUUID(),
@@ -506,7 +547,6 @@ ipcMain.handle('execute-local', async (event, action, params) => {
     return executeRequest(req);
 });
 
-// La UI actualiza credenciales después del login
 ipcMain.handle('set-credentials', async (event, credentials) => {
     config.serverUrl = credentials.serverUrl || config.serverUrl;
     config.username = credentials.username;
@@ -514,13 +554,11 @@ ipcMain.handle('set-credentials', async (event, credentials) => {
     saveConfig();
     console.log('[IAF-Electron] Credenciales actualizadas para:', config.username);
 
-    // Reconectar con nuevas credenciales
     disconnectFromServer();
     await connectToServer();
     return { status: 'ok' };
 });
 
-// La UI solicita estado del cliente
 ipcMain.handle('get-client-status', async () => {
     return {
         connected: isConnected,
@@ -530,7 +568,6 @@ ipcMain.handle('get-client-status', async () => {
     };
 });
 
-// La UI solicita desconectar
 ipcMain.handle('disconnect-client', async () => {
     disconnectFromServer();
     return { status: 'ok' };
@@ -544,7 +581,6 @@ app.whenReady().then(() => {
     loadConfig();
     createWindow();
 
-    // Intentar conectar automáticamente si hay credenciales guardadas
     if (config.token) {
         setTimeout(connectToServer, 2000);
     }
