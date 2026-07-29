@@ -29,7 +29,7 @@ mod client_protocol;
 
 use crate::state::{
     AppState, Project, PromptConfig, ActiveAgentStatus, ProcessRegistry, ToolResultStore, SubAgentManager,
-    ChatSession, ChatMessage, CicleState, CiclePhase, CaptchaRequest,
+    ChatSession, ChatMessage, CicleState, CiclePhase, CaptchaRequest, AuditStep,
 };
 use crate::desktop::DesktopController;
 use crate::auth::{UserStore, ChallengeStore, SessionStore, UserLimits, WeeklySchedule, generate_keypair};
@@ -97,9 +97,16 @@ async fn require_auth(
 // Chat Helpers (nueva estructura de almacenamiento)
 // ============================================================================
 
-use iaf::utils::sanitize_filename;
-
-
+/// Sanitiza un string para usarlo como nombre de archivo
+fn sanitize_filename(title: &str) -> String {
+    title
+        .chars()
+        .map(|c| if c.is_alphanumeric() || c == '-' || c == '_' { c } else { '_' })
+        .take(80)
+        .collect::<String>()
+        .trim_matches('_')
+        .to_string()
+}
 
 fn get_chat_dir(state: &AppState, username: &str, is_admin_or_port80: bool) -> PathBuf {
     if is_admin_or_port80 || username == "admin_local" {
@@ -559,10 +566,10 @@ async fn admin_update_access(
     };
     match state.user_store.update_access(
         &username,
-        payload.modo_estudio,
-        payload.modo_programador,
-        payload.editar_system_prompt_global,
-        payload.editar_system_prompt_local,
+        payload.modo_estudio.unwrap_or(false),
+        payload.modo_programador.unwrap_or(false),
+        payload.editar_system_prompt_global.unwrap_or(false),
+        payload.editar_system_prompt_local.unwrap_or(false),
     ) {
         Ok(()) => Json(json!({ "status": "ok" })).into_response(),
         Err(e) => (StatusCode::NOT_FOUND, Json(json!({ "status": "error", "message": e }))).into_response(),
@@ -583,7 +590,18 @@ async fn admin_update_schedule(
     let _admin = match require_admin(&state, &headers).await {
         Ok(a) => a, Err(e) => return (e.0, Json(json!({ "status": "error", "message": e.1 }))).into_response(),
     };
-    match state.user_store.update_schedule(&username, payload.horarios) {
+    // Convertir Vec<Vec<u32>> a Vec<(u32, u32)>
+    let converted: HashMap<String, Vec<(u32, u32)>> = payload.horarios.into_iter()
+        .map(|(day, ranges)| {
+            let tuples: Vec<(u32, u32)> = ranges.into_iter()
+                .filter(|v| v.len() >= 2)
+                .map(|v| (v[0], v[1]))
+                .collect();
+            (day, tuples)
+        })
+        .collect();
+    let schedule = WeeklySchedule { horarios: converted };
+    match state.user_store.update_schedule(&username, schedule) {
         Ok(()) => Json(json!({ "status": "ok" })).into_response(),
         Err(e) => (StatusCode::NOT_FOUND, Json(json!({ "status": "error", "message": e }))).into_response(),
     }
@@ -856,7 +874,6 @@ async fn legacy_prompts_refine(
         if feedback.is_empty() { String::new() } else { format!("Feedback adicional: {}", feedback) }
     );
 
-    // Usar el scraper o llamada directa a DeepSeek
     let api_key = deepseek_key();
     let client = reqwest::Client::new();
 
@@ -963,7 +980,7 @@ async fn fork_project(
             projects.push(Project {
                 name: repo_name.clone(),
                 path: project_dir.to_string_lossy().to_string(),
-                repo_url: Some(payload.repo_url.clone()),
+                is_local: false,
             });
 
             let local_config = state.base_workspace.join(".config").join("local_projects.json");
@@ -1009,7 +1026,7 @@ async fn add_local_project(
     projects.push(Project {
         name: payload.name.clone(),
         path: payload.path.clone(),
-        repo_url: None,
+        is_local: true,
     });
 
     let local_config = state.base_workspace.join(".config").join("local_projects.json");
@@ -1031,16 +1048,19 @@ async fn get_cicle(
         Ok(u) => u, Err(e) => return (e.0, Json(json!({ "status": "error", "message": e.1 }))).into_response(),
     };
 
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH).unwrap().as_secs();
+
     match state.load_cicle(&username, &project_name) {
-        Ok(cicle) => Json(json!({ "status": "ok", "cicle": cicle })).into_response(),
-        Err(_) => Json(json!({
+        Some(cicle) => Json(json!({ "status": "ok", "cicle": cicle })).into_response(),
+        None => Json(json!({
             "status": "ok",
             "cicle": CicleState {
-                project_name: project_name,
-                phase: CiclePhase::Implementation,
-                iteration: 0,
-                bugs_found: Vec::new(),
-                optimizations_applied: Vec::new(),
+                project_name,
+                current_phase: CiclePhase::Implementacion,
+                iteration_count: 0,
+                started_at: now,
+                last_updated: now,
             }
         })).into_response(),
     }
@@ -1207,7 +1227,7 @@ async fn study_build_prompt(
         Ok(u) => u, Err(e) => return (e.0, Json(json!({ "status": "error", "message": e.1 }))).into_response(),
     };
 
-    let prompt = state.study_engine.build_prompt(&username, &payload.topic);
+    let prompt = state.study_engine.build_study_system_prompt(&username, &payload.topic);
     Json(json!({ "status": "ok", "prompt": prompt })).into_response()
 }
 
@@ -1679,10 +1699,8 @@ async fn sync_get_history(
         Ok(u) => u, Err(e) => return (e.0, Json(json!({ "status": "error", "message": e.1 }))).into_response(),
     };
 
-    match state.sync_store.get_history(&project_id, &path) {
-        Ok(versions) => Json(json!({ "status": "ok", "versions": versions })).into_response(),
-        Err(e) => (StatusCode::NOT_FOUND, Json(json!({ "status": "error", "message": e }))).into_response(),
-    }
+    let versions = state.sync_store.get_file_history(&project_id, &path);
+    Json(json!({ "status": "ok", "versions": versions })).into_response()
 }
 
 // ============================================================================
@@ -1757,14 +1775,14 @@ async fn agent_summary(
         Err(_) => {
             let agent = state.active_agent.lock().unwrap();
             let summary: Vec<String> = agent.steps.iter()
-                .filter_map(|s| if let Some(detail) = &s.detail { Some(format!("{}: {}", s.title, detail)) } else { Some(s.title.clone()) })
+                .map(|s| format!("{}: {}", s.title, s.detail))
                 .collect();
             return Json(json!({ "status": "ok", "summary": summary })).into_response();
         }
     };
     let agent = state.active_agent.lock().unwrap();
     let summary: Vec<String> = agent.steps.iter()
-        .filter_map(|s| if let Some(detail) = &s.detail { Some(format!("{}: {}", s.title, detail)) } else { Some(s.title.clone()) })
+        .map(|s| format!("{}: {}", s.title, s.detail))
         .collect();
     Json(json!({ "status": "ok", "summary": summary })).into_response()
 }
@@ -1806,9 +1824,15 @@ async fn agent_approve_plan(
     };
 
     let mut agent = state.active_agent.lock().unwrap();
-    agent.plan_aprobado = Some(payload.aprobado);
-    agent.plan_feedback = payload.feedback;
+    // Marcar que la aprobación fue procesada — el agente lee el estado
     agent.esperando_aprobacion_plan = false;
+
+    // Si el usuario aprobó, desbloquear al agente
+    if payload.aprobado {
+        agent.respuesta_usuario = Some("PLAN_APROBADO".to_string());
+    } else {
+        agent.respuesta_usuario = Some(format!("PLAN_RECHAZADO: {}", payload.feedback.unwrap_or_default()));
+    }
 
     Json(json!({ "status": "ok" })).into_response()
 }
@@ -1891,7 +1915,7 @@ async fn captcha_solve(
     let mut captcha = state.pending_captcha.lock().unwrap();
     if let Some(ref mut c) = *captcha {
         if c.id == payload.id {
-            c.resolved_content = Some(payload.solved_content);
+            c.solved_content = Some(payload.solved_content);
             return Json(json!({ "status": "ok" })).into_response();
         }
     }
@@ -1963,7 +1987,6 @@ async fn client_connect(
     let client = ConnectedClient {
         client_id: client_id.clone(),
         username: username.clone(),
-        token: payload.token.clone(),
         connected_at: now,
         last_heartbeat: now,
         host_info: payload.host_info.clone(),
