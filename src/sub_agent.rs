@@ -137,11 +137,11 @@ pub fn is_path_allowed(file_path: &str, allowed_paths: &[String]) -> bool {
             }
         }
     }
-    false
-}
 
-    false
-}
+
+/// Ejecuta un sub-agente con un conjunto limitado de iteraciones.
+/// FIX #44: Timeout global de 10 minutos.
+async fn run_sub_agent(
 
 /// Ejecuta un sub-agente con un conjunto limitado de iteraciones.
 async fn run_sub_agent(
