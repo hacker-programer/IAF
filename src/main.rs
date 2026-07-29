@@ -1828,6 +1828,26 @@ async fn agent_interrupt(
 
     if let Some(ref path) = agent.current_chat_path {
         // Append interruption message to chat
+async fn agent_interrupt(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> impl IntoResponse {
+    let _username = match require_auth(&state, &headers).await {
+        Ok(u) => u, Err(e) => return (e.0, Json(json!({ "status": "error", "message": e.1 }))).into_response(),
+    };
+
+    // FIX #9: Abortar el tokio task para detención inmediata del agente
+    if let Ok(mut abort_handle) = state.abort_handle.lock() {
+        if let Some(handle) = abort_handle.take() {
+            handle.abort();
+        }
+    }
+
+    let mut agent = state.active_agent.lock().unwrap();
+    agent.interrupted = true;
+    agent.running = false;
+
+    if let Some(ref path) = agent.current_chat_path {
         if let Ok(content) = fs::read_to_string(path) {
             if let Ok(mut session) = serde_json::from_str::<ChatSession>(&content) {
                 session.messages.push(ChatMessage {
@@ -1842,29 +1862,6 @@ async fn agent_interrupt(
 
     Json(json!({ "status": "ok" })).into_response()
 }
-
-// ============================================================================
-// Endpoints de CAPTCHA
-// ============================================================================
-
-#[derive(Deserialize)]
-struct CaptchaSolveRequest {
-    id: String,
-    solved_content: String,
-}
-
-async fn captcha_status(
-    State(state): State<AppState>,
-    headers: HeaderMap,
-) -> impl IntoResponse {
-    let _username = match require_auth(&state, &headers).await {
-        Ok(u) => u,
-        Err(_) => {
-            // Si no hay auth en puerto 80, igual devolvemos status ok pero sin captcha
-            if state.port_80 {
-                return Json(json!({ "status": "ok", "url": null })).into_response();
-            }
-            return Json(json!({ "status": "ok", "url": null })).into_response();
         }
     };
 
