@@ -1,4 +1,3 @@
-
 citybound/
 /target
 .config/
@@ -7,3 +6,12 @@ debug_messages.json
 .config/users.json
 *.pem
 .config/*.pem
+
+# Electron client
+electron/node_modules/
+electron/dist/
+
+# Capacitor Android
+capacitor/node_modules/
+capacitor/android/
+capacitor/ios/
