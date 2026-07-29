@@ -1361,31 +1361,56 @@ async fn chat_endpoint(
 
     // Iniciar agente en background (BUG #4 fix)
     {
+    // Iniciar agente en background
+    {
         let mut agent = state.active_agent.lock().unwrap();
         agent.current_chat_path = Some(save_path.to_string_lossy().to_string());
-        if !agent.running {
-            agent.running = true;
-            agent.interrupted = false;
-            agent.finished = false;
-            agent.final_message = None;
-            // BUG-002 FIX: Limpiar info_messages al iniciar nuevo agente
-            agent.info_messages.clear();
-            // BUG FIX: Solo limpiar steps si es conversacion NUEVA. Si es existente, cargar desde sesion.
-            if chat_file.is_some() {
-                if let Some(ref steps) = session.steps { agent.steps = steps.clone(); }
-            } else {
-                agent.steps.clear();
-            }
-            agent.thinking_content.clear();
-            agent.esperando_respuesta_usuario = false;
-            agent.respuesta_usuario = None;
-            agent.esperando_aprobacion_plan = false;
-            agent.plan_propuesto = None;
-            agent.pregunta_usuario = None;
-            agent.current_session_id = Some(session_id.clone());
 
-            let state_bg = state.clone();
-            let session_bg = session.clone();
+        // FIX #6: Si el agente ya está corriendo, interrumpirlo para procesar
+        // el nuevo mensaje. Esto evita que mensajes se ignoren silenciosamente.
+        if agent.running {
+            // Interrumpir el agente actual
+            agent.interrupted = true;
+            agent.running = false;
+            // También abortar el tokio task si existe
+            if let Ok(mut abort_handle) = state.abort_handle.lock() {
+                if let Some(handle) = abort_handle.take() {
+                    handle.abort();
+                }
+            }
+            // Guardar mensaje de interrupción en la sesión
+            if let Ok(content) = fs::read_to_string(&save_path) {
+                if let Ok(mut updated) = serde_json::from_str::<ChatSession>(&content) {
+                    updated.messages.push(ChatMessage {
+                        role: "system".to_string(),
+                        content: "⏹️ Agente interrumpido para procesar un nuevo mensaje.".to_string(),
+                        timestamp: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs(),
+                    });
+                    let _ = fs::write(&save_path, serde_json::to_string_pretty(&updated).unwrap());
+                }
+            }
+        }
+
+        // Iniciar el agente con el nuevo mensaje
+        agent.running = true;
+        agent.interrupted = false;
+        agent.finished = false;
+        agent.final_message = None;
+        // BUG-002 FIX: Limpiar info_messages al iniciar nuevo agente
+        agent.info_messages.clear();
+        // BUG FIX: Solo limpiar steps si es conversacion NUEVA. Si es existente, cargar desde sesion.
+        if chat_file.is_some() {
+            if let Some(ref steps) = session.steps { agent.steps = steps.clone(); }
+        } else {
+            agent.steps.clear();
+        }
+        agent.thinking_content.clear();
+        agent.esperando_respuesta_usuario = false;
+        agent.respuesta_usuario = None;
+        agent.esperando_aprobacion_plan = false;
+        agent.plan_propuesto = None;
+        agent.pregunta_usuario = None;
+        agent.current_session_id = Some(session_id.clone());
             let sid_bg = session_id.clone();
             let uname_bg = username.clone();
             let is_admin_bg = is_admin;
