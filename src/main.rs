@@ -425,7 +425,7 @@ async fn sign_nonce(Json(payload): Json<SignRequest>) -> impl IntoResponse {
         Err(e) => Json(json!({ "status": "error", "message": e })),
     }
 }
-}
+
 
 async fn client_check() -> impl IntoResponse {
     // FIX #1/#39: v3.0 — Electron + Capacitor, no Rust client
