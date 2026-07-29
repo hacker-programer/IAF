@@ -128,8 +128,8 @@ function copyNonceCmd(event) {
         if (fallbackCopy(cmd)) { onSuccess(); } else { onFailure(); }
     }
 }
-}
 
+// FIX #4: Descargar scripts PowerShell
 // FIX #4: Descargar scripts PowerShell
 function downloadScript(name) {
     var a = document.createElement('a');
