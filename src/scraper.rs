@@ -53,8 +53,13 @@ async fn search_duckduckgo(query: &str) -> Result<String, Box<dyn std::error::Er
     
     let body = response.text().await?;
 
+    // Parsear resultados de DuckDuckGo Lite
+    // El HTML de lite.duckduckgo.com es muy simple:
+    // - Cada resultado está en una tabla con clase "result" o similar
+    // - Los enlaces están en <a> tags con class="result-link" o "result-snippet"
     let mut results = Vec::new();
 
+    // Extraer enlaces de resultados (formato: <a rel="nofollow" href="...">)
     let link_re = Regex::new(r#"<a[^>]*rel="nofollow"[^>]*href="([^"]*)"[^>]*>([^<]*)</a>"#)?;
     for cap in link_re.captures_iter(&body) {
         let url = &cap[1];
@@ -64,6 +69,7 @@ async fn search_duckduckgo(query: &str) -> Result<String, Box<dyn std::error::Er
         }
     }
 
+    // Si no encontramos con rel=nofollow, intentar extraer snippets
     if results.is_empty() {
         let snippet_re = Regex::new(r#"<td[^>]*class="[^"]*result-snippet[^"]*"[^>]*>(.*?)</td>"#)?;
         for cap in snippet_re.captures_iter(&body) {
@@ -74,6 +80,7 @@ async fn search_duckduckgo(query: &str) -> Result<String, Box<dyn std::error::Er
         }
     }
 
+    // Si aún así no hay resultados, intentar extraer cualquier enlace
     if results.is_empty() {
         let any_link_re = Regex::new(r#"<a[^>]*href="(https?://[^"]*)"[^>]*>([^<]+)</a>"#)?;
         for cap in any_link_re.captures_iter(&body) {
@@ -95,13 +102,13 @@ async fn search_duckduckgo(query: &str) -> Result<String, Box<dyn std::error::Er
     if results.is_empty() {
         Ok("No se encontraron resultados en DuckDuckGo. Intenta refinar la búsqueda.".to_string())
     } else {
+        // Limitar a 10 resultados para no saturar
         results.truncate(10);
         Ok(results.join("\n"))
     }
 }
 
 /// Fallback: búsqueda en Google (probablemente falle por CAPTCHA/bloqueo).
-/// FIX #24: Espera máxima de 10 segundos para resolver CAPTCHA (antes eran 60s).
 async fn search_google(
     query: &str,
     pending_captcha: Arc<Mutex<Option<CaptchaRequest>>>,
@@ -127,8 +134,7 @@ async fn search_google(
             });
         }
 
-        // FIX #24: 10 segundos máximo (20 iteraciones × 500ms) en vez de 60s
-        for _ in 0..20 {
+        for _ in 0..120 {
             tokio::time::sleep(Duration::from_millis(500)).await;
             let current = pending_captcha.lock().unwrap();
             if let Some(ref req) = *current {
@@ -139,7 +145,7 @@ async fn search_google(
                 break;
             }
         }
-        return Err("Google CAPTCHA triggered — timeout después de 10s. Usando DuckDuckGo como respaldo.".into());
+        return Err("Google CAPTCHA was triggered and not solved in time by the user".into());
     }
 
     let mut results = Vec::new();

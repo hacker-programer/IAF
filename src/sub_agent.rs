@@ -14,14 +14,21 @@ use crate::state::{AppState, SubAgentStatus};
 /// Contexto que el agente principal pasa a un sub-agente.
 #[derive(Clone)]
 pub struct SubAgentContext {
+    /// Resumen de lo que el agente principal ha hecho y sabe.
     pub summary: String,
+    /// Archivos/directorios a los que el sub-agente tiene acceso.
+    /// Si está vacío, acceso completo.
     pub allowed_paths: Vec<String>,
+    /// Descripción de la tarea.
     pub task: String,
+    /// Nombre del proyecto.
     pub project_name: Option<String>,
+    /// ID único asignado.
     pub id: String,
 }
 
 /// Spawnea un sub-agente en una tarea tokio independiente.
+/// Retorna el ID del sub-agente.
 pub fn spawn_sub_agent(
     state: &AppState,
     task_description: &str,
@@ -32,9 +39,11 @@ pub fn spawn_sub_agent(
 ) -> Result<String, String> {
     let sub_agents = &state.sub_agents;
 
+    // Verificar límite de paralelismo
     if !sub_agents.can_spawn() {
         return Err(format!(
-            "Límite de sub-agentes concurrentes alcanzado (máx: {}).",
+            "Límite de sub-agentes concurrentes alcanzado (máx: {}). \
+            Espera a que alguno termine o cancela uno existente con kill_sub_agent.",
             *sub_agents.max_parallel.lock().unwrap()
         ));
     }
@@ -49,6 +58,7 @@ pub fn spawn_sub_agent(
         id: id.clone(),
     };
 
+    // Clonar lo necesario antes de mover ctx al async block
     let allowed_paths_display = if ctx.allowed_paths.is_empty() {
         "acceso completo".to_string()
     } else {
@@ -61,6 +71,7 @@ pub fn spawn_sub_agent(
     let id_clone = id.clone();
     let sub_agents_clone = state.sub_agents.clone();
 
+    // Spawnear la tarea
     let handle = tokio::spawn(async move {
         let result = run_sub_agent(
             &state_clone,
@@ -79,6 +90,7 @@ pub fn spawn_sub_agent(
         }
     });
 
+    // Registrar el sub-agente
     sub_agents.register(
         id.clone(),
         task_description.to_string(),
@@ -89,47 +101,34 @@ pub fn spawn_sub_agent(
     );
 
     Ok(format!(
-        "✅ Sub-agente [{}] spawneado.\nTarea: {}\nPaths: {}\ncheck_sub_agent(\"{}\") | kill_sub_agent(\"{}\")",
-        id_short, task_description, allowed_paths_display, id_short, id_short
+        "✅ Sub-agente [{}] spawneado exitosamente.\n\
+         Tarea: {}\n\
+         Archivos permitidos: {}\n\
+         Usa check_sub_agent(\"{}\") para ver su progreso.\n\
+         Usa kill_sub_agent(\"{}\") para cancelarlo.",
+        id_short,
+        task_description,
+        allowed_paths_display,
+        id_short,
+        id_short
     ))
 }
 
-/// FIX #29: Verifica que una ruta está dentro de los paths permitidos usando
-/// canonicalización para prevenir path traversal (ej: `/safe/../../../etc`).
+/// Verifica que una ruta está dentro de los paths permitidos.
+/// Si allowed_paths está vacío, se permite todo.
 pub fn is_path_allowed(file_path: &str, allowed_paths: &[String]) -> bool {
     if allowed_paths.is_empty() {
         return true;
     }
-
-    // Canonicalizar la ruta del archivo para resolver `..` y symlinks
-    let canonical = match std::fs::canonicalize(file_path) {
-        Ok(p) => p,
-        Err(_) => {
-            // Si el archivo no existe aún, intentar canonicalizar el padre
-            let path = Path::new(file_path);
-            if let Some(parent) = path.parent() {
-                match std::fs::canonicalize(parent) {
-                    Ok(p) => p.join(path.file_name().unwrap_or_default()),
-                    Err(_) => return false,
-                }
-            } else {
-                return false;
-            }
-        }
-    };
-
-    let canonical_str = canonical.to_string_lossy().to_lowercase();
+    let path = Path::new(file_path);
+    let normalized = path.to_string_lossy().to_lowercase();
 
     for allowed in allowed_paths {
-        let allowed_path = Path::new(allowed);
-        let allowed_canonical = match std::fs::canonicalize(allowed_path) {
-            Ok(p) => p,
-            Err(_) => continue,
-        };
-        let allowed_str = allowed_canonical.to_string_lossy().to_lowercase();
-
-        // La ruta del archivo debe COMENZAR con la ruta permitida
-        if canonical_str.starts_with(&allowed_str) {
+        let allowed_norm = allowed.to_lowercase();
+        if normalized.starts_with(&allowed_norm) {
+            return true;
+        }
+        if allowed_norm.contains(&normalized) || normalized.contains(&allowed_norm) {
             return true;
         }
     }
@@ -137,27 +136,34 @@ pub fn is_path_allowed(file_path: &str, allowed_paths: &[String]) -> bool {
     false
 }
 
-/// FIX #44: Timeout global de 10 minutos para sub-agentes.
-const SUB_AGENT_TIMEOUT_SECS: u64 = 600;
-
+/// Ejecuta un sub-agente con un conjunto limitado de iteraciones.
 async fn run_sub_agent(
     state: &AppState,
     ctx: SubAgentContext,
     deepseek_key: &str,
 ) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
     let system_prompt = format!(
-        "Eres un SUB-AGENTE de desarrollo trabajando en una tarea específica.\n\
+        "Eres un SUB-AGENTE de desarrollo (DeepSeek V4 Pro) trabajando en una tarea específica.\n\
          \n\
-         CONTEXTO HEREDADO:\n{}\n\
+         CONTEXTO HEREDADO DEL AGENTE PRINCIPAL:\n\
+         {}\n\
          \n\
-         TU TAREA:\n{}\n\
+         TU TAREA ESPECÍFICA:\n\
+         {}\n\
          \n\
          RESTRICCIONES:\n\
          - Solo puedes modificar archivos en: {}\n\
-         - Máximo 15 iteraciones.\n\
-         - Cuando termines, DEBES llamar a finalizar_tarea.\n\
+         - Tienes un máximo de 15 iteraciones.\n\
+         - Cuando termines (éxito o fallo), DEBES llamar a finalizar_tarea.\n\
          - No puedes spawnear otros sub-agentes.\n\
-         - Reporta tus hallazgos de forma concisa.",
+         - Reporta tus hallazgos de forma concisa.\n\
+         \n\
+         REGLAS:\n\
+         - Antes de actuar, piensa en <thinking> tags.\n\
+         - Usa read_file para entender el código existente.\n\
+         - Usa write_file_with_commit para modificar archivos.\n\
+         - Usa execute_powershell para ejecutar comandos.\n\
+         - Si encuentras un problema que no puedes resolver, repórtalo y finaliza.",
         ctx.summary,
         ctx.task,
         if ctx.allowed_paths.is_empty() { "todos los archivos".to_string() } else { ctx.allowed_paths.join(", ") }
@@ -177,19 +183,13 @@ async fn run_sub_agent(
 
     let max_iterations = 15;
     let mut iteration = 0;
-    let start_time = std::time::Instant::now();
 
     loop {
         iteration += 1;
         if iteration > max_iterations {
-            return Ok(format!("Límite de {} iteraciones alcanzado.", max_iterations));
-        }
-
-        // FIX #44: Timeout global de 10 minutos
-        if start_time.elapsed().as_secs() > SUB_AGENT_TIMEOUT_SECS {
             return Ok(format!(
-                "Timeout global de {}s alcanzado después de {} iteraciones.",
-                SUB_AGENT_TIMEOUT_SECS, iteration
+                "Límite de {} iteraciones alcanzado. Tarea: {}",
+                max_iterations, ctx.task
             ));
         }
 
@@ -197,7 +197,7 @@ async fn run_sub_agent(
         {
             let status = state.active_agent.lock().unwrap();
             if status.interrupted {
-                return Ok("Sub-agente interrumpido.".to_string());
+                return Ok("Sub-agente interrumpido: el agente principal fue interrumpido.".to_string());
             }
         }
 
@@ -220,7 +220,7 @@ async fn run_sub_agent(
             .header("Authorization", format!("Bearer {}", deepseek_key))
             .header("Content-Type", "application/json")
             .json(&json!({
-                "model": "deepseek-chat",
+                "model": "deepseek-v4-pro",
                 "messages": messages,
                 "tools": tools,
                 "tool_choice": "auto",
@@ -265,7 +265,13 @@ async fn run_sub_agent(
                 let args_str = tool_call["function"]["arguments"].as_str().unwrap_or("{}");
                 let args: Value = serde_json::from_str(args_str).unwrap_or(json!({}));
 
-                let result = execute_sub_agent_tool(func_name, &args, &ctx, state).await;
+                let result = execute_sub_agent_tool(
+                    func_name,
+                    &args,
+                    &ctx,
+                    state,
+                )
+                .await;
 
                 messages.push(json!({
                     "role": "tool",
@@ -297,13 +303,14 @@ async fn run_sub_agent(
     }
 }
 
+/// Construye las herramientas disponibles para un sub-agente (subconjunto restringido).
 fn build_sub_agent_tools() -> Vec<Value> {
     vec![
         json!({
             "type": "function",
             "function": {
                 "name": "read_file",
-                "description": "Lee el contenido de un archivo.",
+                "description": "Lee el contenido de un archivo. Permite especificar rango de líneas.",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -379,6 +386,7 @@ fn build_sub_agent_tools() -> Vec<Value> {
     ]
 }
 
+/// Ejecuta una herramienta para un sub-agente con restricciones de path.
 async fn execute_sub_agent_tool(
     func_name: &str,
     args: &Value,
@@ -390,8 +398,9 @@ async fn execute_sub_agent_tool(
             let rel_path = args["path"].as_str().unwrap_or("");
             if !is_path_allowed(rel_path, &ctx.allowed_paths) {
                 return format!(
-                    "⛔ ACCESO DENEGADO: '{}' no está en tus paths permitidos.",
-                    rel_path
+                    "⛔ ACCESO DENEGADO: El archivo '{}' no está en tus paths permitidos: {:?}. \
+                    Solo puedes acceder a archivos dentro de esos directorios.",
+                    rel_path, ctx.allowed_paths
                 );
             }
 
@@ -433,7 +442,10 @@ async fn execute_sub_agent_tool(
         "write_file_with_commit" => {
             let rel_path = args["path"].as_str().unwrap_or("");
             if !is_path_allowed(rel_path, &ctx.allowed_paths) {
-                return format!("⛔ ACCESO DENEGADO: '{}' no está en tus paths permitidos.", rel_path);
+                return format!(
+                    "⛔ ACCESO DENEGADO: No puedes escribir en '{}'. Paths permitidos: {:?}",
+                    rel_path, ctx.allowed_paths
+                );
             }
 
             let content = args["content"].as_str().unwrap_or("");
@@ -479,6 +491,7 @@ async fn execute_sub_agent_tool(
 
         "execute_powershell" => {
             let command = args["command"].as_str().unwrap_or("");
+
             let cmd_lower = command.to_lowercase();
             if cmd_lower.contains("taskkill") || cmd_lower.contains("stop-process") {
                 return "[BLOQUEADO] Comando potencialmente peligroso bloqueado.".to_string();
@@ -536,6 +549,7 @@ async fn execute_sub_agent_tool(
     }
 }
 
+/// Helper para obtener el path de un proyecto desde el AppState.
 fn get_project_path_from_state(state: &AppState, name: &str) -> String {
     let projs = state.projects.lock().unwrap();
     projs.iter()

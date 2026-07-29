@@ -416,8 +416,7 @@ impl UserStore {
         let hash_str = match &user.password_hash {
             Some(h) => h.clone(),
             None => return Err("Este usuario no tiene contraseÃ±a configurada (usa nonce).".into()),
-            // FIX #30: Usuario con nonce -> Ok(None) igual que usuario no encontrado
-            None => return Ok(None),
+            None => return Ok(None), // FIX #30: nonce user → Ok(None) like not-found
         let parsed_hash = PasswordHash::new(&hash_str)
             .map_err(|e| format!("Error interno: hash mal formado: {}", e))?;
 
