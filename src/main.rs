@@ -484,12 +484,14 @@ async fn admin_create_user(
     let perms = payload.permissions.unwrap_or_else(|| vec!["read_file".into(), "search_code".into()]);
     let limits = if payload.is_admin { UserLimits::admin() } else { UserLimits::default() };
     let result = if payload.is_admin && payload.public_key.is_some() {
-    let result = if payload.is_admin && payload.public_key.is_some() {
         state.user_store.create_admin(&payload.username, &payload.public_key.unwrap(), perms, limits)
     } else if payload.is_admin && payload.public_key.is_none() {
         // FIX #13: Error claro cuando admin no tiene clave pública
         Err("Para crear un admin necesitás generar claves (botón 'Generar Claves') o subir un .pem.".into())
     } else if let Some(ref pw) = payload.password {
+        state.user_store.create_user_with_password(
+            &payload.username, pw, payload.is_admin, perms, limits,
+            payload.modo_estudio.unwrap_or(false),
             payload.modo_programador.unwrap_or(false),
             payload.editar_system_prompt_global.unwrap_or(false),
             payload.editar_system_prompt_local.unwrap_or(false),
@@ -497,7 +499,6 @@ async fn admin_create_user(
     } else {
         Err("Se requiere password (usuarios normales) o public_key (admins).".into())
     };
-
     match result {
         Ok(user) => Json(json!({ "status": "ok", "user": user })).into_response(),
         Err(e) => (StatusCode::BAD_REQUEST, Json(json!({ "status": "error", "message": e }))).into_response(),
