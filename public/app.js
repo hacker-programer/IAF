@@ -389,20 +389,17 @@ async function refreshUsersTable() {
 // EDIT USER - with schedule, activation, granular permissions
 // ============================================================================
 
-const DAY_NAMES = ['lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado', 'domingo'];
-
-function buildScheduleGrid(schedule) {
-    const grid = document.getElementById('editScheduleGrid');
-    grid.innerHTML = DAY_NAMES.map(day => {
-        const ranges = (schedule && schedule.horarios && schedule.horarios[day])
-            ? schedule.horarios[day].map(r => r.join('-')).join(',')
-            : '';
-        return '<span class="day-label">' + day + '</span><input type="text" data-day="' + day + '" value="' + ranges + '" placeholder="9-12,14-18">';
-    }).join('');
-}
-
-function parseScheduleGrid() {
-    const horarios = {};
+        // FIX #18: Escapar HTML para prevenir XSS
+        tbody.innerHTML = res.users.map(function(u) {
+            var safeName = escHtml(u.username);
+            return '<tr style="border-bottom:1px solid var(--border-color);">' +
+                '<td style="padding:6px;">' + safeName + (u.is_admin ? ' 👑' : '') + '</td>' +
+                '<td>' + (u.is_admin ? '✅' : '❌') + '</td>' +
+                '<td>' + (u.has_study_access ? '✅' : '❌') + '</td>' +
+                '<td>' + (u.has_programming_access ? '✅' : '❌') + '</td>' +
+                '<td><button class="btn btn-warning btn-sm" onclick="editUser(\'' + safeName + '\')">Editar</button></td>' +
+                '</tr>';
+        }).join('');
     document.querySelectorAll('#editScheduleGrid input[type="text"]').forEach(input => {
         const day = input.dataset.day;
         const raw = input.value.trim();
