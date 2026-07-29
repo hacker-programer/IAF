@@ -98,14 +98,21 @@ async fn require_auth(
 // ============================================================================
 
 /// Sanitiza un string para usarlo como nombre de archivo
+/// Sanitiza un string para usarlo como nombre de archivo.
+/// Agrega un hash al final para evitar colisiones cuando dos títulos
+/// difieren solo después de los primeros 70 caracteres.
 fn sanitize_filename(title: &str) -> String {
-    title
+    use std::hash::{Hash, Hasher};
+    let base: String = title
         .chars()
         .map(|c| if c.is_alphanumeric() || c == '-' || c == '_' { c } else { '_' })
-        .take(80)
-        .collect::<String>()
-        .trim_matches('_')
-        .to_string()
+        .take(70)
+        .collect();
+    let base = base.trim_matches('_').to_string();
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    title.hash(&mut hasher);
+    let hash = format!("{:08x}", hasher.finish());
+    if base.is_empty() { hash } else { format!("{}_{}", base, hash) }
 }
 
 fn get_chat_dir(state: &AppState, username: &str, is_admin_or_port80: bool) -> PathBuf {
@@ -1845,18 +1852,12 @@ async fn agent_interrupt(
         Ok(u) => u, Err(e) => return (e.0, Json(json!({ "status": "error", "message": e.1 }))).into_response(),
     };
 
-    // FIX #9: Abortar el tokio task para detención inmediata
-    if let Ok(mut abort_handle) = state.abort_handle.lock() {
-        if let Some(handle) = abort_handle.take() {
-            handle.abort();
-        }
-    }
-
     let mut agent = state.active_agent.lock().unwrap();
     agent.interrupted = true;
     agent.running = false;
 
     if let Some(ref path) = agent.current_chat_path {
+        // Append interruption message to chat
         if let Ok(content) = fs::read_to_string(path) {
             if let Ok(mut session) = serde_json::from_str::<ChatSession>(&content) {
                 session.messages.push(ChatMessage {
@@ -1871,6 +1872,12 @@ async fn agent_interrupt(
 
     Json(json!({ "status": "ok" })).into_response()
 }
+
+// ============================================================================
+// Endpoints de CAPTCHA
+// ============================================================================
+
+#[derive(Deserialize)]
 struct CaptchaSolveRequest {
     id: String,
     solved_content: String,
