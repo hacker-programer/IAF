@@ -74,6 +74,11 @@ function detectPlatform() {
 
 // ---- Helpers: Toggle Password Visibility ----
 function togglePassword(fieldId) {
+    const el = document.getElementById(fieldId);
+    if (!el) return;
+    el.type = el.type === 'password' ? 'text' : 'password';
+}
+
 /**
  * Copia el comando sign_nonce al portapapeles.
  */
@@ -124,7 +129,7 @@ function copyNonceCmd(event) {
     }
 }
 
-// FIX #4: Función para descargar scripts PowerShell desde el panel admin
+// FIX #4: Descargar scripts PowerShell desde el panel admin
 function downloadScript(name) {
     var a = document.createElement('a');
     a.href = '/api/scripts/' + name;
@@ -134,6 +139,11 @@ function downloadScript(name) {
     document.body.removeChild(a);
     showInfoToast('📥 Descargando ' + name + '.ps1...');
 }
+
+async function init() {
+    detectPlatform();
+
+    if (isPort80) {
         // Puerto 80: acceso directo como admin local
         authToken = 'admin_local';
         authUsername = 'admin_local';
@@ -389,29 +399,31 @@ async function refreshUsersTable() {
 // EDIT USER - with schedule, activation, granular permissions
 // ============================================================================
 
-        // FIX #18: Escapar HTML para prevenir XSS
-        tbody.innerHTML = res.users.map(function(u) {
-            var safeName = escHtml(u.username);
-            return '<tr style="border-bottom:1px solid var(--border-color);">' +
-                '<td style="padding:6px;">' + safeName + (u.is_admin ? ' 👑' : '') + '</td>' +
-                '<td>' + (u.is_admin ? '✅' : '❌') + '</td>' +
-                '<td>' + (u.has_study_access ? '✅' : '❌') + '</td>' +
-                '<td>' + (u.has_programming_access ? '✅' : '❌') + '</td>' +
-                '<td><button class="btn btn-warning btn-sm" onclick="editUser(\'' + safeName + '\')">Editar</button></td>' +
-                '</tr>';
-        }).join('');
+const DAY_NAMES = ['lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado', 'domingo'];
+
+function buildScheduleGrid(schedule) {
+    const grid = document.getElementById('editScheduleGrid');
+    grid.innerHTML = DAY_NAMES.map(day => {
+        const ranges = (schedule && schedule.horarios && schedule.horarios[day])
+            ? schedule.horarios[day].map(r => r.join('-')).join(',')
+            : '';
+        return '<span class="day-label">' + day + '</span><input type="text" data-day="' + day + '" value="' + ranges + '" placeholder="9-12,14-18">';
+    }).join('');
+}
+
+function parseScheduleGrid() {
+    const horarios = {};
     document.querySelectorAll('#editScheduleGrid input[type="text"]').forEach(input => {
         const day = input.dataset.day;
         const raw = input.value.trim();
-// FIX #18: Helper para escapar HTML (prevención XSS)
-function escHtml(str) {
-    var div = document.createElement('div');
-    div.appendChild(document.createTextNode(str));
-    return div.innerHTML;
-}
-
-// ============================================================================
-// EDIT USER - with schedule, activation, granular permissions
+        if (!raw) { horarios[day] = []; return; }
+        const ranges = raw.split(',').map(s => s.trim()).filter(Boolean).map(rangeStr => {
+            const parts = rangeStr.split('-').map(Number);
+            if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
+                return [parts[0], parts[1]];
+            }
+            return null;
+        }).filter(Boolean);
         horarios[day] = ranges;
     });
     return horarios;
@@ -651,12 +663,13 @@ document.getElementById('forkBtn').onclick = async () => {
     const btn = document.getElementById('forkBtn');
     btn.disabled = true;
     btn.textContent = 'Forkeando...';
+    try {
+        const res = await apiCall('/api/projects/fork', 'POST', { repo_url: url });
         if (res.status === 'ok') {
             document.getElementById('repoUrl').value = '';
-            // FIX #16: backend returns { project: { name: "..." } }
-            var projName = (res.project && res.project.name) ? res.project.name : 'repo';
-            showInfoToast('✅ Repo forkeado: ' + projName);
+            showInfoToast('✅ Repo forkeado: ' + res.name);
             await loadProjects();
+        } else {
             alert('Error: ' + (res.message || 'No se pudo forkear.'));
         }
     } catch(e) { alert('Error de conexión.'); }
@@ -805,20 +818,18 @@ async function loadChatHistory() {
         }
     } catch(e) {}
 }
+
 async function selectChatSession(id) {
-    var previousId = currentSessionId;
     currentSessionId = id;
     loadChatHistory();
-    var res;
-    try {
-        res = await apiCall('/api/chats/' + id);
-    } catch(e) {
-        // FIX #17: restore previous sessionId on failure
-        currentSessionId = previousId;
-        loadChatHistory();
-        return;
-    }
+    const res = await apiCall('/api/chats/' + id);
     if (res.status === 'ok') {
+        const chatArea = document.getElementById('chatArea');
+        chatArea.innerHTML = '';
+        res.session.messages.forEach(m => addMessage(m.role, m.content));
+        window._shownInfoMsgs = new Set();
+        if (res.session.project_name) {
+            document.getElementById('activeProjectName').innerText = res.session.project_name;
             activeProject = res.session.project_name;
             loadProjects();
         }
