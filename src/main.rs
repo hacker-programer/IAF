@@ -505,10 +505,9 @@ async fn admin_create_user(
             payload.editar_system_prompt_local.unwrap_or(false),
         )
     } else {
-    } else {
-    } else {
         Err("Se requiere password (usuarios normales) o public_key (admins).".into())
     };
+
     match result {
         Ok(user) => Json(json!({ "status": "ok", "user": user })).into_response(),
         Err(e) => (StatusCode::BAD_REQUEST, Json(json!({ "status": "error", "message": e }))).into_response(),
