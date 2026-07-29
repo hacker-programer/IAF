@@ -380,10 +380,20 @@ async function openAdminUsers() {
     modal.classList.remove('hidden');
     await refreshUsersTable();
 }
+
+// FIX #18: Helper para escapar HTML (XSS)
+function escHtml(str) {
+    var d = document.createElement('div');
+    d.appendChild(document.createTextNode(str));
+    return d.innerHTML;
+}
+
+async function refreshUsersTable() {
+    var tbody = document.getElementById('usersTableBody');
     try {
-        var res2 = await apiCall('/api/admin/users');
-        if (res2.status !== 'ok') return;
-        tbody.innerHTML = res2.users.map(function(u) {
+        var r = await apiCall('/api/admin/users');
+        if (r.status !== 'ok') return;
+        tbody.innerHTML = r.users.map(function(u) {
             var safe = escHtml(u.username);
             return '<tr style="border-bottom:1px solid var(--border-color);">' +
                 '<td style="padding:6px;">' + safe + (u.is_admin ? ' 👑' : '') + '</td>' +
@@ -395,9 +405,8 @@ async function openAdminUsers() {
         }).join('');
     } catch(e) {}
 }
+
 function buildScheduleGrid(schedule) {
-    const grid = document.getElementById('editScheduleGrid');
-    grid.innerHTML = DAY_NAMES.map(day => {
         const ranges = (schedule && schedule.horarios && schedule.horarios[day])
             ? schedule.horarios[day].map(r => r.join('-')).join(',')
             : '';
