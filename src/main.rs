@@ -1444,21 +1444,15 @@ async fn chat_endpoint(
                 let steps = { let ag = state_bg.active_agent.lock().unwrap(); ag.steps.clone() };
                 updated.steps = Some(steps);
                 let _ = fs::write(&save_p_bg, serde_json::to_string_pretty(&updated).unwrap());
-
                 let mut ag = state_bg.active_agent.lock().unwrap();
                 ag.running = false;
                 if !ag.finished { ag.finished = true; ag.final_message = final_msg; }
-                ag.running = false;
-                if !ag.finished { ag.finished = true; ag.final_message = final_msg; }
             });
-    }
+        }
 
-    Json(json!({
-        "session_id": session.id,
-        "title": session.title,
-        "chat_path": save_path.to_string_lossy(),
-    })).into_response()
-}
+        Json(json!({
+            "status": "ok",
+            "session_id": session.id,
 
 async fn get_chats(
     State(state): State<AppState>,
