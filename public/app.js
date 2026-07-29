@@ -382,25 +382,30 @@ async function refreshUsersTable() {
     const tbody = document.getElementById('usersTableBody');
     try {
         const res = await apiCall('/api/admin/users');
-        if (res.status !== 'ok') return;
-        tbody.innerHTML = res.users.map(u => `
-            <tr style="border-bottom:1px solid var(--border-color);">
-                <td style="padding:6px;">${u.username}${u.is_admin ? ' 👑' : ''}</td>
-                <td>${u.is_admin ? '✅' : '❌'}</td>
-                <td>${u.has_study_access ? '✅' : '❌'}</td>
-                <td>${u.has_programming_access ? '✅' : '❌'}</td>
-                <td><button class="btn btn-warning btn-sm" onclick="editUser('${u.username}')">Editar</button></td>
-            </tr>
-        `).join('');
-    } catch(e) {}
+// FIX #18: Helper para escapar HTML (XSS)
+function escHtml(str) {
+    var d = document.createElement('div');
+    d.appendChild(document.createTextNode(str));
+    return d.innerHTML;
 }
 
-// ============================================================================
-// EDIT USER - with schedule, activation, granular permissions
-// ============================================================================
-
-const DAY_NAMES = ['lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado', 'domingo'];
-
+async function refreshUsersTable() {
+    var tbody = document.getElementById('usersTableBody');
+    try {
+        var res2 = await apiCall('/api/admin/users');
+        if (res2.status !== 'ok') return;
+        tbody.innerHTML = res2.users.map(function(u) {
+            var safe = escHtml(u.username);
+            return '<tr style="border-bottom:1px solid var(--border-color);">' +
+                '<td style="padding:6px;">' + safe + (u.is_admin ? ' 👑' : '') + '</td>' +
+                '<td>' + (u.is_admin ? '✅' : '❌') + '</td>' +
+                '<td>' + (u.has_study_access ? '✅' : '❌') + '</td>' +
+                '<td>' + (u.has_programming_access ? '✅' : '❌') + '</td>' +
+                '<td><button class="btn btn-warning btn-sm" onclick="editUser(\'' + safe + '\')">Editar</button></td>' +
+                '</tr>';
+        }).join('');
+    } catch(e) {}
+}
 function buildScheduleGrid(schedule) {
     const grid = document.getElementById('editScheduleGrid');
     grid.innerHTML = DAY_NAMES.map(day => {
