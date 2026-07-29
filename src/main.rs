@@ -1342,27 +1342,33 @@ async fn chat_endpoint(
     {
         let mut agent = state.active_agent.lock().unwrap();
         agent.current_chat_path = Some(save_path.to_string_lossy().to_string());
-        if !agent.running {
-            agent.running = true;
-            agent.interrupted = false;
-            agent.finished = false;
-            agent.final_message = None;
-            // BUG-002 FIX: Limpiar info_messages al iniciar nuevo agente
-            agent.info_messages.clear();
-            // BUG FIX: Solo limpiar steps si es conversacion NUEVA. Si es existente, cargar desde sesion.
-            if chat_file.is_some() {
-                if let Some(ref steps) = session.steps { agent.steps = steps.clone(); }
-            } else {
-                agent.steps.clear();
+        // FIX #6/#25: Always interrupt and restart agent for new messages
+        if agent.running {
+            agent.interrupted = true;
+            agent.running = false;
+            if let Ok(mut abort_handle) = state.abort_handle.lock() {
+                if let Some(handle) = abort_handle.take() {
+                    handle.abort();
+                }
             }
-            agent.thinking_content.clear();
-            agent.esperando_respuesta_usuario = false;
-            agent.respuesta_usuario = None;
-            agent.esperando_aprobacion_plan = false;
-            agent.plan_propuesto = None;
-            agent.pregunta_usuario = None;
-            agent.current_session_id = Some(session_id.clone());
-
+        }
+        agent.running = true;
+        agent.interrupted = false;
+        agent.finished = false;
+        agent.final_message = None;
+        agent.info_messages.clear();
+        if chat_file.is_some() {
+            if let Some(ref steps) = session.steps { agent.steps = steps.clone(); }
+        } else {
+            agent.steps.clear();
+        }
+        agent.thinking_content.clear();
+        agent.esperando_respuesta_usuario = false;
+        agent.respuesta_usuario = None;
+        agent.esperando_aprobacion_plan = false;
+        agent.plan_propuesto = None;
+        agent.pregunta_usuario = None;
+        agent.current_session_id = Some(session_id.clone());
             let state_bg = state.clone();
             let session_bg = session.clone();
             let sid_bg = session_id.clone();
