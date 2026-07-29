@@ -129,6 +129,9 @@ async function init() {
         appContainer.classList.add('hidden');
         await checkClient();
     }
+
+    // Inicializar hamburger menu para mobile
+    initMobileNav();
 }
 
 async function checkClient() {
@@ -486,112 +489,76 @@ document.getElementById('createUserBtn').onclick = async () => {
     if (isAdmin) {
         const createRes = await apiCall('/api/admin/users', 'POST', payload);
         if (createRes.status === 'ok') {
-            document.getElementById('newUsername').value = '';
-            document.getElementById('newIsAdmin').checked = false;
-            showInfoToast('✅ Admin creado exitosamente.');
-            await refreshUsersTable();
-        } else {
-            alert('Error: ' + (createRes.message || 'Error al crear admin.'));
-        }
-    } else {
-        const pwd = document.getElementById('newPassword').value;
-        if (!pwd) return alert('Password requerido para usuarios normales.');
-        payload.password = pwd;
-        const createRes = await apiCall('/api/admin/users', 'POST', payload);
-        if (createRes.status === 'ok') {
+            // Para admins, generar keypair
+            if (createRes.user && createRes.user.public_key) {
+                showInfoToast('✅ Admin ' + username + ' creado. Clave pública generada.');
+            } else {
+                showInfoToast('✅ Admin ' + username + ' creado.');
+            }
             document.getElementById('newUsername').value = '';
             document.getElementById('newPassword').value = '';
             document.getElementById('newPasswordConfirm').value = '';
-            showInfoToast('✅ Usuario creado exitosamente.');
+            document.getElementById('newPublicKey').value = '';
             await refreshUsersTable();
         } else {
-            alert('Error: ' + (createRes.message || 'Error al crear usuario.'));
+            alert('Error: ' + (createRes.message || 'No se pudo crear el usuario.'));
+        }
+    } else {
+        const pwd = document.getElementById('newPassword').value;
+        if (!pwd) return alert('La contrasena es requerida.');
+        payload.password = pwd;
+        const createRes = await apiCall('/api/admin/users', 'POST', payload);
+        if (createRes.status === 'ok') {
+            showInfoToast('✅ Usuario ' + username + ' creado.');
+            document.getElementById('newUsername').value = '';
+            document.getElementById('newPassword').value = '';
+            document.getElementById('newPasswordConfirm').value = '';
+            await refreshUsersTable();
+        } else {
+            alert('Error: ' + (createRes.message || 'No se pudo crear el usuario.'));
         }
     }
 };
 
-// ============================================================================
-// PROYECTOS
-// ============================================================================
-
-async function loadProjects() {
-    try {
-        const res = await apiCall('/api/projects');
-        const list = document.getElementById('projectList');
-        if (!res.projects || !Array.isArray(res.projects)) return;
-        const projects = res.projects;
-        if (projects.length > 0) {
-            list.innerHTML = projects.map(p => `
-                <div class="project-item ${activeProject === p.name ? 'active' : ''}" onclick="selectProject('${p.name}')">${p.name}</div>
-            `).join('');
-        } else {
-            list.innerHTML = '<div class="console-empty">No hay proyectos. Agregá uno local o forkeá un repo.</div>';
-        }
-    } catch(e) {
-        console.error('[IAF] Error cargando proyectos:', e);
-        const list = document.getElementById('projectList');
-        if (list) list.innerHTML = '<div class="console-empty" style="color:var(--danger);">Error al cargar proyectos. Revisá la consola.</div>';
-    }
+function toggleAdminCreateMode() {
+    const isAdmin = document.getElementById('newIsAdmin').checked;
+    document.getElementById('newPublicKeyContainer').classList.toggle('hidden', !isAdmin);
+    document.getElementById('uploadPemBtn').classList.toggle('hidden', !isAdmin);
+    document.getElementById('generateKeysBtn').classList.toggle('hidden', !isAdmin);
+    // Mostrar/ocultar password fields
+    const pwdInputs = [document.getElementById('newPassword'), document.getElementById('newPasswordConfirm')];
+    const pwdLabels = document.querySelectorAll('label[for="newPassword"], label[for="newPasswordConfirm"]');
+    pwdInputs.forEach(el => {
+        if (el) el.parentElement.style.display = isAdmin ? 'none' : '';
+    });
 }
 
-function selectProject(name) {
-    activeProject = name;
-    document.getElementById('activeProjectName').innerText = name;
-    loadProjects();
-    loadPrompts(); // BUG-024 FIX: Reload prompts when switching projects so local prompt updates
-}
-// ---- Fork & Clone ----
-document.getElementById('forkBtn').onclick = async () => {
-    const url = document.getElementById('repoUrl').value.trim();
-    if (!url) return alert('Ingresá una URL de GitHub o usuario/repo.');
-
-    const btn = document.getElementById('forkBtn');
-    btn.disabled = true;
-    btn.textContent = 'Forkeando...';
-
-    try {
-        const res = await apiCall('/api/projects/fork', 'POST', { repo_url: url });
-        if (res.status === 'ok') {
-            document.getElementById('repoUrl').value = '';
-            showInfoToast('✅ Repo forkeado y clonado: ' + (res.project ? res.project.name : url));
-            await loadProjects();
-        } else {
-            alert('Error: ' + (res.message || 'No se pudo forkear el repo.'));
-        }
-    } catch(e) {
-        alert('Error de conexión al forkear.');
+document.getElementById('generateKeysBtn').onclick = async () => {
+    const res = await apiCall('/api/auth/keygen');
+    if (res.status === 'ok') {
+        document.getElementById('newPublicKey').value = res.public_key;
+        alert('⚠️ GUARDA ESTA CLAVE PRIVADA. ES LA ÚNICA VEZ QUE LA VERÁS:\n\n' + res.private_key);
     }
-    btn.disabled = false;
-    btn.textContent = 'Fork & Clone';
 };
 
-// ---- Agregar Carpeta Local ----
-document.getElementById('addLocalBtn').onclick = async () => {
-    const name = document.getElementById('localProjName').value.trim();
-    const path = document.getElementById('localProjPath').value.trim();
-    if (!name) return alert('Ingresá un nombre para el proyecto.');
-    if (!path) return alert('Ingresá la ruta absoluta de la carpeta.');
-
-    const btn = document.getElementById('addLocalBtn');
-    btn.disabled = true;
-    btn.textContent = 'Agregando...';
-
-    try {
-        const res = await apiCall('/api/projects/local', 'POST', { name, path });
-        if (res.status === 'ok') {
-            document.getElementById('localProjName').value = '';
-            document.getElementById('localProjPath').value = '';
-            showInfoToast('✅ Proyecto local agregado: ' + name);
-            await loadProjects();
-        } else {
-            alert('Error: ' + (res.message || 'No se pudo agregar el proyecto.'));
-        }
-    } catch(e) {
-        alert('Error de conexión al agregar proyecto.');
-    }
-    btn.disabled = false;
-    btn.textContent = 'Agregar Carpeta';
+document.getElementById('uploadPemBtn').onclick = () => {
+    document.getElementById('pemFileInput').click();
 };
+
+document.getElementById('pemFileInput').onchange = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const text = await file.text();
+    // Extract public key from PEM
+    const pubMatch = text.match(/-----BEGIN PUBLIC KEY-----[\s\S]*?-----END PUBLIC KEY-----/);
+    if (pubMatch) {
+        document.getElementById('newPublicKey').value = pubMatch[0].replace(/-----.*?-----/g, '').replace(/\s/g, '');
+        showInfoToast('✅ Clave pública extraída del .pem');
+    } else {
+        alert('No se encontró una clave pública en el archivo .pem');
+    }
+};
+
 // ============================================================================
 // ============================================================================
 // PROMPTS — alineado con IDs del HTML: globalPrompt, localPrompt,
@@ -618,39 +585,30 @@ document.getElementById('savePromptsBtn').onclick = async () => {
     const globalContent = document.getElementById('globalPrompt').value;
     // FIX: El backend solo acepta POST en /api/prompts/global (no PUT)
     const globalRes = await apiCall('/api/prompts/global', 'POST', { content: globalContent });
-    if (globalRes.status !== 'ok') {
-        alert('Error al guardar prompt global: ' + globalRes.message);
-        return;
-    }
-
-    if (activeProject) {
+    if (activeProject && document.getElementById('localPrompt').value.trim()) {
         const localContent = document.getElementById('localPrompt').value;
-        // FIX: /api/prompts/local usa POST y recibe { project_name, content } en el body (no PUT a /api/prompts/projects/...)
-        const localRes = await apiCall('/api/prompts/local', 'POST', { project_name: activeProject, content: localContent });
-        if (localRes.status !== 'ok') {
-            alert('Error al guardar prompt local: ' + localRes.message);
-            return;
-        }
-        alert('System prompts global y local guardados para ' + activeProject + '.');
+        await apiCall('/api/prompts/local', 'POST', { project_name: activeProject, content: localContent });
+    }
+    if (globalRes.status === 'ok') {
+        showInfoToast('✅ Prompts guardados.');
     } else {
-        alert('System prompt global guardado.');
+        alert('Error al guardar prompt global: ' + (globalRes.message || ''));
     }
 };
 
-// resetPromptBtn: restaura el prompt global al valor por defecto
 document.getElementById('resetPromptBtn').onclick = async () => {
-    if (!confirm('¿Restaurar el system prompt global al valor por defecto?')) return;
+    if (!confirm('¿Restaurar el prompt global al valor por defecto?')) return;
     const res = await apiCall('/api/prompts/global/reset', 'POST');
     if (res.status === 'ok') {
-        document.getElementById('globalPrompt').value = res.content;
-        alert('System prompt global restaurado.');
+        document.getElementById('globalPrompt').value = res.content || '';
+        showInfoToast('🔄 Prompt global restaurado.');
     } else {
-        alert('Error: ' + res.message);
+        alert('Error: ' + (res.message || 'No se pudo restaurar.'));
     }
 };
 
 // ============================================================================
-// STUDY PROFILE — carga desde /api/study/profile y rellena el formulario
+// STUDY PROFILE
 // ============================================================================
 
 async function loadStudyProfile() {
@@ -658,64 +616,30 @@ async function loadStudyProfile() {
         const res = await apiCall('/api/study/profile');
         if (res.status === 'ok' && res.profile) {
             const p = res.profile;
-
-            // Rellenar campos del formulario de perfil
-            const ageEl = document.getElementById('profileAge');
-            const gamesEl = document.getElementById('profileGames');
-            const hobbiesEl = document.getElementById('profileHobbies');
-            const neuroEl = document.getElementById('profileNeuro');
-            const phaseEl = document.getElementById('studyPhase');
-
-            if (ageEl && p.age) ageEl.value = p.age;
-            if (gamesEl && p.favorite_games) gamesEl.value = p.favorite_games.join(', ');
-            if (hobbiesEl && p.hobbies) hobbiesEl.value = p.hobbies.join(', ');
-            if (neuroEl && p.neurological_conditions) neuroEl.value = p.neurological_conditions.join(', ');
-
-            // Mostrar info de la fase y resumen de aprendizaje
-            if (phaseEl) {
-                const phaseMap = { 'NotStarted': 'No iniciado', 'Exploration': '🔍 Exploración', 'Exploitation': '🎯 Explotación' };
-                const phaseName = phaseMap[p.phase] || p.phase || 'No definida';
-                const summary = p.learning_style_summary || '';
-                const engagement = res.engagement ? (' | Engagement: ' + Math.round(res.engagement * 100) + '%') : '';
-                phaseEl.innerHTML = '<b>Fase:</b> ' + phaseName + engagement +
-                    (summary ? '<br><b>Resumen:</b> ' + summary : '') +
-                    '<br><b>Usuario:</b> ' + (p.username || authUsername || '?');
-            }
-
-            // Mostrar en el chat que el perfil se cargó correctamente
-            console.log('[IAF] Perfil de estudio cargado:', p.username, 'fase:', p.phase);
-        } else {
-            // Perfil no encontrado, mostrar estado inicial
-            const phaseEl = document.getElementById('studyPhase');
-            if (phaseEl) phaseEl.innerHTML = '<b>Fase:</b> No iniciado — Completá el perfil y guardalo.';
+            document.getElementById('profileAge').value = p.age || '';
+            document.getElementById('profileGames').value = (p.favorite_games || []).join(', ');
+            document.getElementById('profileHobbies').value = (p.hobbies || []).join(', ');
+            document.getElementById('profileNeuro').value = (p.neurological_conditions || []).join(', ');
+            document.getElementById('studyPhase').textContent = p.phase === 'exploration' ? '🔍 Exploración' : '🎯 Explotación';
         }
-    } catch(e) {
-        console.error('[IAF] Error cargando perfil de estudio:', e);
-        const phaseEl = document.getElementById('studyPhase');
-        if (phaseEl) phaseEl.innerHTML = '<b>Error:</b> No se pudo cargar el perfil.';
-    }
+    } catch(e) {}
 }
 
-// ---- Save Study Profile ----
 document.getElementById('saveProfileBtn').onclick = async () => {
-    const ageRaw = document.getElementById('profileAge').value.trim();
-    const gamesRaw = document.getElementById('profileGames').value.trim();
-    const hobbiesRaw = document.getElementById('profileHobbies').value.trim();
-    const neuroRaw = document.getElementById('profileNeuro').value.trim();
-
-    const payload = {};
-    if (ageRaw) payload.age = parseInt(ageRaw);
-    if (gamesRaw) payload.favorite_games = gamesRaw.split(',').map(s => s.trim()).filter(Boolean);
-    if (hobbiesRaw) payload.hobbies = hobbiesRaw.split(',').map(s => s.trim()).filter(Boolean);
-    if (neuroRaw) payload.neurological_conditions = neuroRaw.split(',').map(s => s.trim()).filter(Boolean);
+    const age = parseInt(document.getElementById('profileAge').value) || null;
+    const games = document.getElementById('profileGames').value.split(',').map(s => s.trim()).filter(Boolean);
+    const hobbies = document.getElementById('profileHobbies').value.split(',').map(s => s.trim()).filter(Boolean);
+    const neuro = document.getElementById('profileNeuro').value.split(',').map(s => s.trim()).filter(Boolean);
 
     try {
-        const res = await apiCall('/api/study/profile', 'POST', payload);
+        const res = await apiCall('/api/study/profile', 'POST', {
+            age: age,
+            favorite_games: games,
+            hobbies: hobbies,
+            neurological_conditions: neuro,
+        });
         if (res.status === 'ok') {
-            showInfoToast('✅ Perfil de estudio guardado correctamente.');
-            loadStudyProfile(); // Recargar para mostrar datos actualizados
-        } else {
-            alert('Error al guardar perfil: ' + (res.message || 'Desconocido'));
+            showInfoToast('✅ Perfil guardado.');
         }
     } catch(e) {
         alert('Error de conexión al guardar perfil.');
@@ -723,7 +647,7 @@ document.getElementById('saveProfileBtn').onclick = async () => {
 };
 
 // ============================================================================
-// CHAT HISTORY
+// CHAT HISTORY — con deduplicación y etiqueta de usuario para admin
 // ============================================================================
 
 async function loadChatHistory() {
@@ -731,9 +655,23 @@ async function loadChatHistory() {
         const res = await apiCall('/api/chats');
         const list = document.getElementById('chatHistoryList');
         if (res.chats && Array.isArray(res.chats)) {
-            list.innerHTML = res.chats.map(c => `
-                <div class="project-item ${currentSessionId === c.id ? 'active' : ''}" onclick="selectChatSession('${c.id}')">${c.title}</div>
-            `).join('');
+            // DEDUP: usar un Set para evitar IDs duplicados (defensa en profundidad)
+            const seen = new Set();
+            const unique = [];
+            for (const c of res.chats) {
+                if (!seen.has(c.id)) {
+                    seen.add(c.id);
+                    unique.push(c);
+                }
+            }
+            list.innerHTML = unique.map(c => {
+                const isActive = currentSessionId === c.id ? ' active' : '';
+                // Mostrar etiqueta de usuario para admins
+                const userLabel = (authIsAdmin && c.username && c.username !== authUsername)
+                    ? ' <span style="font-size:10px;color:var(--text-muted);">(@' + c.username + ')</span>'
+                    : '';
+                return `<div class="project-item${isActive}" onclick="selectChatSession('${c.id}')">${c.title}${userLabel}</div>`;
+            }).join('');
         }
     } catch(e) {}
 }
@@ -746,7 +684,7 @@ async function selectChatSession(id) {
     const res = await apiCall(`/api/chats/${id}`);
     if (res.status === 'ok') {
         const chatArea = document.getElementById('chatArea');
-        chatArea.innerHTML = '';
+        // BUG FIX: solo un innerHTML, no dos líneas duplicadas
         chatArea.innerHTML = '';
         res.session.messages.forEach(m => addMessage(m.role, m.content));
         // BUG-002 FIX: Limpiar Set de mensajes ya mostrados al cambiar de sesión
@@ -996,6 +934,41 @@ async function aprobarPlan(aprobado, feedback) {
     document.getElementById('agentPlanModal').classList.add('hidden');
     agentPlanShown = false;
     await apiCall('/api/agent/aprobar_plan', 'POST', { aprobado, feedback: feedback || '' });
+}
+
+// ============================================================================
+// MOBILE NAVIGATION — hamburger menu toggle
+// ============================================================================
+
+function initMobileNav() {
+    const hamburger = document.getElementById('hamburgerBtn');
+    const sidebar = document.querySelector('.sidebar');
+    const overlay = document.getElementById('sidebarOverlay');
+
+    if (!hamburger || !sidebar || !overlay) return;
+
+    // Toggle sidebar on hamburger click
+    hamburger.onclick = () => {
+        sidebar.classList.toggle('open');
+        overlay.classList.toggle('open');
+    };
+
+    // Close sidebar on overlay click
+    overlay.onclick = () => {
+        sidebar.classList.remove('open');
+        overlay.classList.remove('open');
+    };
+
+    // Close sidebar when a chat or project is selected (mobile)
+    sidebar.addEventListener('click', (e) => {
+        // If clicking a project-item or chat item, close sidebar on mobile
+        if (e.target.classList.contains('project-item') || e.target.closest('.project-item')) {
+            if (window.innerWidth <= 768) {
+                sidebar.classList.remove('open');
+                overlay.classList.remove('open');
+            }
+        }
+    });
 }
 
 // ============================================================================
