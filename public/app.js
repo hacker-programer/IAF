@@ -129,6 +129,16 @@ function copyNonceCmd(event) {
     }
 }
 
+// FIX #4: Descargar scripts PowerShell desde el panel admin
+function downloadScript(name) {
+    var a = document.createElement('a');
+    a.href = '/api/scripts/' + name;
+    a.download = name + '.ps1';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+}
+
 async function init() {
     detectPlatform();
 
