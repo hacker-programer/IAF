@@ -415,10 +415,9 @@ impl UserStore {
 
         let hash_str = match &user.password_hash {
             Some(h) => h.clone(),
+            // FIX #30: nonce user returns Ok(None) like not-found
             None => return Ok(None),
-
-        let parsed_hash = PasswordHash::new(&hash_str)
-            .map_err(|e| format!("Error interno: hash mal formado: {}", e))?;
+        };
 
         let valid = Argon2::default().verify_password(password.as_bytes(), &parsed_hash).is_ok();
 
