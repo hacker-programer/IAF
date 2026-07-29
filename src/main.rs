@@ -1837,12 +1837,22 @@ async fn agent_approve_plan(
 }
 
 async fn agent_interrupt(
+async fn agent_interrupt(
     State(state): State<AppState>,
     headers: HeaderMap,
 ) -> impl IntoResponse {
     let _username = match require_auth(&state, &headers).await {
         Ok(u) => u, Err(e) => return (e.0, Json(json!({ "status": "error", "message": e.1 }))).into_response(),
     };
+
+    // FIX #9: Abortar el tokio task antes de cambiar flags
+    {
+        let mut abort_handle = state.abort_handle.lock().unwrap();
+        if let Some(handle) = abort_handle.take() {
+            handle.abort();
+            eprintln!("[IAF] Tokio task del agente abortado.");
+        }
+    }
 
     let mut agent = state.active_agent.lock().unwrap();
     agent.interrupted = true;
