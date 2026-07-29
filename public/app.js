@@ -653,13 +653,12 @@ document.getElementById('forkBtn').onclick = async () => {
     const btn = document.getElementById('forkBtn');
     btn.disabled = true;
     btn.textContent = 'Forkeando...';
-    try {
-        const res = await apiCall('/api/projects/fork', 'POST', { repo_url: url });
         if (res.status === 'ok') {
             document.getElementById('repoUrl').value = '';
-            showInfoToast('✅ Repo forkeado: ' + res.name);
+            // FIX #16: backend returns { project: { name: "..." } }
+            var projName = (res.project && res.project.name) ? res.project.name : 'repo';
+            showInfoToast('✅ Repo forkeado: ' + projName);
             await loadProjects();
-        } else {
             alert('Error: ' + (res.message || 'No se pudo forkear.'));
         }
     } catch(e) { alert('Error de conexión.'); }
