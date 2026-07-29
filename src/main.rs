@@ -1832,26 +1832,24 @@ async fn agent_interrupt(
                 session.messages.push(ChatMessage {
                     role: "system".to_string(),
                     content: "⏹️ Agente interrumpido por el usuario.".to_string(),
-                    timestamp: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs(),
-                });
-                let _ = fs::write(path, serde_json::to_string_pretty(&session).unwrap());
-            }
+async fn agent_interrupt(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> impl IntoResponse {
+    let _username = match require_auth(&state, &headers).await {
+        Ok(u) => u, Err(e) => return (e.0, Json(json!({ "status": "error", "message": e.1 }))).into_response(),
+    };
+
+    // FIX #9: Abortar el tokio task para detención inmediata
+    if let Ok(mut abort_handle) = state.abort_handle.lock() {
+        if let Some(handle) = abort_handle.take() {
+            handle.abort();
         }
     }
 
-    Json(json!({ "status": "ok" })).into_response()
-}
-
-// ============================================================================
-// Endpoints de CAPTCHA
-// ============================================================================
-
-#[derive(Deserialize)]
-struct CaptchaSolveRequest {
-    id: String,
-    solved_content: String,
-}
-
+    let mut agent = state.active_agent.lock().unwrap();
+    agent.interrupted = true;
+    agent.running = false;
 async fn captcha_status(
     State(state): State<AppState>,
     headers: HeaderMap,
