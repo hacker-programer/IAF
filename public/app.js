@@ -128,8 +128,9 @@ function copyNonceCmd(event) {
         if (fallbackCopy(cmd)) { onSuccess(); } else { onFailure(); }
     }
 }
+}
 
-// FIX #4: Descargar scripts PowerShell desde el panel admin
+// FIX #4: Descargar scripts PowerShell
 function downloadScript(name) {
     var a = document.createElement('a');
     a.href = '/api/scripts/' + name;
@@ -140,7 +141,6 @@ function downloadScript(name) {
 }
 
 async function init() {
-    detectPlatform();
 
     if (isPort80) {
         // Puerto 80: acceso directo como admin local
@@ -367,40 +367,30 @@ function switchMode(mode) {
 
 // ---- Admin Panel ----
 document.getElementById('adminUsersBtn').onclick = openAdminUsers;
-// FIX #7: scroll seguro con fallback
-document.getElementById('adminPromptsBtn').onclick = function() {
-    var s = document.querySelector('.config-section');
-    if (s) { s.scrollIntoView({ behavior: 'smooth' }); }
-    else { showInfoToast('⚠️ Sección de prompts no visible.'); }
+document.getElementById('adminPromptsBtn').onclick = () => {
+    document.querySelector('.config-section').scrollIntoView({ behavior: 'smooth' });
 };
 
-// FIX #18: Helper para escapar HTML (XSS)
-function escHtml(str) {
-    var d = document.createElement('div');
-    d.appendChild(document.createTextNode(str));
-    return d.innerHTML;
-}
-
 async function openAdminUsers() {
-    var modal = document.getElementById('adminUsersModal');
+    const modal = document.getElementById('adminUsersModal');
     modal.classList.remove('hidden');
     await refreshUsersTable();
 }
 
 async function refreshUsersTable() {
-    var tbody = document.getElementById('usersTableBody');
+    const tbody = document.getElementById('usersTableBody');
     try {
-        var r = await apiCall('/api/admin/users');
-        if (r.status !== 'ok') return;
-        tbody.innerHTML = r.users.map(function(u) {
-            var safe = escHtml(u.username);
-            return '<tr style="border-bottom:1px solid var(--border-color);">' +
-                '<td style="padding:6px;">' + safe + (u.is_admin ? ' 👑' : '') + '</td>' +
-                '<td>' + (u.is_admin ? '✅' : '❌') + '</td>' +
-                '<td>' + (u.has_study_access ? '✅' : '❌') + '</td>' +
-                '<td>' + (u.has_programming_access ? '✅' : '❌') + '</td>' +
-                '<td><button class="btn btn-warning btn-sm" onclick="editUser(\'' + safe + '\')">Editar</button></td>' +
-                '</tr>';
+        const res = await apiCall('/api/admin/users');
+        if (res.status !== 'ok') return;
+        tbody.innerHTML = res.users.map(u => `
+            <tr style="border-bottom:1px solid var(--border-color);">
+                <td style="padding:6px;">${u.username}${u.is_admin ? ' 👑' : ''}</td>
+                <td>${u.is_admin ? '✅' : '❌'}</td>
+                <td>${u.has_study_access ? '✅' : '❌'}</td>
+                <td>${u.has_programming_access ? '✅' : '❌'}</td>
+                <td><button class="btn btn-warning btn-sm" onclick="editUser('${u.username}')">Editar</button></td>
+            </tr>
+        `).join('');
     } catch(e) {}
 }
 
@@ -413,6 +403,12 @@ const DAY_NAMES = ['lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'
 function buildScheduleGrid(schedule) {
     const grid = document.getElementById('editScheduleGrid');
     grid.innerHTML = DAY_NAMES.map(day => {
+        const ranges = (schedule && schedule.horarios && schedule.horarios[day])
+            ? schedule.horarios[day].map(r => r.join('-')).join(',')
+            : '';
+        return '<span class="day-label">' + day + '</span><input type="text" data-day="' + day + '" value="' + ranges + '" placeholder="9-12,14-18">';
+    }).join('');
+}
 
 function parseScheduleGrid() {
     const horarios = {};
