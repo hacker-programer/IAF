@@ -373,21 +373,12 @@ document.getElementById('adminPromptsBtn').onclick = () => {
 };
 
 async function openAdminUsers() {
-    const modal = document.getElementById('adminUsersModal');
+    var modal = document.getElementById('adminUsersModal');
     modal.classList.remove('hidden');
     await refreshUsersTable();
 }
 
-async function refreshUsersTable() {
-    const tbody = document.getElementById('usersTableBody');
-    try {
-        const res = await apiCall('/api/admin/users');
 // FIX #18: Helper para escapar HTML (XSS)
-function escHtml(str) {
-    var d = document.createElement('div');
-    d.appendChild(document.createTextNode(str));
-    return d.innerHTML;
-}
 
 async function refreshUsersTable() {
     var tbody = document.getElementById('usersTableBody');
