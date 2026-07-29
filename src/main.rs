@@ -92,21 +92,12 @@ async fn require_auth(
     state.session_store.validate_token(&token)
         .ok_or_else(|| (StatusCode::UNAUTHORIZED, "Token inválido o expirado.".into()))
 }
-
 // ============================================================================
 // Chat Helpers (nueva estructura de almacenamiento)
 // ============================================================================
 
-/// Sanitiza un string para usarlo como nombre de archivo
-fn sanitize_filename(title: &str) -> String {
-    title
-        .chars()
-        .map(|c| if c.is_alphanumeric() || c == '-' || c == '_' { c } else { '_' })
-        .take(80)
-        .collect::<String>()
-        .trim_matches('_')
-        .to_string()
-}
+// FIX #22/#46: Using unified sanitize_filename from utils.rs (hash anti-collision)
+use iaf::utils::sanitize_filename;
 
 fn get_chat_dir(state: &AppState, username: &str, is_admin_or_port80: bool) -> PathBuf {
     if is_admin_or_port80 || username == "admin_local" {
@@ -122,10 +113,9 @@ fn get_chat_path(state: &AppState, username: &str, is_admin_or_port80: bool, tit
     dir.join(format!("{}-{}.json", safe_title, id))
 }
 
-/// Limpia archivos viejos con el mismo UUID en el directorio de chats
-/// para evitar duplicados cuando el título cambia.
+/// Limpia archivos viejos con el mismo UUID. FIX #10: validación estricta del sufijo.
 fn clean_old_chat_files(dir: &PathBuf, session_id: &str) {
-    if !dir.exists() {
+    if !dir.exists() || !looks_like_uuid_stem(session_id) {
         return;
     }
     if let Ok(entries) = fs::read_dir(dir) {
@@ -135,17 +125,14 @@ fn clean_old_chat_files(dir: &PathBuf, session_id: &str) {
                 continue;
             }
             let fname = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
-            if fname.ends_with(&format!("-{}", session_id)) {
+            let expected_suffix = format!("-{}", session_id);
+            if fname.ends_with(&expected_suffix) && fname.len() > expected_suffix.len() {
                 let _ = fs::remove_file(&path);
                 eprintln!("[IAF] Limpiado archivo duplicado: {}", path.display());
             }
         }
     }
 }
-
-/// Determina si un nombre de archivo (sin extensión) parece un UUID
-fn looks_like_uuid_stem(stem: &str) -> bool {
-    stem.len() >= 30
         && stem.chars().all(|c| c.is_ascii_hexdigit() || c == '-')
         && stem.matches('-').count() >= 3
 }
