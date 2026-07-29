@@ -427,27 +427,12 @@ async fn sign_nonce(Json(payload): Json<SignRequest>) -> impl IntoResponse {
 }
 
 async fn client_check() -> impl IntoResponse {
-    let possible_paths = vec![
-        "client/target/release/iaf-client.exe",
-        "client/target/debug/iaf-client.exe",
-        "iaf-client.exe",
-    ];
-    let mut found = Vec::new();
-    for path in &possible_paths {
-        if std::path::Path::new(path).exists() {
-            found.push(path.to_string());
-        }
-    }
+    // FIX #1/#39: v3.0 — cliente Rust eliminado, reemplazado por Electron + Capacitor.
     Json(json!({
         "status": "ok",
-        "client_installed": !found.is_empty(),
-        "found_at": found,
-        "expected_paths": possible_paths,
-        "instructions": if found.is_empty() {
-            "Para instalar el cliente: cd client && cargo build --release. Luego: .\\client\\target\\release\\iaf-client.exe <url> <user> <token>"
-        } else {
-            "Cliente encontrado. Ejecutalo con: iaf-client.exe http://127.0.0.1:8080 <username> <token>"
-        }
+        "client_installed": true,
+        "message": "IAF v3.0 usa Electron (desktop) o Capacitor (Android) como cliente.",
+        "instructions": "Electron: cd electron && npm install && npm start. Capacitor: cd capacitor && .\\setup_capacitor.ps1"
     }))
 }
 
@@ -500,6 +485,9 @@ async fn admin_create_user(
     let limits = if payload.is_admin { UserLimits::admin() } else { UserLimits::default() };
     let result = if payload.is_admin && payload.public_key.is_some() {
         state.user_store.create_admin(&payload.username, &payload.public_key.unwrap(), perms, limits)
+    } else if payload.is_admin && payload.public_key.is_none() {
+        // FIX #13: Error claro cuando admin no tiene clave pública
+        Err("Para crear un admin necesitás generar claves (botón 'Generar Claves') o subir un .pem.".into())
     } else if let Some(ref pw) = payload.password {
         state.user_store.create_user_with_password(
             &payload.username, pw, payload.is_admin, perms, limits,
@@ -511,6 +499,12 @@ async fn admin_create_user(
     } else {
         Err("Se requiere password (usuarios normales) o public_key (admins).".into())
     };
+
+    match result {
+        Ok(user) => Json(json!({ "status": "ok", "user": user })).into_response(),
+        Err(e) => (StatusCode::BAD_REQUEST, Json(json!({ "status": "error", "message": e }))).into_response(),
+    }
+}
 
     match result {
         Ok(user) => Json(json!({ "status": "ok", "user": user })).into_response(),
