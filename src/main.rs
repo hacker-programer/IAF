@@ -98,21 +98,14 @@ async fn require_auth(
 // ============================================================================
 
 /// Sanitiza un string para usarlo como nombre de archivo
-/// Sanitiza un string para usarlo como nombre de archivo.
-/// Agrega un hash al final para evitar colisiones cuando dos títulos
-/// difieren solo después de los primeros 70 caracteres.
 fn sanitize_filename(title: &str) -> String {
-    use std::hash::{Hash, Hasher};
-    let base: String = title
+    title
         .chars()
         .map(|c| if c.is_alphanumeric() || c == '-' || c == '_' { c } else { '_' })
-        .take(70)
-        .collect();
-    let base = base.trim_matches('_').to_string();
-    let mut hasher = std::collections::hash_map::DefaultHasher::new();
-    title.hash(&mut hasher);
-    let hash = format!("{:08x}", hasher.finish());
-    if base.is_empty() { hash } else { format!("{}_{}", base, hash) }
+        .take(80)
+        .collect::<String>()
+        .trim_matches('_')
+        .to_string()
 }
 
 fn get_chat_dir(state: &AppState, username: &str, is_admin_or_port80: bool) -> PathBuf {
@@ -443,15 +436,27 @@ async fn sign_nonce(Json(payload): Json<SignRequest>) -> impl IntoResponse {
 }
 
 async fn client_check() -> impl IntoResponse {
-    // FIX #1/#39: v3.0 — cliente Rust eliminado. Verificar si hay clientes
-    // Electron/Capacitor conectados en lugar de buscar el binario inexistente.
+    let possible_paths = vec![
+        "client/target/release/iaf-client.exe",
+        "client/target/debug/iaf-client.exe",
+        "iaf-client.exe",
+    ];
+    let mut found = Vec::new();
+    for path in &possible_paths {
+        if std::path::Path::new(path).exists() {
+            found.push(path.to_string());
+        }
+    }
     Json(json!({
         "status": "ok",
-        "client_installed": true,
-        "message": "IAF v3.0 usa Electron (desktop) o Capacitor (Android). El frontend detecta la plataforma automáticamente.",
-        "instructions": "Electron: cd electron && npm install && npm start. Capacitor: cd capacitor && .\\setup_capacitor.ps1"
-    }))
-}
+        "client_installed": !found.is_empty(),
+        "found_at": found,
+        "expected_paths": possible_paths,
+        "instructions": if found.is_empty() {
+            "Para instalar el cliente: cd client && cargo build --release. Luego: .\\client\\target\\release\\iaf-client.exe <url> <user> <token>"
+        } else {
+            "Cliente encontrado. Ejecutalo con: iaf-client.exe http://127.0.0.1:8080 <username> <token>"
+        }
     }))
 }
 
@@ -460,6 +465,7 @@ async fn client_check() -> impl IntoResponse {
 // ============================================================================
 
 async fn admin_list_users(
+    State(state): State<AppState>,
     headers: HeaderMap,
 ) -> impl IntoResponse {
     let admin = match require_admin(&state, &headers).await {
