@@ -1811,22 +1811,9 @@ async fn agent_approve_plan(
     }
 
     Json(json!({ "status": "ok" })).into_response()
+    Json(json!({ "status": "ok" })).into_response()
 }
 
-async fn agent_interrupt(
-    State(state): State<AppState>,
-    headers: HeaderMap,
-) -> impl IntoResponse {
-    let _username = match require_auth(&state, &headers).await {
-        Ok(u) => u, Err(e) => return (e.0, Json(json!({ "status": "error", "message": e.1 }))).into_response(),
-    };
-
-    let mut agent = state.active_agent.lock().unwrap();
-    agent.interrupted = true;
-    agent.running = false;
-
-    if let Some(ref path) = agent.current_chat_path {
-        // Append interruption message to chat
 async fn agent_interrupt(
     State(state): State<AppState>,
     headers: HeaderMap,
