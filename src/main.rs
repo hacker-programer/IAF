@@ -124,13 +124,8 @@ fn get_chat_path(state: &AppState, username: &str, is_admin_or_port80: bool, tit
 
 /// Limpia archivos viejos con el mismo UUID en el directorio de chats
 /// para evitar duplicados cuando el título cambia.
-/// FIX #10: Verificación estricta — el nombre DEBE terminar en "-<UUID completo>"
 fn clean_old_chat_files(dir: &PathBuf, session_id: &str) {
     if !dir.exists() {
-        return;
-    }
-    // Solo limpiar si session_id parece un UUID válido
-    if !looks_like_uuid_stem(session_id) {
         return;
     }
     if let Ok(entries) = fs::read_dir(dir) {
@@ -140,16 +135,14 @@ fn clean_old_chat_files(dir: &PathBuf, session_id: &str) {
                 continue;
             }
             let fname = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
-            let expected_suffix = format!("-{}", session_id);
-            // Solo eliminar si el nombre termina EXACTAMENTE con "-UUID"
-            // y no es solo el UUID mismo (debe tener al menos un carácter antes del guion)
-            if fname.ends_with(&expected_suffix) && fname.len() > expected_suffix.len() {
+            if fname.ends_with(&format!("-{}", session_id)) {
                 let _ = fs::remove_file(&path);
                 eprintln!("[IAF] Limpiado archivo duplicado: {}", path.display());
             }
         }
     }
 }
+
 /// Determina si un nombre de archivo (sin extensión) parece un UUID
 fn looks_like_uuid_stem(stem: &str) -> bool {
     stem.len() >= 30
@@ -443,14 +436,12 @@ async fn sign_nonce(Json(payload): Json<SignRequest>) -> impl IntoResponse {
 }
 
 async fn client_check() -> impl IntoResponse {
-    // FIX #1: El cliente Rust fue eliminado en v3.0 (reemplazado por Electron + Capacitor).
-    // Siempre retornamos true porque el cliente Electron o Capacitor se detecta
-    // del lado del frontend (app.js: detectPlatform()).
+    // FIX #1: v3.0 — cliente Rust eliminado, reemplazado por Electron + Capacitor
     Json(json!({
         "status": "ok",
         "client_installed": true,
-        "message": "Usa el cliente Electron para ejecutar comandos localmente, o Capacitor en Android.",
-        "instructions": "Para instalar Electron: cd electron && npm install && npm start. Para Capacitor: cd capacitor && .\\setup_capacitor.ps1"
+        "message": "IAF v3.0 usa Electron (PC) o Capacitor (Android) como cliente.",
+        "instructions": "Electron: cd electron && npm install && npm start. Capacitor: cd capacitor && .\\setup_capacitor.ps1"
     }))
 }
 
@@ -1361,56 +1352,31 @@ async fn chat_endpoint(
 
     // Iniciar agente en background (BUG #4 fix)
     {
-    // Iniciar agente en background
-    {
         let mut agent = state.active_agent.lock().unwrap();
         agent.current_chat_path = Some(save_path.to_string_lossy().to_string());
-
-        // FIX #6: Si el agente ya está corriendo, interrumpirlo para procesar
-        // el nuevo mensaje. Esto evita que mensajes se ignoren silenciosamente.
-        if agent.running {
-            // Interrumpir el agente actual
-            agent.interrupted = true;
-            agent.running = false;
-            // También abortar el tokio task si existe
-            if let Ok(mut abort_handle) = state.abort_handle.lock() {
-                if let Some(handle) = abort_handle.take() {
-                    handle.abort();
-                }
+        if !agent.running {
+            agent.running = true;
+            agent.interrupted = false;
+            agent.finished = false;
+            agent.final_message = None;
+            // BUG-002 FIX: Limpiar info_messages al iniciar nuevo agente
+            agent.info_messages.clear();
+            // BUG FIX: Solo limpiar steps si es conversacion NUEVA. Si es existente, cargar desde sesion.
+            if chat_file.is_some() {
+                if let Some(ref steps) = session.steps { agent.steps = steps.clone(); }
+            } else {
+                agent.steps.clear();
             }
-            // Guardar mensaje de interrupción en la sesión
-            if let Ok(content) = fs::read_to_string(&save_path) {
-                if let Ok(mut updated) = serde_json::from_str::<ChatSession>(&content) {
-                    updated.messages.push(ChatMessage {
-                        role: "system".to_string(),
-                        content: "⏹️ Agente interrumpido para procesar un nuevo mensaje.".to_string(),
-                        timestamp: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs(),
-                    });
-                    let _ = fs::write(&save_path, serde_json::to_string_pretty(&updated).unwrap());
-                }
-            }
-        }
+            agent.thinking_content.clear();
+            agent.esperando_respuesta_usuario = false;
+            agent.respuesta_usuario = None;
+            agent.esperando_aprobacion_plan = false;
+            agent.plan_propuesto = None;
+            agent.pregunta_usuario = None;
+            agent.current_session_id = Some(session_id.clone());
 
-        // Iniciar el agente con el nuevo mensaje
-        agent.running = true;
-        agent.interrupted = false;
-        agent.finished = false;
-        agent.final_message = None;
-        // BUG-002 FIX: Limpiar info_messages al iniciar nuevo agente
-        agent.info_messages.clear();
-        // BUG FIX: Solo limpiar steps si es conversacion NUEVA. Si es existente, cargar desde sesion.
-        if chat_file.is_some() {
-            if let Some(ref steps) = session.steps { agent.steps = steps.clone(); }
-        } else {
-            agent.steps.clear();
-        }
-        agent.thinking_content.clear();
-        agent.esperando_respuesta_usuario = false;
-        agent.respuesta_usuario = None;
-        agent.esperando_aprobacion_plan = false;
-        agent.plan_propuesto = None;
-        agent.pregunta_usuario = None;
-        agent.current_session_id = Some(session_id.clone());
+            let state_bg = state.clone();
+            let session_bg = session.clone();
             let sid_bg = session_id.clone();
             let uname_bg = username.clone();
             let is_admin_bg = is_admin;
@@ -1832,6 +1798,30 @@ struct AgentApprovePlanRequest {
     aprobado: bool,
     feedback: Option<String>,
 }
+
+async fn agent_approve_plan(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(payload): Json<AgentApprovePlanRequest>,
+) -> impl IntoResponse {
+    let _username = match require_auth(&state, &headers).await {
+        Ok(u) => u, Err(e) => return (e.0, Json(json!({ "status": "error", "message": e.1 }))).into_response(),
+    };
+
+    let mut agent = state.active_agent.lock().unwrap();
+    // Marcar que la aprobación fue procesada — el agente lee el estado
+    agent.esperando_aprobacion_plan = false;
+
+    // Si el usuario aprobó, desbloquear al agente
+    if payload.aprobado {
+        agent.respuesta_usuario = Some("PLAN_APROBADO".to_string());
+    } else {
+        agent.respuesta_usuario = Some(format!("PLAN_RECHAZADO: {}", payload.feedback.unwrap_or_default()));
+    }
+
+    Json(json!({ "status": "ok" })).into_response()
+}
+
 async fn agent_interrupt(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -1839,17 +1829,6 @@ async fn agent_interrupt(
     let _username = match require_auth(&state, &headers).await {
         Ok(u) => u, Err(e) => return (e.0, Json(json!({ "status": "error", "message": e.1 }))).into_response(),
     };
-
-    // FIX #9: Abortar el tokio task ANTES de cambiar flags.
-    // Esto detiene inmediatamente la ejecución del agente, no solo
-    // en el próximo chequeo de la flag.
-    {
-        let mut abort_handle = state.abort_handle.lock().unwrap();
-        if let Some(handle) = abort_handle.take() {
-            handle.abort();
-            eprintln!("[IAF] Tokio task del agente abortado por interrupt.");
-        }
-    }
 
     let mut agent = state.active_agent.lock().unwrap();
     agent.interrupted = true;
@@ -1871,6 +1850,7 @@ async fn agent_interrupt(
 
     Json(json!({ "status": "ok" })).into_response()
 }
+
 // ============================================================================
 // Endpoints de CAPTCHA
 // ============================================================================
@@ -1880,6 +1860,7 @@ struct CaptchaSolveRequest {
     id: String,
     solved_content: String,
 }
+
 async fn captcha_status(
     State(state): State<AppState>,
     headers: HeaderMap,
