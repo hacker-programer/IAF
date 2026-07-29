@@ -18,6 +18,7 @@ let authIsAdmin = false;
 let authHasStudy = false;
 let authHasProgramming = false;
 let isPort80 = window.location.port === '80' || window.location.port === '';
+let isPort80 = window.location.port === '80';
 
 // ---- DOM refs ----
 const loginScreen = document.getElementById('loginScreen');
