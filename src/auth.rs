@@ -416,7 +416,8 @@ impl UserStore {
         let hash_str = match &user.password_hash {
             Some(h) => h.clone(),
             None => return Err("Este usuario no tiene contraseÃ±a configurada (usa nonce).".into()),
-            None => return Ok(None), // FIX #30: nonce user → Ok(None) like not-found
+        };
+
         let parsed_hash = PasswordHash::new(&hash_str)
             .map_err(|e| format!("Error interno: hash mal formado: {}", e))?;
 
@@ -483,32 +484,7 @@ impl UserStore {
             .ok_or_else(|| format!("Usuario '{}' no encontrado.", username))?;
         user.permissions = permissions;
         drop(users);
-        self.save()
-    }
-
-    /// Actualiza accesos del usuario (modo programador, modo estudio, editar prompts)
-    pub fn update_access(
-        &self,
-        username: &str,
-        modo_estudio: bool,
-        modo_programador: bool,
-        editar_global: bool,
-        editar_local: bool,
-    ) -> Result<(), String> {
-        let mut users = self.users.lock();
-        let user = users.users.iter_mut()
-            .find(|u| u.username == username)
-            .ok_or_else(|| format!("Usuario '{}' no encontrado.", username))?;
-        if !user.is_admin {
-            user.modo_estudio = modo_estudio;
-            user.modo_programador = modo_programador;
-            user.editar_system_prompt_global = editar_global;
-            user.editar_system_prompt_local = editar_local;
-        }
-        drop(users);
-        self.save()
-    }
-
+    pub fn update_limits(&self, username: &str, limits: UserLimits) -> Result<(), String> {
     /// Actualiza horarios de un usuario
     pub fn update_schedule(&self, username: &str, schedule: WeeklySchedule) -> Result<(), String> {
         let mut users = self.users.lock();

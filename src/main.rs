@@ -97,8 +97,16 @@ async fn require_auth(
 // Chat Helpers (nueva estructura de almacenamiento)
 // ============================================================================
 
-// FIX #46: Usar la versión unificada de utils.rs (70 chars + hash anti-colisión)
-use iaf::utils::sanitize_filename;
+/// Sanitiza un string para usarlo como nombre de archivo
+fn sanitize_filename(title: &str) -> String {
+    title
+        .chars()
+        .map(|c| if c.is_alphanumeric() || c == '-' || c == '_' { c } else { '_' })
+        .take(80)
+        .collect::<String>()
+        .trim_matches('_')
+        .to_string()
+}
 
 fn get_chat_dir(state: &AppState, username: &str, is_admin_or_port80: bool) -> PathBuf {
     if is_admin_or_port80 || username == "admin_local" {
@@ -114,9 +122,10 @@ fn get_chat_path(state: &AppState, username: &str, is_admin_or_port80: bool, tit
     dir.join(format!("{}-{}.json", safe_title, id))
 }
 
-/// Limpia archivos viejos con el mismo UUID. FIX #10: validación estricta del sufijo.
+/// Limpia archivos viejos con el mismo UUID en el directorio de chats
+/// para evitar duplicados cuando el título cambia.
 fn clean_old_chat_files(dir: &PathBuf, session_id: &str) {
-    if !dir.exists() || !looks_like_uuid_stem(session_id) {
+    if !dir.exists() {
         return;
     }
     if let Ok(entries) = fs::read_dir(dir) {
@@ -126,14 +135,14 @@ fn clean_old_chat_files(dir: &PathBuf, session_id: &str) {
                 continue;
             }
             let fname = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
-            let expected_suffix = format!("-{}", session_id);
-            if fname.ends_with(&expected_suffix) && fname.len() > expected_suffix.len() {
+            if fname.ends_with(&format!("-{}", session_id)) {
                 let _ = fs::remove_file(&path);
                 eprintln!("[IAF] Limpiado archivo duplicado: {}", path.display());
             }
         }
     }
 }
+
 /// Determina si un nombre de archivo (sin extensión) parece un UUID
 fn looks_like_uuid_stem(stem: &str) -> bool {
     stem.len() >= 30
@@ -427,12 +436,27 @@ async fn sign_nonce(Json(payload): Json<SignRequest>) -> impl IntoResponse {
 }
 
 async fn client_check() -> impl IntoResponse {
-    // FIX #1/#39: v3.0 — cliente Rust eliminado, reemplazado por Electron + Capacitor.
+    let possible_paths = vec![
+        "client/target/release/iaf-client.exe",
+        "client/target/debug/iaf-client.exe",
+        "iaf-client.exe",
+    ];
+    let mut found = Vec::new();
+    for path in &possible_paths {
+        if std::path::Path::new(path).exists() {
+            found.push(path.to_string());
+        }
+    }
     Json(json!({
         "status": "ok",
-        "client_installed": true,
-        "message": "IAF v3.0 usa Electron (desktop) o Capacitor (Android) como cliente.",
-        "instructions": "Electron: cd electron && npm install && npm start. Capacitor: cd capacitor && .\\setup_capacitor.ps1"
+        "client_installed": !found.is_empty(),
+        "found_at": found,
+        "expected_paths": possible_paths,
+        "instructions": if found.is_empty() {
+            "Para instalar el cliente: cd client && cargo build --release. Luego: .\\client\\target\\release\\iaf-client.exe <url> <user> <token>"
+        } else {
+            "Cliente encontrado. Ejecutalo con: iaf-client.exe http://127.0.0.1:8080 <username> <token>"
+        }
     }))
 }
 
@@ -485,9 +509,6 @@ async fn admin_create_user(
     let limits = if payload.is_admin { UserLimits::admin() } else { UserLimits::default() };
     let result = if payload.is_admin && payload.public_key.is_some() {
         state.user_store.create_admin(&payload.username, &payload.public_key.unwrap(), perms, limits)
-    } else if payload.is_admin && payload.public_key.is_none() {
-        // FIX #13: Error claro cuando admin no tiene clave pública
-        Err("Para crear un admin necesitás generar claves (botón 'Generar Claves') o subir un .pem.".into())
     } else if let Some(ref pw) = payload.password {
         state.user_store.create_user_with_password(
             &payload.username, pw, payload.is_admin, perms, limits,
@@ -1344,101 +1365,85 @@ async fn chat_endpoint(
     let _ = fs::create_dir_all(save_path.parent().unwrap());
     let _ = fs::write(&save_path, serde_json::to_string_pretty(&session).unwrap());
 
-    // Iniciar agente en background
+    // Iniciar agente en background (BUG #4 fix)
     {
         let mut agent = state.active_agent.lock().unwrap();
         agent.current_chat_path = Some(save_path.to_string_lossy().to_string());
+        if !agent.running {
+            agent.running = true;
+            agent.interrupted = false;
+            agent.finished = false;
+            agent.final_message = None;
+            // BUG-002 FIX: Limpiar info_messages al iniciar nuevo agente
+            agent.info_messages.clear();
+            // BUG FIX: Solo limpiar steps si es conversacion NUEVA. Si es existente, cargar desde sesion.
+            if chat_file.is_some() {
+                if let Some(ref steps) = session.steps { agent.steps = steps.clone(); }
+            } else {
+                agent.steps.clear();
+            }
+            agent.thinking_content.clear();
+            agent.esperando_respuesta_usuario = false;
+            agent.respuesta_usuario = None;
+            agent.esperando_aprobacion_plan = false;
+            agent.plan_propuesto = None;
+            agent.pregunta_usuario = None;
+            agent.current_session_id = Some(session_id.clone());
 
-        // FIX #6/#25: SIEMPRE interrumpir y relanzar con el nuevo mensaje
-        if agent.running {
-            agent.interrupted = true;
-            agent.running = false;
-            if let Ok(mut abort_handle) = state.abort_handle.lock() {
-                if let Some(handle) = abort_handle.take() {
-                    handle.abort();
+            let state_bg = state.clone();
+            let session_bg = session.clone();
+            let sid_bg = session_id.clone();
+            let uname_bg = username.clone();
+            let is_admin_bg = is_admin;
+            let mode_bg = payload.mode.clone().unwrap_or_else(|| "programming".to_string());
+            let dk = deepseek_key().to_string();
+            let vk = std::env::var("VOYAGE_API_KEY").unwrap_or_default();
+            let ok = std::env::var("OPENROUTER_API_KEY").unwrap_or_default();
+
+            tokio::spawn(async move {
+                let result = crate::agent::run_agent_loop(
+                    session_bg.messages.clone(),
+                    session_bg.project_name.clone(),
+                    state_bg.clone(),
+                    &dk, &vk, &ok,
+                    Some(sid_bg.clone()),
+                    &uname_bg,
+                    &mode_bg,
+                ).await;
+                let save_p_bg = get_chat_path(&state_bg, &uname_bg, is_admin_bg, &session_bg.title, &sid_bg);
+                let mut updated = if let Ok(c) = fs::read_to_string(&save_p_bg) {
+                    serde_json::from_str::<ChatSession>(&c).unwrap_or_else(|_| session_bg.clone())
+                } else { session_bg.clone() };
+
+                // Guardar el mensaje final antes de que result sea movido
+                let final_msg = match &result {
+                    Ok(resp) => Some(resp.clone()),
+                    Err(e) => Some(format!("Error: {}", e)),
+                };
+
+                match result {
+                    Ok(resp) => {
+                        updated.messages.push(ChatMessage {
+                            role: "agent".to_string(), content: resp,
+                            timestamp: std::time::SystemTime::now()
+                                .duration_since(std::time::UNIX_EPOCH).unwrap().as_secs(),
+                        });
+                    }
+                    Err(e) => {
+                        updated.messages.push(ChatMessage {
+                            role: "agent_error".to_string(),
+                            content: format!("Error: {}", e),
+                            timestamp: std::time::SystemTime::now()
+                                .duration_since(std::time::UNIX_EPOCH).unwrap().as_secs(),
+                        });
+                    }
                 }
-            }
-        }
 
-        agent.running = true;
-        agent.interrupted = false;
-        agent.finished = false;
-        agent.final_message = None;
-        agent.info_messages.clear();
-        if chat_file.is_some() {
-            if let Some(ref steps) = session.steps { agent.steps = steps.clone(); }
-        } else {
-            agent.steps.clear();
-        }
-        agent.thinking_content.clear();
-        agent.esperando_respuesta_usuario = false;
-        agent.respuesta_usuario = None;
-        agent.esperando_aprobacion_plan = false;
-        agent.plan_propuesto = None;
-        agent.pregunta_usuario = None;
-        agent.current_session_id = Some(session_id.clone());
-    }
+                let steps = { let ag = state_bg.active_agent.lock().unwrap(); ag.steps.clone() };
+                updated.steps = Some(steps);
+                let _ = fs::write(&save_p_bg, serde_json::to_string_pretty(&updated).unwrap());
 
-    let state_bg = state.clone();
-    let session_bg = session.clone();
-    let sid_bg = session_id.clone();
-    let uname_bg = username.clone();
-    let is_admin_bg = is_admin;
-    let mode_bg = payload.mode.clone().unwrap_or_else(|| "programming".to_string());
-    let dk = deepseek_key().to_string();
-    let vk = std::env::var("VOYAGE_API_KEY").unwrap_or_default();
-    let ok = std::env::var("OPENROUTER_API_KEY").unwrap_or_default();
-
-    tokio::spawn(async move {
-        let result = crate::agent::run_agent_loop(
-            session_bg.messages.clone(),
-            session_bg.project_name.clone(),
-            state_bg.clone(),
-            &dk, &vk, &ok,
-            Some(sid_bg.clone()),
-            &uname_bg,
-            &mode_bg,
-        ).await;
-        let save_p_bg = get_chat_path(&state_bg, &uname_bg, is_admin_bg, &session_bg.title, &sid_bg);
-        let mut updated = if let Ok(c) = fs::read_to_string(&save_p_bg) {
-            serde_json::from_str::<ChatSession>(&c).unwrap_or_else(|_| session_bg.clone())
-        } else { session_bg.clone() };
-
-        let final_msg = match &result {
-            Ok(resp) => Some(resp.clone()),
-            Err(e) => Some(format!("Error: {}", e)),
-        };
-
-        match result {
-            Ok(resp) => {
-                updated.messages.push(ChatMessage {
-                    role: "agent".to_string(), content: resp,
-                    timestamp: std::time::SystemTime::now()
-                        .duration_since(std::time::UNIX_EPOCH).unwrap().as_secs(),
-                });
-            }
-            Err(e) => {
-                updated.messages.push(ChatMessage {
-                    role: "agent_error".to_string(),
-                    content: format!("Error: {}", e),
-                    timestamp: std::time::SystemTime::now()
-                        .duration_since(std::time::UNIX_EPOCH).unwrap().as_secs(),
-                });
-            }
-        }
-
-        let steps = { let ag = state_bg.active_agent.lock().unwrap(); ag.steps.clone() };
-        updated.steps = Some(steps);
-        let _ = fs::write(&save_p_bg, serde_json::to_string_pretty(&updated).unwrap());
-
-        let mut ag = state_bg.active_agent.lock().unwrap();
-        ag.running = false;
-        if !ag.finished { ag.finished = true; ag.final_message = final_msg; }
-    });
-
-    Json(json!({
-        "status": "ok",
-        "session_id": session.id,
+                let mut ag = state_bg.active_agent.lock().unwrap();
                 ag.running = false;
                 if !ag.finished { ag.finished = true; ag.final_message = final_msg; }
             });
@@ -1831,6 +1836,7 @@ async fn agent_approve_plan(
 
     Json(json!({ "status": "ok" })).into_response()
 }
+
 async fn agent_interrupt(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -1839,18 +1845,12 @@ async fn agent_interrupt(
         Ok(u) => u, Err(e) => return (e.0, Json(json!({ "status": "error", "message": e.1 }))).into_response(),
     };
 
-    // FIX #9: Abortar el tokio task para detención inmediata del agente
-    if let Ok(mut abort_handle) = state.abort_handle.lock() {
-        if let Some(handle) = abort_handle.take() {
-            handle.abort();
-        }
-    }
-
     let mut agent = state.active_agent.lock().unwrap();
     agent.interrupted = true;
     agent.running = false;
 
     if let Some(ref path) = agent.current_chat_path {
+        // Append interruption message to chat
         if let Ok(content) = fs::read_to_string(path) {
             if let Ok(mut session) = serde_json::from_str::<ChatSession>(&content) {
                 session.messages.push(ChatMessage {
@@ -1865,6 +1865,7 @@ async fn agent_interrupt(
 
     Json(json!({ "status": "ok" })).into_response()
 }
+
 // ============================================================================
 // Endpoints de CAPTCHA
 // ============================================================================
