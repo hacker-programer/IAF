@@ -1830,13 +1830,18 @@ async fn agent_interrupt(
                     role: "system".to_string(),
                     content: "⏹️ Agente interrumpido por el usuario.".to_string(),
                     timestamp: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs(),
-                });
-                let _ = fs::write(path, serde_json::to_string_pretty(&session).unwrap());
-            }
+    // FIX #9: Abortar tokio task para detencion inmediata
+    if let Ok(mut abort_handle) = state.abort_handle.lock() {
+        if let Some(handle) = abort_handle.take() {
+            handle.abort();
         }
     }
 
-    Json(json!({ "status": "ok" })).into_response()
+    let mut agent = state.active_agent.lock().unwrap();
+    agent.interrupted = true;
+    agent.running = false;
+
+    if let Some(ref path) = agent.current_chat_path {
 }
 
 // ============================================================================
