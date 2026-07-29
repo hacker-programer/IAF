@@ -130,18 +130,25 @@ impl DesktopController {
                             simulate(&EventType::KeyRelease(key))?;
                         }
                     }
-                    // Ignorar caracteres no soportados (no hacer nada)
-                }
-            }
-        }
-        Ok(())
-    }
-
-    /// Launch an executable and track its child process.
+    /// FIX #28: Reap zombies before adding new child + reap method
     pub fn launch_executable(&self, path: &str) -> Result<u32, Box<dyn std::error::Error>> {
+        self.reap_zombies();
         let child = Command::new(path).spawn()?;
         let pid = child.id();
         self.children.lock().unwrap().push(child);
         Ok(pid)
     }
-}
+
+    /// FIX #28: Elimina procesos hijo que ya terminaron para evitar acumulacion de zombies.
+    pub fn reap_zombies(&self) {
+        let mut children = self.children.lock().unwrap();
+        let mut i = 0;
+        while i < children.len() {
+            let remove = match children[i].try_wait() {
+                Ok(Some(_)) => true,
+                Ok(None) => false,
+                Err(_) => true,
+            };
+            if remove { children.remove(i); } else { i += 1; }
+        }
+    }
