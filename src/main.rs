@@ -1388,11 +1388,8 @@ async fn chat_endpoint(
         agent.plan_propuesto = None;
         agent.pregunta_usuario = None;
         agent.current_session_id = Some(session_id.clone());
-            agent.plan_propuesto = None;
-            agent.pregunta_usuario = None;
-            agent.current_session_id = Some(session_id.clone());
 
-            let state_bg = state.clone();
+        let state_bg = state.clone();
             let session_bg = session.clone();
             let sid_bg = session_id.clone();
             let uname_bg = username.clone();
