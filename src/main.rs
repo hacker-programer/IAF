@@ -98,22 +98,14 @@ async fn require_auth(
 // ============================================================================
 
 /// Sanitiza un string para usarlo como nombre de archivo
-/// Sanitiza un string para usarlo como nombre de archivo.
-/// FIX #22: Agrega un hash de 8 caracteres al final para evitar colisiones
-/// cuando dos títulos difieren solo después del carácter 80.
 fn sanitize_filename(title: &str) -> String {
-    use std::hash::{Hash, Hasher};
-    let base: String = title
+    title
         .chars()
         .map(|c| if c.is_alphanumeric() || c == '-' || c == '_' { c } else { '_' })
-        .take(70)
-        .collect();
-    let base = base.trim_matches('_').to_string();
-    // Calcular hash corto del título completo para desambiguar
-    let mut hasher = std::collections::hash_map::DefaultHasher::new();
-    title.hash(&mut hasher);
-    let hash = format!("{:08x}", hasher.finish());
-    format!("{}_{}", base, hash)
+        .take(80)
+        .collect::<String>()
+        .trim_matches('_')
+        .to_string()
 }
 
 fn get_chat_dir(state: &AppState, username: &str, is_admin_or_port80: bool) -> PathBuf {
@@ -130,9 +122,10 @@ fn get_chat_path(state: &AppState, username: &str, is_admin_or_port80: bool, tit
     dir.join(format!("{}-{}.json", safe_title, id))
 }
 
-/// FIX #10: Verificación estricta del sufijo UUID para evitar matches parciales
+/// Limpia archivos viejos con el mismo UUID en el directorio de chats
+/// para evitar duplicados cuando el título cambia.
 fn clean_old_chat_files(dir: &PathBuf, session_id: &str) {
-    if !dir.exists() || !looks_like_uuid_stem(session_id) {
+    if !dir.exists() {
         return;
     }
     if let Ok(entries) = fs::read_dir(dir) {
@@ -142,14 +135,14 @@ fn clean_old_chat_files(dir: &PathBuf, session_id: &str) {
                 continue;
             }
             let fname = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
-            let expected_suffix = format!("-{}", session_id);
-            if fname.ends_with(&expected_suffix) && fname.len() > expected_suffix.len() {
+            if fname.ends_with(&format!("-{}", session_id)) {
                 let _ = fs::remove_file(&path);
                 eprintln!("[IAF] Limpiado archivo duplicado: {}", path.display());
             }
         }
     }
 }
+
 /// Determina si un nombre de archivo (sin extensión) parece un UUID
 fn looks_like_uuid_stem(stem: &str) -> bool {
     stem.len() >= 30
@@ -443,12 +436,27 @@ async fn sign_nonce(Json(payload): Json<SignRequest>) -> impl IntoResponse {
 }
 
 async fn client_check() -> impl IntoResponse {
-    // FIX #1: v3.0 — cliente Rust eliminado, reemplazado por Electron + Capacitor
+    let possible_paths = vec![
+        "client/target/release/iaf-client.exe",
+        "client/target/debug/iaf-client.exe",
+        "iaf-client.exe",
+    ];
+    let mut found = Vec::new();
+    for path in &possible_paths {
+        if std::path::Path::new(path).exists() {
+            found.push(path.to_string());
+        }
+    }
     Json(json!({
         "status": "ok",
-        "client_installed": true,
-        "message": "IAF v3.0 usa Electron (PC) o Capacitor (Android) como cliente.",
-        "instructions": "Electron: cd electron && npm install && npm start. Capacitor: cd capacitor && .\\setup_capacitor.ps1"
+        "client_installed": !found.is_empty(),
+        "found_at": found,
+        "expected_paths": possible_paths,
+        "instructions": if found.is_empty() {
+            "Para instalar el cliente: cd client && cargo build --release. Luego: .\\client\\target\\release\\iaf-client.exe <url> <user> <token>"
+        } else {
+            "Cliente encontrado. Ejecutalo con: iaf-client.exe http://127.0.0.1:8080 <username> <token>"
+        }
     }))
 }
 
@@ -501,9 +509,6 @@ async fn admin_create_user(
     let limits = if payload.is_admin { UserLimits::admin() } else { UserLimits::default() };
     let result = if payload.is_admin && payload.public_key.is_some() {
         state.user_store.create_admin(&payload.username, &payload.public_key.unwrap(), perms, limits)
-    } else if payload.is_admin && payload.public_key.is_none() {
-        // FIX #13: Error claro cuando admin no tiene clave pública
-        Err("Para crear un admin necesitás generar claves (botón 'Generar Claves') o subir un .pem.".into())
     } else if let Some(ref pw) = payload.password {
         state.user_store.create_user_with_password(
             &payload.username, pw, payload.is_admin, perms, limits,
@@ -1347,6 +1352,7 @@ async fn chat_endpoint(
 
     // Limpiar archivos viejos con el mismo UUID para evitar duplicados
     clean_old_chat_files(&chat_dir, &session_id);
+
     // Agregar mensaje del usuario
     session.messages.push(ChatMessage {
         role: "user".to_string(),
@@ -1359,40 +1365,32 @@ async fn chat_endpoint(
     let _ = fs::create_dir_all(save_path.parent().unwrap());
     let _ = fs::write(&save_path, serde_json::to_string_pretty(&session).unwrap());
 
-    // Iniciar agente en background
+    // Iniciar agente en background (BUG #4 fix)
     {
         let mut agent = state.active_agent.lock().unwrap();
         agent.current_chat_path = Some(save_path.to_string_lossy().to_string());
-            agent.interrupted = true;
-            agent.running = false;
-            // Abortar tokio task anterior si existe
-            if let Ok(mut abort_handle) = state.abort_handle.lock() {
-                if let Some(handle) = abort_handle.take() {
-                    handle.abort();
-                }
+        if !agent.running {
+            agent.running = true;
+            agent.interrupted = false;
+            agent.finished = false;
+            agent.final_message = None;
+            // BUG-002 FIX: Limpiar info_messages al iniciar nuevo agente
+            agent.info_messages.clear();
+            // BUG FIX: Solo limpiar steps si es conversacion NUEVA. Si es existente, cargar desde sesion.
+            if chat_file.is_some() {
+                if let Some(ref steps) = session.steps { agent.steps = steps.clone(); }
+            } else {
+                agent.steps.clear();
             }
-        }
+            agent.thinking_content.clear();
+            agent.esperando_respuesta_usuario = false;
+            agent.respuesta_usuario = None;
+            agent.esperando_aprobacion_plan = false;
+            agent.plan_propuesto = None;
+            agent.pregunta_usuario = None;
+            agent.current_session_id = Some(session_id.clone());
 
-        // Iniciar el agente con el nuevo mensaje
-        agent.running = true;
-        agent.interrupted = false;
-        agent.finished = false;
-        agent.final_message = None;
-        agent.info_messages.clear();
-        if chat_file.is_some() {
-            if let Some(ref steps) = session.steps { agent.steps = steps.clone(); }
-        } else {
-            agent.steps.clear();
-        }
-        agent.thinking_content.clear();
-        agent.esperando_respuesta_usuario = false;
-        agent.respuesta_usuario = None;
-        agent.esperando_aprobacion_plan = false;
-        agent.plan_propuesto = None;
-        agent.pregunta_usuario = None;
-        agent.current_session_id = Some(session_id.clone());
-
-        let state_bg = state.clone();
+            let state_bg = state.clone();
             let session_bg = session.clone();
             let sid_bg = session_id.clone();
             let uname_bg = username.clone();
@@ -1444,17 +1442,12 @@ async fn chat_endpoint(
                 let steps = { let ag = state_bg.active_agent.lock().unwrap(); ag.steps.clone() };
                 updated.steps = Some(steps);
                 let _ = fs::write(&save_p_bg, serde_json::to_string_pretty(&updated).unwrap());
+
                 let mut ag = state_bg.active_agent.lock().unwrap();
                 ag.running = false;
                 if !ag.finished { ag.finished = true; ag.final_message = final_msg; }
             });
         }
-        Json(json!({
-            "status": "ok",
-            "session_id": session.id,
-            "title": session.title,
-            "chat_path": save_path.to_string_lossy(),
-        })).into_response()
     }
 
     Json(json!({
@@ -1466,6 +1459,14 @@ async fn chat_endpoint(
 }
 
 async fn get_chats(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> impl IntoResponse {
+    let username = match require_auth(&state, &headers).await {
+        Ok(u) => u,
+        Err(_) => {
+            return Json(json!({ "status": "ok", "chats": [] })).into_response();
+        }
     };
 
     let is_admin = username == "admin_local" || state.user_store.is_admin(&username);
@@ -1844,19 +1845,12 @@ async fn agent_interrupt(
         Ok(u) => u, Err(e) => return (e.0, Json(json!({ "status": "error", "message": e.1 }))).into_response(),
     };
 
-    // FIX #9: Abortar el tokio task para detención inmediata
-    {
-        let mut abort_handle = state.abort_handle.lock().unwrap();
-        if let Some(handle) = abort_handle.take() {
-            handle.abort();
-        }
-    }
-
     let mut agent = state.active_agent.lock().unwrap();
     agent.interrupted = true;
     agent.running = false;
 
     if let Some(ref path) = agent.current_chat_path {
+        // Append interruption message to chat
         if let Ok(content) = fs::read_to_string(path) {
             if let Ok(mut session) = serde_json::from_str::<ChatSession>(&content) {
                 session.messages.push(ChatMessage {
@@ -1871,6 +1865,9 @@ async fn agent_interrupt(
 
     Json(json!({ "status": "ok" })).into_response()
 }
+
+// ============================================================================
+// Endpoints de CAPTCHA
 // ============================================================================
 
 #[derive(Deserialize)]

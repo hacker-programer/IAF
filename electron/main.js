@@ -28,25 +28,31 @@ const crypto = require('crypto');
 // Seguridad: validación de entrada para prevenir inyección de comandos
 // ============================================================================
 
-/// Solo permite caracteres seguros en subcomandos y argumentos
-/// (letras, números, guiones, underscore, punto, espacios, slash)
-const SAFE_ARG_REGEX = /^[a-zA-Z0-9_\-\s.\/\\:+=,@~]+$/;
+/// Solo permite caracteres seguros en subcomandos (estrictos)
+const SAFE_SUBCMD_REGEX = /^[a-zA-Z0-9_\-.]+$/;
+
+/// Permite caracteres adicionales en argumentos (commit messages, URLs, paths)
+const SAFE_ARGS_REGEX = /^[a-zA-Z0-9_\-\s.\/\\:+=,@~#%!^*()<>'"\[\]{}?&]+$/;
 
 function validateSafeArg(value, context) {
-    if (typeof value !== 'string' || value.length === 0) return true; // empty is ok
-    if (value.length > 500) {
-        console.error(`[IAF-Electron] BLOQUEO: ${context} excede 500 caracteres: ${value.substring(0,80)}...`);
+    if (typeof value !== 'string' || value.length === 0) return true;
+    if (value.length > 2000) {
+        console.error(`[IAF-Electron] BLOQUEO: ${context} excede 2000 caracteres: ${value.substring(0,80)}...`);
         return false;
     }
-    if (!SAFE_ARG_REGEX.test(value)) {
-        console.error(`[IAF-Electron] BLOQUEO: ${context} contiene caracteres no permitidos: ${value}`);
+    // Usar regex más permisivo para argumentos, estricto para subcomandos
+    var regex = context.includes('subcommand') ? SAFE_SUBCMD_REGEX : SAFE_ARGS_REGEX;
+    if (!regex.test(value)) {
+        console.error(`[IAF-Electron] BLOQUEO: ${context} contiene caracteres no permitidos: ${value.substring(0,100)}`);
+        return false;
+    }
+    // Bloquear shell metacharacters críticos incluso si el regex los permite
+    if (/[;|`$]/.test(value) && (context.includes('subcommand') || value.length < 500)) {
+        console.error(`[IAF-Electron] BLOQUEO: ${context} contiene shell metacharacters: ${value.substring(0,100)}`);
         return false;
     }
     return true;
 }
-
-// ============================================================================
-// Configuración
 // ============================================================================
 
 // Guardar credenciales en %APPDATA%/iaf-electron/config.json
