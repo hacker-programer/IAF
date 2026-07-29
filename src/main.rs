@@ -425,16 +425,8 @@ async fn sign_nonce(Json(payload): Json<SignRequest>) -> impl IntoResponse {
         Err(e) => Json(json!({ "status": "error", "message": e })),
     }
 }
+}
 
-async fn client_check() -> impl IntoResponse {
-    let possible_paths = vec![
-        "client/target/release/iaf-client.exe",
-        "client/target/debug/iaf-client.exe",
-        "iaf-client.exe",
-    ];
-    let mut found = Vec::new();
-    for path in &possible_paths {
-        if std::path::Path::new(path).exists() {
 async fn client_check() -> impl IntoResponse {
     // FIX #1/#39: v3.0 — Electron + Capacitor, no Rust client
     Json(json!({
@@ -444,9 +436,12 @@ async fn client_check() -> impl IntoResponse {
         "instructions": "Electron: cd electron && npm install && npm start. Capacitor: cd capacitor && .\\setup_capacitor.ps1"
     }))
 }
-    let admin = match require_admin(&state, &headers).await {
-        Ok(a) => a, Err(e) => return (e.0, Json(json!({ "status": "error", "message": e.1 }))).into_response(),
-    };
+
+// ============================================================================
+// Endpoints Admin (gestión de usuarios)
+// ============================================================================
+
+async fn admin_list_users(
     let _ = admin;
     let users = state.user_store.list_users();
     // Agregar campos calculados que el frontend espera (has_study_access, has_programming_access)
