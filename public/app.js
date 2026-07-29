@@ -171,19 +171,36 @@ async function init() {
 }
 
 async function checkClient() {
-    // En Electron, no mostrar advertencia de "cliente no detectado"
+    // En Electron, verificar estado de conexión con el servidor
     if (platformType === 'electron') {
-        clientWarning.innerHTML = '🖥️ <b>Cliente Electron activo</b> — comandos locales disponibles.';
-        clientWarning.style.borderColor = 'var(--success)';
-        clientWarning.style.color = 'var(--success)';
-        clientWarning.style.background = 'rgba(16,185,129,0.1)';
+        if (window.iafClient) {
+            try {
+                const status = await window.iafClient.getStatus();
+                if (status.connected) {
+                    clientWarning.innerHTML = '🖥️ <b>Electron conectado</b> — comandos locales disponibles (PowerShell, git, cargo).';
+                    clientWarning.style.borderColor = 'var(--success)';
+                    clientWarning.style.color = 'var(--success)';
+                    clientWarning.style.background = 'rgba(16,185,129,0.1)';
+                } else {
+                    clientWarning.innerHTML = '🖥️ <b>Electron desconectado</b> — reconectando al servidor...';
+                    clientWarning.style.borderColor = 'var(--warning, #f59e0b)';
+                    clientWarning.style.color = 'var(--warning, #f59e0b)';
+                    clientWarning.style.background = 'rgba(245,158,11,0.1)';
+                }
+            } catch(e) {
+                clientWarning.innerHTML = '🖥️ <b>Cliente Electron activo</b> — comandos locales disponibles.';
+                clientWarning.style.borderColor = 'var(--success)';
+                clientWarning.style.color = 'var(--success)';
+                clientWarning.style.background = 'rgba(16,185,129,0.1)';
+            }
+        }
         clientWarning.classList.remove('hidden');
         return;
     }
 
-    // En Capacitor/Android, mostrar estado
+    // En Capacitor/Android, mostrar capacidades
     if (platformType === 'capacitor') {
-        clientWarning.innerHTML = '📱 <b>App Android</b> — los comandos se ejecutan vía cliente Electron en tu PC.';
+        clientWarning.innerHTML = '📱 <b>App Android</b> — shell disponible (ls, cat, grep, find, curl). Usá el puerto 80 para admin directo.';
         clientWarning.style.borderColor = 'var(--accent)';
         clientWarning.style.color = 'var(--accent)';
         clientWarning.style.background = 'rgba(6,182,212,0.1)';
@@ -191,27 +208,52 @@ async function checkClient() {
         return;
     }
 
-    // En navegador normal, verificar si el cliente está instalado
+    // En navegador normal, verificar si hay clientes conectados
     try {
         const res = await fetch('/api/client/check');
         const text = await res.text();
         let data;
         try { data = JSON.parse(text); } catch(e) { return; }
-        if (!data.client_installed) {
+
+        if (data.v3_client) {
+            // Nueva respuesta v3.0
+            if (data.active_client_count > 0) {
+                const clientNames = data.active_clients.map(function(c) {
+                    return c.host_info || c.client_id.substring(0, 8);
+                }).join(', ');
+                clientWarning.innerHTML = '✅ <b>' + data.active_client_count + ' cliente(s) conectado(s):</b> ' + clientNames;
+                clientWarning.style.borderColor = 'var(--success)';
+                clientWarning.style.color = 'var(--success)';
+                clientWarning.style.background = 'rgba(16,185,129,0.1)';
+            } else if (data.electron_installed) {
+                clientWarning.innerHTML = '🎯 <b>Electron instalado pero no conectado.</b><br>Ejecutá: <code>cd electron && npm start</code>';
+                clientWarning.style.borderColor = 'var(--warning, #f59e0b)';
+                clientWarning.style.color = 'var(--warning, #f59e0b)';
+                clientWarning.style.background = 'rgba(245,158,11,0.1)';
+            } else {
+                clientWarning.innerHTML = '📦 <b>Sin clientes.</b> Instalá Electron:<br><code>cd electron && npm install && npm start</code>';
+                clientWarning.style.borderColor = 'var(--danger, #ef4444)';
+                clientWarning.style.color = 'var(--danger, #ef4444)';
+                clientWarning.style.background = 'rgba(239,68,68,0.1)';
+            }
+        } else if (!data.client_installed) {
+            // Respuesta legacy (viejo cliente Rust)
             clientWarning.innerHTML = '⚠️ <b>Cliente no detectado.</b><br>' + data.instructions;
-            clientWarning.classList.remove('hidden');
+            clientWarning.style.borderColor = 'var(--danger, #ef4444)';
+            clientWarning.style.color = 'var(--danger, #ef4444)';
+            clientWarning.style.background = 'rgba(239,68,68,0.1)';
         }
+        clientWarning.classList.remove('hidden');
     } catch(e) {
-        // Si el endpoint falla, no bloquear
+        // Si el endpoint falla, asumir que no hay cliente
+        clientWarning.innerHTML = '⚠️ <b>No se pudo verificar el estado del cliente.</b>';
+        clientWarning.style.borderColor = 'var(--warning, #f59e0b)';
+        clientWarning.style.color = 'var(--warning, #f59e0b)';
+        clientWarning.style.background = 'rgba(245,158,11,0.1)';
+        clientWarning.classList.remove('hidden');
     }
 }
 
-// ---- Login Tabs ----
-loginTabs.addEventListener('click', (e) => {
-    if (e.target.classList.contains('login-tab')) {
-        loginTabs.querySelectorAll('.login-tab').forEach(t => t.classList.remove('active'));
-        e.target.classList.add('active');
-        const tab = e.target.dataset.tab;
         loginPassword.classList.toggle('hidden', tab !== 'password');
         loginNonce.classList.toggle('hidden', tab !== 'nonce');
         loginError.classList.add('hidden');
