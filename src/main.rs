@@ -511,8 +511,9 @@ struct UpdateLimitsRequest {
     limits: UserLimits,
 }
 
+
 async fn admin_update_limits(
-async fn admin_update_limits(
+    State(state): State<AppState>,
     State(state): State<AppState>,
     headers: HeaderMap,
     AxumPath(username): AxumPath<String>,
