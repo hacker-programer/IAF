@@ -492,10 +492,12 @@ async fn admin_create_user(
         Err("Se requiere password (usuarios normales) o public_key (admins).".into())
     };
 
-    match result {
-        Ok(user) => Json(json!({ "status": "ok", "user": user })).into_response(),
-        Err(e) => (StatusCode::BAD_REQUEST, Json(json!({ "status": "error", "message": e }))).into_response(),
-    }
+    let result = if payload.is_admin && payload.public_key.is_some() {
+        state.user_store.create_admin(&payload.username, &payload.public_key.unwrap(), perms, limits)
+    } else if payload.is_admin && payload.public_key.is_none() {
+        // FIX #13: Error claro cuando admin no tiene clave publica
+        Err("Para crear un admin necesitas generar claves (boton Generar Claves) o subir un .pem.".into())
+    } else if let Some(ref pw) = payload.password {
 }
 
 #[derive(Deserialize)]
