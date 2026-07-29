@@ -26,7 +26,6 @@ hex = "0.4"
 argon2 = "0.5"
 sha2 = "0.10"
 parking_lot = "0.12"
-once_cell = "1.19"
 # BUG-001: Soporte nativo para PDF y DOCX (v2.5)
 pdf-extract = "0.7"
 zip = "0.6"
