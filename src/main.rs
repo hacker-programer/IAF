@@ -502,12 +502,12 @@ async fn admin_create_user(
         Err(e) => (StatusCode::BAD_REQUEST, Json(json!({ "status": "error", "message": e }))).into_response(),
     }
 }
-
-#[derive(Deserialize)]
-struct UpdateLimitsRequest {
-    limits: UserLimits,
-}
-
+    let result = if payload.is_admin && payload.public_key.is_some() {
+        state.user_store.create_admin(&payload.username, &payload.public_key.unwrap(), perms, limits)
+    } else if payload.is_admin && payload.public_key.is_none() {
+        // FIX #13: Error claro cuando admin no tiene clave pública
+        Err("Para crear un admin necesitás generar claves (botón 'Generar Claves') o subir un .pem.".into())
+    } else if let Some(ref pw) = payload.password {
 async fn admin_update_limits(
     State(state): State<AppState>,
     headers: HeaderMap,
