@@ -1389,10 +1389,20 @@ async fn chat_endpoint(
         let ok = std::env::var("OPENROUTER_API_KEY").unwrap_or_default();
 
         tokio::spawn(async move {
+        tokio::spawn(async move {
+                let result = crate::agent::run_agent_loop(
+                    session_bg.messages.clone(),
+                    session_bg.project_name.clone(),
+                    state_bg.clone(),
+                    &dk, &vk, &ok,
+                    Some(sid_bg.clone()),
+                    &uname_bg,
+                    &mode_bg,
+                ).await;
+                let save_p_bg = get_chat_path(&state_bg, &uname_bg, is_admin_bg, &session_bg.title, &sid_bg);
+                let mut updated = if let Ok(c) = fs::read_to_string(&save_p_bg) {
+                    serde_json::from_str::<ChatSession>(&c).unwrap_or_else(|_| session_bg.clone())
                 } else { session_bg.clone() };
-
-                // Guardar el mensaje final antes de que result sea movido
-                let final_msg = match &result {
                     Ok(resp) => Some(resp.clone()),
                     Err(e) => Some(format!("Error: {}", e)),
                 };
