@@ -1829,12 +1829,19 @@ async fn agent_interrupt(
         Ok(u) => u, Err(e) => return (e.0, Json(json!({ "status": "error", "message": e.1 }))).into_response(),
     };
 
+    // FIX #9: Abortar el tokio task para detención inmediata
+    {
+        let mut abort_handle = state.abort_handle.lock().unwrap();
+        if let Some(handle) = abort_handle.take() {
+            handle.abort();
+        }
+    }
+
     let mut agent = state.active_agent.lock().unwrap();
     agent.interrupted = true;
     agent.running = false;
 
     if let Some(ref path) = agent.current_chat_path {
-        // Append interruption message to chat
         if let Ok(content) = fs::read_to_string(path) {
             if let Ok(mut session) = serde_json::from_str::<ChatSession>(&content) {
                 session.messages.push(ChatMessage {
@@ -1849,9 +1856,6 @@ async fn agent_interrupt(
 
     Json(json!({ "status": "ok" })).into_response()
 }
-
-// ============================================================================
-// Endpoints de CAPTCHA
 // ============================================================================
 
 #[derive(Deserialize)]
