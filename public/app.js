@@ -401,8 +401,6 @@ async function refreshUsersTable() {
                 '<td>' + (u.has_programming_access ? '✅' : '❌') + '</td>' +
                 '<td><button class="btn btn-warning btn-sm" onclick="editUser(\'' + safe + '\')">Editar</button></td>' +
                 '</tr>';
-        }).join('');
-    } catch(e) {}
     } catch(e) {}
 }
 
@@ -414,6 +412,7 @@ const DAY_NAMES = ['lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'
 
 function buildScheduleGrid(schedule) {
     const grid = document.getElementById('editScheduleGrid');
+    grid.innerHTML = DAY_NAMES.map(day => {
 
 function parseScheduleGrid() {
     const horarios = {};
