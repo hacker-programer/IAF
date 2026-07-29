@@ -1871,16 +1871,8 @@ async fn agent_interrupt(
 
     Json(json!({ "status": "ok" })).into_response()
 }
-
-    let mut agent = state.active_agent.lock().unwrap();
-    agent.interrupted = true;
-    agent.running = false;
-
-    if let Some(ref path) = agent.current_chat_path {
-        // Append interruption message to chat
 // ============================================================================
 // Endpoints de CAPTCHA
-// ============================================================================
 // ============================================================================
 
 #[derive(Deserialize)]
@@ -1888,7 +1880,6 @@ struct CaptchaSolveRequest {
     id: String,
     solved_content: String,
 }
-
 async fn captcha_status(
     State(state): State<AppState>,
     headers: HeaderMap,
