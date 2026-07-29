@@ -1449,20 +1449,23 @@ async fn chat_endpoint(
                 if !ag.finished { ag.finished = true; ag.final_message = final_msg; }
             });
         }
-
         Json(json!({
             "status": "ok",
             "session_id": session.id,
+            "title": session.title,
+            "chat_path": save_path.to_string_lossy(),
+        })).into_response()
+    }
+
+    Json(json!({
+        "status": "ok",
+        "session_id": session.id,
+        "title": session.title,
+        "chat_path": save_path.to_string_lossy(),
+    })).into_response()
+}
 
 async fn get_chats(
-    State(state): State<AppState>,
-    headers: HeaderMap,
-) -> impl IntoResponse {
-    let username = match require_auth(&state, &headers).await {
-        Ok(u) => u,
-        Err(_) => {
-            return Json(json!({ "status": "ok", "chats": [] })).into_response();
-        }
     };
 
     let is_admin = username == "admin_local" || state.user_store.is_admin(&username);
