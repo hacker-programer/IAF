@@ -128,19 +128,9 @@ function copyNonceCmd(event) {
         if (fallbackCopy(cmd)) { onSuccess(); } else { onFailure(); }
     }
 }
-}
-
-// FIX #4: Descargar scripts PowerShell
-function downloadScript(name) {
-    var a = document.createElement('a');
-    a.href = '/api/scripts/' + name;
-    a.download = name + '.ps1';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-}
 
 async function init() {
+    detectPlatform();
 
     if (isPort80) {
         // Puerto 80: acceso directo como admin local
