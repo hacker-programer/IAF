@@ -74,11 +74,6 @@ function detectPlatform() {
 
 // ---- Helpers: Toggle Password Visibility ----
 function togglePassword(fieldId) {
-    const el = document.getElementById(fieldId);
-    if (!el) return;
-    el.type = el.type === 'password' ? 'text' : 'password';
-}
-
 /**
  * Copia el comando sign_nonce al portapapeles.
  */
@@ -129,10 +124,16 @@ function copyNonceCmd(event) {
     }
 }
 
-async function init() {
-    detectPlatform();
-
-    if (isPort80) {
+// FIX #4: Función para descargar scripts PowerShell desde el panel admin
+function downloadScript(name) {
+    var a = document.createElement('a');
+    a.href = '/api/scripts/' + name;
+    a.download = name + '.ps1';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    showInfoToast('📥 Descargando ' + name + '.ps1...');
+}
         // Puerto 80: acceso directo como admin local
         authToken = 'admin_local';
         authUsername = 'admin_local';
