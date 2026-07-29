@@ -1,6 +1,12 @@
 # MEMORIES.md — Registro de Bugs, Limitaciones y Lecciones Aprendidas
 
-## Bugs Corregidos (Sesión 2025-2026)
+### BUG-029: Túnel Cloudflare mostraba interfaz rota — isPort80 detectaba HTTPS como puerto 80
+- **Síntoma**: Al acceder por `https://iaf.mujerbonitauy.com` (túnel Cloudflare), la interfaz se veía rota/diferente a `http://127.0.0.1:8080`. No mostraba login y las llamadas API fallaban.
+- **Causa real**: `public/app.js` L21: `let isPort80 = window.location.port === '80' || window.location.port === ''`. Al acceder por HTTPS (puerto 443 por defecto), `window.location.port` es `''` (vacío), lo que activaba `isPort80 = true`. El frontend seteaba `authToken = 'admin_local'` y no enviaba token Bearer. El backend en puerto 8080 (`port_80 = false`) rechazaba todas las llamadas API sin token válido.
+- **Fix aplicado**: `public/app.js` L21 cambiado a `let isPort80 = window.location.port === '80'` — solo detecta puerto 80 literal, no puerto vacío (HTTPS).
+- **Lección**: `window.location.port` es `''` tanto para HTTP en puerto 80 como para HTTPS en puerto 443. No se puede usar puerto vacío como indicador de puerto 80. Si se necesita detectar el puerto real, usar `window.location.protocol` para distinguir HTTP de HTTPS.
+- **Archivos modificados**: `public/app.js` (1 línea)
+
 
 ### BUG-028: System prompts no se cargaban en la UI — loadPrompts() perdido
 - **Síntoma**: Los textareas `globalPrompt` y `localPrompt` aparecían vacíos en la interfaz gráfica. El system prompt global y local no se cargaban al iniciar sesión ni al cambiar de proyecto.
