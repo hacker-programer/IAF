@@ -1424,8 +1424,8 @@ async fn chat_endpoint(
                 if !ag.finished { ag.finished = true; ag.final_message = final_msg; }
             });
     }
+    }
 
-    Json(json!({
     Json(json!({
         "status": "ok",
         "session_id": session.id,
