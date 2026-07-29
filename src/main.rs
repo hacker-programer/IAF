@@ -494,20 +494,13 @@ struct CreateUserRequest {
     editar_system_prompt_global: Option<bool>,
     editar_system_prompt_local: Option<bool>,
 }
-
-async fn admin_create_user(
-    State(state): State<AppState>,
-    headers: HeaderMap,
-    Json(payload): Json<CreateUserRequest>,
-) -> impl IntoResponse {
-    let _admin = match require_admin(&state, &headers).await {
-        Ok(a) => a, Err(e) => return (e.0, Json(json!({ "status": "error", "message": e.1 }))).into_response(),
-    };
-
     let perms = payload.permissions.unwrap_or_else(|| vec!["read_file".into(), "search_code".into()]);
     let limits = if payload.is_admin { UserLimits::admin() } else { UserLimits::default() };
     let result = if payload.is_admin && payload.public_key.is_some() {
         state.user_store.create_admin(&payload.username, &payload.public_key.unwrap(), perms, limits)
+    } else if payload.is_admin && payload.public_key.is_none() {
+        // FIX #13: Mensaje claro cuando se intenta crear admin sin clave pública
+        Err("Para crear un admin necesitás generar una clave pública (botón 'Generar Claves') o subir un archivo .pem.".into())
     } else if let Some(ref pw) = payload.password {
         state.user_store.create_user_with_password(
             &payload.username, pw, payload.is_admin, perms, limits,
@@ -516,6 +509,9 @@ async fn admin_create_user(
             payload.editar_system_prompt_global.unwrap_or(false),
             payload.editar_system_prompt_local.unwrap_or(false),
         )
+    } else {
+        Err("Se requiere password (usuarios normales) o public_key (admins).".into())
+    };
     } else {
         Err("Se requiere password (usuarios normales) o public_key (admins).".into())
     };
