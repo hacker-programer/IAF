@@ -426,9 +426,8 @@ async fn sign_nonce(Json(payload): Json<SignRequest>) -> impl IntoResponse {
     }
 }
 
-async fn client_check() -> impl IntoResponse {
-    let possible_paths = vec![
-        "client/target/release/iaf-client.exe",
+}
+
 async fn client_check() -> impl IntoResponse {
     // FIX #1/#39: v3.0 — cliente Rust eliminado, reemplazado por Electron + Capacitor.
     // El frontend detecta la plataforma automáticamente (detectPlatform en app.js).
