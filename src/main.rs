@@ -1832,30 +1832,6 @@ struct AgentApprovePlanRequest {
     aprobado: bool,
     feedback: Option<String>,
 }
-
-async fn agent_approve_plan(
-    State(state): State<AppState>,
-    headers: HeaderMap,
-    Json(payload): Json<AgentApprovePlanRequest>,
-) -> impl IntoResponse {
-    let _username = match require_auth(&state, &headers).await {
-        Ok(u) => u, Err(e) => return (e.0, Json(json!({ "status": "error", "message": e.1 }))).into_response(),
-    };
-
-    let mut agent = state.active_agent.lock().unwrap();
-    // Marcar que la aprobación fue procesada — el agente lee el estado
-    agent.esperando_aprobacion_plan = false;
-
-    // Si el usuario aprobó, desbloquear al agente
-    if payload.aprobado {
-        agent.respuesta_usuario = Some("PLAN_APROBADO".to_string());
-    } else {
-        agent.respuesta_usuario = Some(format!("PLAN_RECHAZADO: {}", payload.feedback.unwrap_or_default()));
-    }
-
-    Json(json!({ "status": "ok" })).into_response()
-}
-
 async fn agent_interrupt(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -1863,6 +1839,38 @@ async fn agent_interrupt(
     let _username = match require_auth(&state, &headers).await {
         Ok(u) => u, Err(e) => return (e.0, Json(json!({ "status": "error", "message": e.1 }))).into_response(),
     };
+
+    // FIX #9: Abortar el tokio task ANTES de cambiar flags.
+    // Esto detiene inmediatamente la ejecución del agente, no solo
+    // en el próximo chequeo de la flag.
+    {
+        let mut abort_handle = state.abort_handle.lock().unwrap();
+        if let Some(handle) = abort_handle.take() {
+            handle.abort();
+            eprintln!("[IAF] Tokio task del agente abortado por interrupt.");
+        }
+    }
+
+    let mut agent = state.active_agent.lock().unwrap();
+    agent.interrupted = true;
+    agent.running = false;
+
+    if let Some(ref path) = agent.current_chat_path {
+        // Append interruption message to chat
+        if let Ok(content) = fs::read_to_string(path) {
+            if let Ok(mut session) = serde_json::from_str::<ChatSession>(&content) {
+                session.messages.push(ChatMessage {
+                    role: "system".to_string(),
+                    content: "⏹️ Agente interrumpido por el usuario.".to_string(),
+                    timestamp: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs(),
+                });
+                let _ = fs::write(path, serde_json::to_string_pretty(&session).unwrap());
+            }
+        }
+    }
+
+    Json(json!({ "status": "ok" })).into_response()
+}
 
     let mut agent = state.active_agent.lock().unwrap();
     agent.interrupted = true;
