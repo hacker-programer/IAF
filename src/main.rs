@@ -124,8 +124,13 @@ fn get_chat_path(state: &AppState, username: &str, is_admin_or_port80: bool, tit
 
 /// Limpia archivos viejos con el mismo UUID en el directorio de chats
 /// para evitar duplicados cuando el título cambia.
+/// FIX #10: Verificación estricta — el nombre DEBE terminar en "-<UUID completo>"
 fn clean_old_chat_files(dir: &PathBuf, session_id: &str) {
     if !dir.exists() {
+        return;
+    }
+    // Solo limpiar si session_id parece un UUID válido
+    if !looks_like_uuid_stem(session_id) {
         return;
     }
     if let Ok(entries) = fs::read_dir(dir) {
@@ -135,14 +140,16 @@ fn clean_old_chat_files(dir: &PathBuf, session_id: &str) {
                 continue;
             }
             let fname = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
-            if fname.ends_with(&format!("-{}", session_id)) {
+            let expected_suffix = format!("-{}", session_id);
+            // Solo eliminar si el nombre termina EXACTAMENTE con "-UUID"
+            // y no es solo el UUID mismo (debe tener al menos un carácter antes del guion)
+            if fname.ends_with(&expected_suffix) && fname.len() > expected_suffix.len() {
                 let _ = fs::remove_file(&path);
                 eprintln!("[IAF] Limpiado archivo duplicado: {}", path.display());
             }
         }
     }
 }
-
 /// Determina si un nombre de archivo (sin extensión) parece un UUID
 fn looks_like_uuid_stem(stem: &str) -> bool {
     stem.len() >= 30
