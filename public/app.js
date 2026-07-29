@@ -19,6 +19,10 @@ let authHasStudy = false;
 let authHasProgramming = false;
 let isPort80 = window.location.port === '80';
 
+// Platform detection (Electron / Capacitor / Browser)
+let platformType = 'browser';   // 'electron', 'capacitor', 'browser'
+let platformLabel = '';         // badge text
+
 // ---- DOM refs ----
 const loginScreen = document.getElementById('loginScreen');
 const appContainer = document.getElementById('appContainer');
@@ -31,6 +35,41 @@ const userBadge = document.getElementById('userBadge');
 const adminPanel = document.getElementById('adminPanel');
 const studyProfileSection = document.getElementById('studyProfileSection');
 
+// ---- Platform Detection ----
+
+function detectPlatform() {
+    // Detectar Electron: el preload.js expone window.iafClient
+    if (window.iafClient && window.iafClient.isElectron) {
+        platformType = 'electron';
+        platformLabel = '🖥️ Electron';
+        console.log('[IAF] Ejecutándose en Electron (cliente desktop)');
+        return;
+    }
+
+    // Detectar Capacitor (Android WebView): expone window.Capacitor
+    if (window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()) {
+        platformType = 'capacitor';
+        const platform = window.Capacitor.getPlatform();
+        platformLabel = platform === 'android' ? '📱 Android' : '📱 Mobile';
+        console.log('[IAF] Ejecutándose en Capacitor (' + platform + ')');
+        return;
+    }
+
+    // Detectar si es un dispositivo móvil táctil (Android Chrome, etc.)
+    const isMobile = /Android|iPhone|iPad|iPod|webOS/i.test(navigator.userAgent)
+        || ('ontouchend' in document);
+    if (isMobile) {
+        platformType = 'mobile-browser';
+        platformLabel = '📱 Navegador Móvil';
+        console.log('[IAF] Ejecutándose en navegador móvil');
+        return;
+    }
+
+    platformType = 'browser';
+    platformLabel = '🌐 Web';
+    console.log('[IAF] Ejecutándose en navegador desktop');
+}
+
 // ---- Init ----
 
 // ---- Helpers: Toggle Password Visibility ----
@@ -42,28 +81,19 @@ function togglePassword(fieldId) {
 
 /**
  * Copia el comando sign_nonce al portapapeles.
- * Ahora recibe 'event' explícitamente y tiene fallback para navegadores
- * sin Clipboard API (HTTP, navegadores antiguos).
  */
 function copyNonceCmd(event) {
-    // Normalizar el evento (soporte cross-browser)
     event = event || window.event;
     const nonce = window._lastNonce || '';
     const cmd = '.\\scripts\\sign_nonce.ps1 -Nonce "' + nonce + '" -KeyPath ".config\\admin_private.pem"';
 
-    // Resolver el botón que disparó el evento
     var btn = null;
     if (event && event.target) {
         btn = event.target;
     } else {
-        // Fallback: buscar por clase
         btn = document.querySelector('.btn-copy-small');
     }
 
-    /**
-     * Fallback: copia usando textarea + execCommand.
-     * Funciona en HTTP y navegadores sin Clipboard API.
-     */
     function fallbackCopy(text) {
         var ta = document.createElement('textarea');
         ta.value = text;
@@ -74,11 +104,7 @@ function copyNonceCmd(event) {
         ta.focus();
         ta.select();
         var ok = false;
-        try {
-            ok = document.execCommand('copy');
-        } catch (e) {
-            ok = false;
-        }
+        try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
         document.body.removeChild(ta);
         return ok;
     }
@@ -94,27 +120,18 @@ function copyNonceCmd(event) {
         alert('No se pudo copiar al portapapeles. Copiá manualmente:\n\n' + cmd);
     }
 
-    // Intentar primero la API moderna
     if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
         navigator.clipboard.writeText(cmd).then(onSuccess).catch(function () {
-            // Si falla (HTTP no seguro), usar fallback
-            if (fallbackCopy(cmd)) {
-                onSuccess();
-            } else {
-                onFailure();
-            }
+            if (fallbackCopy(cmd)) { onSuccess(); } else { onFailure(); }
         });
     } else {
-        // Sin Clipboard API, usar fallback directamente
-        if (fallbackCopy(cmd)) {
-            onSuccess();
-        } else {
-            onFailure();
-        }
+        if (fallbackCopy(cmd)) { onSuccess(); } else { onFailure(); }
     }
 }
 
 async function init() {
+    detectPlatform();
+
     if (isPort80) {
         // Puerto 80: acceso directo como admin local
         authToken = 'admin_local';
@@ -127,6 +144,15 @@ async function init() {
         // Puerto 8080: login obligatorio
         loginScreen.classList.remove('hidden');
         appContainer.classList.add('hidden');
+        // En Electron, intentar reconectar automáticamente
+        if (platformType === 'electron' && window.iafClient) {
+            try {
+                const status = await window.iafClient.getStatus();
+                if (status.connected) {
+                    console.log('[IAF] Electron ya conectado al servidor como', status.username);
+                }
+            } catch(e) {}
+        }
         await checkClient();
     }
 
@@ -135,6 +161,27 @@ async function init() {
 }
 
 async function checkClient() {
+    // En Electron, no mostrar advertencia de "cliente no detectado"
+    if (platformType === 'electron') {
+        clientWarning.innerHTML = '🖥️ <b>Cliente Electron activo</b> — comandos locales disponibles.';
+        clientWarning.style.borderColor = 'var(--success)';
+        clientWarning.style.color = 'var(--success)';
+        clientWarning.style.background = 'rgba(16,185,129,0.1)';
+        clientWarning.classList.remove('hidden');
+        return;
+    }
+
+    // En Capacitor/Android, mostrar estado
+    if (platformType === 'capacitor') {
+        clientWarning.innerHTML = '📱 <b>App Android</b> — los comandos se ejecutan vía cliente Electron en tu PC.';
+        clientWarning.style.borderColor = 'var(--accent)';
+        clientWarning.style.color = 'var(--accent)';
+        clientWarning.style.background = 'rgba(6,182,212,0.1)';
+        clientWarning.classList.remove('hidden');
+        return;
+    }
+
+    // En navegador normal, verificar si el cliente está instalado
     try {
         const res = await fetch('/api/client/check');
         const text = await res.text();
@@ -225,13 +272,27 @@ function setAuth(res) {
     authIsAdmin = res.is_admin;
     authHasStudy = res.has_study_access;
     authHasProgramming = res.has_programming_access;
+
+    // Notificar al cliente Electron de las credenciales
+    if (platformType === 'electron' && window.iafClient) {
+        window.iafClient.setCredentials({
+            serverUrl: window.location.origin,
+            username: res.username,
+            token: res.token,
+        }).then(() => {
+            console.log('[IAF] Credenciales enviadas al cliente Electron');
+        }).catch(e => {
+            console.warn('[IAF] Error notificando a Electron:', e);
+        });
+    }
+
     showApp();
 }
 
 function showApp() {
     loginScreen.classList.add('hidden');
     appContainer.classList.remove('hidden');
-    userBadge.textContent = authUsername + (authIsAdmin ? ' 👑' : '');
+    userBadge.textContent = authUsername + ' ' + platformLabel + (authIsAdmin ? ' 👑' : '');
     if (authIsAdmin) adminPanel.classList.remove('hidden');
     if (!authHasProgramming) document.getElementById('modeProgramming').classList.add('hidden');
     if (!authHasStudy) document.getElementById('modeStudy').classList.add('hidden');
@@ -245,6 +306,10 @@ function showApp() {
 document.getElementById('logoutBtn').onclick = async () => {
     if (authToken && authToken !== 'admin_local') {
         await apiCall('/api/auth/logout', 'POST', { token: authToken });
+    }
+    // Desconectar cliente Electron
+    if (platformType === 'electron' && window.iafClient) {
+        try { await window.iafClient.disconnect(); } catch(e) {}
     }
     authToken = null;
     authUsername = null;
@@ -331,7 +396,7 @@ function buildScheduleGrid(schedule) {
         const ranges = (schedule && schedule.horarios && schedule.horarios[day])
             ? schedule.horarios[day].map(r => r.join('-')).join(',')
             : '';
-        return `<span class="day-label">${day}</span><input type="text" data-day="${day}" value="${ranges}" placeholder="9-12,14-18">`;
+        return '<span class="day-label">' + day + '</span><input type="text" data-day="' + day + '" value="' + ranges + '" placeholder="9-12,14-18">';
     }).join('');
 }
 
@@ -423,10 +488,10 @@ document.getElementById('saveEditUserBtn').onclick = async () => {
     };
 
     // Update limits
-    await apiCall(`/api/admin/users/${username}/limits`, 'PUT', { limits });
+    await apiCall('/api/admin/users/' + username + '/limits', 'PUT', { limits });
 
     // Update access (granular permissions)
-    await apiCall(`/api/admin/users/${username}/access`, 'PUT', {
+    await apiCall('/api/admin/users/' + username + '/access', 'PUT', {
         modo_estudio: document.getElementById('editStudyAccess').checked,
         modo_programador: document.getElementById('editProgAccess').checked,
         editar_system_prompt_global: document.getElementById('editGlobalPromptPerm').checked,
@@ -435,11 +500,11 @@ document.getElementById('saveEditUserBtn').onclick = async () => {
 
     // Update schedule separately
     const horarios = parseScheduleGrid();
-    await apiCall(`/api/admin/users/${username}/schedule`, 'PUT', { horarios });
+    await apiCall('/api/admin/users/' + username + '/schedule', 'PUT', { horarios });
 
     // Change password if provided
     if (pwd) {
-        await apiCall(`/api/admin/users/${username}/password`, 'PUT', { new_password: pwd });
+        await apiCall('/api/admin/users/' + username + '/password', 'PUT', { new_password: pwd });
     }
 
     document.getElementById('adminEditUserModal').classList.add('hidden');
@@ -448,8 +513,8 @@ document.getElementById('saveEditUserBtn').onclick = async () => {
 
 document.getElementById('deleteUserBtn').onclick = async () => {
     const username = document.getElementById('editUsername').textContent;
-    if (!confirm(`¿Eliminar permanentemente a ${username}?`)) return;
-    await apiCall(`/api/admin/users/${username}`, 'DELETE');
+    if (!confirm('¿Eliminar permanentemente a ' + username + '?')) return;
+    await apiCall('/api/admin/users/' + username, 'DELETE');
     document.getElementById('adminEditUserModal').classList.add('hidden');
     await refreshUsersTable();
 };
@@ -477,7 +542,7 @@ document.getElementById('createUserBtn').onclick = async () => {
     if (document.getElementById('newCanSearchGoogle').checked) allowedTools.push('search_google');
 
     const payload = {
-        username,
+        username: username,
         is_admin: isAdmin,
         modo_estudio: document.getElementById('newStudyAccess').checked,
         modo_programador: document.getElementById('newProgAccess').checked,
@@ -489,7 +554,6 @@ document.getElementById('createUserBtn').onclick = async () => {
     if (isAdmin) {
         const createRes = await apiCall('/api/admin/users', 'POST', payload);
         if (createRes.status === 'ok') {
-            // Para admins, generar keypair
             if (createRes.user && createRes.user.public_key) {
                 showInfoToast('✅ Admin ' + username + ' creado. Clave pública generada.');
             } else {
@@ -527,7 +591,6 @@ function toggleAdminCreateMode() {
     document.getElementById('generateKeysBtn').classList.toggle('hidden', !isAdmin);
     // Mostrar/ocultar password fields
     const pwdInputs = [document.getElementById('newPassword'), document.getElementById('newPasswordConfirm')];
-    const pwdLabels = document.querySelectorAll('label[for="newPassword"], label[for="newPasswordConfirm"]');
     pwdInputs.forEach(el => {
         if (el) el.parentElement.style.display = isAdmin ? 'none' : '';
     });
@@ -560,16 +623,79 @@ document.getElementById('pemFileInput').onchange = async (e) => {
 };
 
 // ============================================================================
+// PROJECTS
 // ============================================================================
-// PROMPTS — alineado con IDs del HTML: globalPrompt, localPrompt,
-//           savePromptsBtn (guarda ambos), resetPromptBtn (restaura global)
+
+async function loadProjects() {
+    try {
+        const res = await apiCall('/api/projects');
+        if (res.status === 'ok' && res.projects) {
+            const list = document.getElementById('projectList');
+            list.innerHTML = res.projects.map(p => {
+                const isActive = activeProject === p.name ? ' active' : '';
+                return '<div class="project-item' + isActive + '" onclick="selectProject(\'' + p.name + '\')">' + p.name + '</div>';
+            }).join('');
+        }
+    } catch(e) {}
+}
+
+function selectProject(name) {
+    activeProject = name;
+    document.getElementById('activeProjectName').innerText = name;
+    loadProjects();
+    loadPrompts();
+}
+
+document.getElementById('forkBtn').onclick = async () => {
+    const url = document.getElementById('repoUrl').value.trim();
+    if (!url) return alert('URL del repositorio requerida.');
+    const btn = document.getElementById('forkBtn');
+    btn.disabled = true;
+    btn.textContent = 'Forkeando...';
+    try {
+        const res = await apiCall('/api/projects/fork', 'POST', { repo_url: url });
+        if (res.status === 'ok') {
+            document.getElementById('repoUrl').value = '';
+            showInfoToast('✅ Repo forkeado: ' + res.name);
+            await loadProjects();
+        } else {
+            alert('Error: ' + (res.message || 'No se pudo forkear.'));
+        }
+    } catch(e) { alert('Error de conexión.'); }
+    btn.disabled = false;
+    btn.textContent = 'Fork & Clone';
+};
+
+document.getElementById('addLocalBtn').onclick = async () => {
+    const name = document.getElementById('localProjName').value.trim();
+    const path = document.getElementById('localProjPath').value.trim();
+    if (!name || !path) return alert('Nombre y ruta requeridos.');
+    const btn = document.getElementById('addLocalBtn');
+    btn.disabled = true;
+    btn.textContent = 'Agregando...';
+    try {
+        const res = await apiCall('/api/projects/local', 'POST', { name: name, path: path });
+        if (res.status === 'ok') {
+            document.getElementById('localProjName').value = '';
+            document.getElementById('localProjPath').value = '';
+            showInfoToast('✅ Proyecto local agregado: ' + name);
+            await loadProjects();
+        } else {
+            alert('Error: ' + (res.message || 'No se pudo agregar el proyecto.'));
+        }
+    } catch(e) { alert('Error de conexión al agregar proyecto.'); }
+    btn.disabled = false;
+    btn.textContent = 'Agregar Carpeta';
+};
+
+// ============================================================================
+// PROMPTS
 // ============================================================================
 
 async function loadPrompts() {
     try {
         const prompts = await apiCall('/api/prompts');
         if (prompts.status === 'ok') {
-            // BUG-024 FIX: Backend returns global_current, not global
             document.getElementById('globalPrompt').value = prompts.global_current || '';
             if (activeProject && prompts.projects && prompts.projects[activeProject]) {
                 document.getElementById('localPrompt').value = prompts.projects[activeProject];
@@ -580,10 +706,8 @@ async function loadPrompts() {
     } catch(e) {}
 }
 
-// savePromptsBtn: guarda ambos prompts (global y local) en una sola acción
 document.getElementById('savePromptsBtn').onclick = async () => {
     const globalContent = document.getElementById('globalPrompt').value;
-    // FIX: El backend solo acepta POST en /api/prompts/global (no PUT)
     const globalRes = await apiCall('/api/prompts/global', 'POST', { content: globalContent });
     if (activeProject && document.getElementById('localPrompt').value.trim()) {
         const localContent = document.getElementById('localPrompt').value;
@@ -620,7 +744,14 @@ async function loadStudyProfile() {
             document.getElementById('profileGames').value = (p.favorite_games || []).join(', ');
             document.getElementById('profileHobbies').value = (p.hobbies || []).join(', ');
             document.getElementById('profileNeuro').value = (p.neurological_conditions || []).join(', ');
-            document.getElementById('studyPhase').textContent = p.phase === 'exploration' ? '🔍 Exploración' : '🎯 Explotación';
+
+            const phaseMap = { 'NotStarted': 'No iniciado', 'Exploration': '🔍 Exploración', 'Exploitation': '🎯 Explotación' };
+            const phaseEl = document.getElementById('studyPhase');
+            phaseEl.innerHTML = '<b>Fase:</b> ' + (phaseMap[p.phase] || p.phase || 'No definida');
+
+            if (res.engagement) {
+                phaseEl.innerHTML += ' | <b>Engagement:</b> ' + Math.round(res.engagement * 100) + '%';
+            }
         }
     } catch(e) {}
 }
@@ -658,7 +789,8 @@ async function loadChatHistory() {
             // DEDUP: usar un Set para evitar IDs duplicados (defensa en profundidad)
             const seen = new Set();
             const unique = [];
-            for (const c of res.chats) {
+            for (let i = 0; i < res.chats.length; i++) {
+                const c = res.chats[i];
                 if (!seen.has(c.id)) {
                     seen.add(c.id);
                     unique.push(c);
@@ -670,42 +802,35 @@ async function loadChatHistory() {
                 const userLabel = (authIsAdmin && c.username && c.username !== authUsername)
                     ? ' <span style="font-size:10px;color:var(--text-muted);">(@' + c.username + ')</span>'
                     : '';
-                return `<div class="project-item${isActive}" onclick="selectChatSession('${c.id}')">${c.title}${userLabel}</div>`;
+                return '<div class="project-item' + isActive + '" onclick="selectChatSession(\'' + c.id + '\')">' + c.title + userLabel + '</div>';
             }).join('');
         }
     } catch(e) {}
 }
 
-// BUG-014 + BUG-015 FIX: Al seleccionar un chat existente (ej: tras recargar la página),
-// se inicia el monitoreo del agente y se cargan los steps de auditoría desde la sesión.
 async function selectChatSession(id) {
     currentSessionId = id;
     loadChatHistory();
-    const res = await apiCall(`/api/chats/${id}`);
+    const res = await apiCall('/api/chats/' + id);
     if (res.status === 'ok') {
         const chatArea = document.getElementById('chatArea');
-        // BUG FIX: solo un innerHTML, no dos líneas duplicadas
         chatArea.innerHTML = '';
         res.session.messages.forEach(m => addMessage(m.role, m.content));
-        // BUG-002 FIX: Limpiar Set de mensajes ya mostrados al cambiar de sesión
         window._shownInfoMsgs = new Set();
         if (res.session.project_name) {
-            document.getElementById('activeProjectName').innerText = activeProject;
+            document.getElementById('activeProjectName').innerText = res.session.project_name;
+            activeProject = res.session.project_name;
             loadProjects();
         }
-        // BUG-015 FIX: Cargar steps de auditoría desde la sesión persistida
         if (res.session.steps && Array.isArray(res.session.steps) && res.session.steps.length > 0) {
             renderConsoleSteps(res.session.steps);
         }
-        // BUG-014 FIX: Iniciar monitoreo del agente al entrar a un chat existente
         startAgentMonitoring();
     }
 }
 
-// BUG-019 FIX: Al crear un nuevo chat, limpiar TODO el estado anterior
 document.getElementById('newChatBtn').onclick = () => {
     currentSessionId = null;
-    // BUG-002 FIX: Limpiar Set de mensajes ya mostrados al crear nuevo chat
     window._shownInfoMsgs = new Set();
     document.getElementById('chatArea').innerHTML = '<div class="message system-msg"><strong>Sistema:</strong> Nuevo chat iniciado.</div>';
     if (agentMonitorInterval) {
@@ -780,7 +905,7 @@ document.getElementById('reRefinePromptBtn').onclick = async () => {
     const btn = document.getElementById('reRefinePromptBtn');
     btn.disabled = true; btn.innerText = 'Re-Refinando...';
     const refineRes = await apiCall('/api/prompts/refine', 'POST', {
-        prompt: currentText, feedback, session_id: currentSessionId, project_name: activeProject
+        prompt: currentText, feedback: feedback, session_id: currentSessionId, project_name: activeProject
     });
     if (refineRes.status === 'ok') {
         document.getElementById('refinedPromptText').value = refineRes.refined;
@@ -800,7 +925,6 @@ document.getElementById('cancelRefinedPromptBtn').onclick = async () => {
 
 async function sendMessageToAgent(text, mode) {
     addMessage('user', text);
-    // Resetear flags de modales para la nueva sesión del agente
     agentQuestionShown = false;
     agentPlanShown = false;
     const res = await apiCall('/api/chat', 'POST', {
@@ -817,7 +941,7 @@ async function sendMessageToAgent(text, mode) {
 }
 
 // ============================================================================
-// AGENT MONITORING — polling con manejo de mensajes informativos
+// AGENT MONITORING
 // ============================================================================
 
 function startAgentMonitoring() {
@@ -829,86 +953,64 @@ function startAgentMonitoring() {
             const res = await apiCall('/api/agent/status');
             if (res.status !== 'ok') return;
 
-            // Mostrar/ocultar botón de interrumpir según estado
             const interruptBtn = document.getElementById('interruptBtn');
             if (interruptBtn) {
-                if (res.running) {
-                    interruptBtn.classList.remove('hidden');
-                } else if (res.finished || res.interrupted || !res.active) {
-                    interruptBtn.classList.add('hidden');
-                }
+                if (res.running) { interruptBtn.classList.remove('hidden'); }
+                else if (res.finished || res.interrupted || !res.active) { interruptBtn.classList.add('hidden'); }
             }
 
-            // Mostrar thinking en la consola de auditoría
             if (res.thinking_content && Array.isArray(res.thinking_content)) {
                 const thinking = res.thinking_content.join('\n');
-                if (thinking.trim()) {
-                    updateConsoleThinking(thinking);
-                }
+                if (thinking.trim()) { updateConsoleThinking(thinking); }
             }
 
-            // Mostrar steps en la consola
             if (res.steps && Array.isArray(res.steps)) {
                 renderConsoleSteps(res.steps);
             }
 
-            // Mostrar mensajes informativos en el chat
             if (res.info_messages && Array.isArray(res.info_messages)) {
-                // Solo mostrar los mensajes nuevos (no duplicados)
-                const shownKey = '_shownInfoMsgs';
-                if (!window[shownKey]) window[shownKey] = new Set();
+                if (!window._shownInfoMsgs) window._shownInfoMsgs = new Set();
                 res.info_messages.forEach(msg => {
-                    if (!window[shownKey].has(msg)) {
-                        window[shownKey].add(msg);
-                        // BUG-002 FIX: Distinguir notificaciones [NOTIF] de respuestas de texto normales
+                    if (!window._shownInfoMsgs.has(msg)) {
+                        window._shownInfoMsgs.add(msg);
                         if (msg.startsWith('[NOTIF] ')) {
                             addMessage('agent', 'ℹ️ ' + msg.slice(8), 'info-msg');
                         } else {
-                            // Respuesta de texto normal del agente (sin clase extra)
                             addMessage('agent', msg);
                         }
                     }
                 });
-                // Limpiar el set si crece demasiado
-                if (window[shownKey].size > 200) window[shownKey] = new Set();
+                if (window._shownInfoMsgs.size > 200) window._shownInfoMsgs = new Set();
             }
 
-            // Mostrar pregunta del agente (banner inline, ya no es modal)
             if (res.esperando_respuesta_usuario && res.pregunta_usuario && !agentQuestionShown) {
                 agentQuestionShown = true;
                 showAgentQuestionBanner(res.pregunta_usuario);
             }
 
-            // Mostrar plan del agente (modal)
             if (res.esperando_aprobacion_plan && res.plan_propuesto && !agentPlanShown) {
                 agentPlanShown = true;
                 showAgentPlanModal(res.plan_propuesto);
             }
 
-            // Agente terminó (finalizar_tarea)
             if (res.finished) {
                 clearInterval(agentMonitorInterval);
                 agentMonitorInterval = null;
                 if (res.final_message) {
                     addMessage('agent', '✅ ' + res.final_message, 'final-msg');
                 }
-                // Recargar historial
                 loadChatHistory();
                 updateConsoleStatus('✅ Agente finalizado.');
-                // Ocultar botón de interrumpir
                 const ib = document.getElementById('interruptBtn');
                 if (ib) ib.classList.add('hidden');
             }
 
-            // Interrupción
             if (res.interrupted) {
                 updateConsoleStatus('⚠️ Agente interrumpido.');
                 const ib = document.getElementById('interruptBtn');
                 if (ib) ib.classList.add('hidden');
             }
-        } catch(e) {
-            console.error('[IAF] Error en monitoreo del agente:', e);
-        }
+        } catch(e) { console.error('[IAF] Error en monitoreo del agente:', e); }
     }, 1000);
 }
 
@@ -920,64 +1022,25 @@ document.getElementById('interruptBtn').onclick = async () => {
     }
 };
 
-// ---- Agent Answer (responder a pregunta, banner inline) ----
+// ---- Agent Answer ----
 async function responderAgente(respuesta) {
-    // Mostrar la respuesta del usuario en el chat
     addMessage('user', respuesta);
     document.getElementById('agentQuestionBanner').classList.add('hidden');
     agentQuestionShown = false;
-    await apiCall('/api/agent/responder', 'POST', { respuesta });
+    await apiCall('/api/agent/responder', 'POST', { respuesta: respuesta });
 }
 
 // ---- Agent Approve Plan ----
 async function aprobarPlan(aprobado, feedback) {
     document.getElementById('agentPlanModal').classList.add('hidden');
     agentPlanShown = false;
-    await apiCall('/api/agent/aprobar_plan', 'POST', { aprobado, feedback: feedback || '' });
+    await apiCall('/api/agent/aprobar_plan', 'POST', { aprobado: aprobado, feedback: feedback || '' });
 }
 
 // ============================================================================
-// MOBILE NAVIGATION — hamburger menu toggle
+// UI HELPERS
 // ============================================================================
 
-function initMobileNav() {
-    const hamburger = document.getElementById('hamburgerBtn');
-    const sidebar = document.querySelector('.sidebar');
-    const overlay = document.getElementById('sidebarOverlay');
-
-    if (!hamburger || !sidebar || !overlay) return;
-
-    // Toggle sidebar on hamburger click
-    hamburger.onclick = () => {
-        sidebar.classList.toggle('open');
-        overlay.classList.toggle('open');
-    };
-
-    // Close sidebar on overlay click
-    overlay.onclick = () => {
-        sidebar.classList.remove('open');
-        overlay.classList.remove('open');
-    };
-
-    // Close sidebar when a chat or project is selected (mobile)
-    sidebar.addEventListener('click', (e) => {
-        // If clicking a project-item or chat item, close sidebar on mobile
-        if (e.target.classList.contains('project-item') || e.target.closest('.project-item')) {
-            if (window.innerWidth <= 768) {
-                sidebar.classList.remove('open');
-                overlay.classList.remove('open');
-            }
-        }
-    });
-}
-
-// ============================================================================
-// UI HELPERS — modales, toasts, consola, mensajes
-// ============================================================================
-
-// BUG-025 FIX: El modal agentQuestionModal fue ELIMINADO del HTML y reemplazado
-// por el banner inline #agentQuestionBanner. Se renombró la función y se usan
-// los IDs correctos: agentQuestionBanner, agentQuestionPrompt, agentQuestionResponse.
 function showAgentQuestionBanner(pregunta) {
     const banner = document.getElementById('agentQuestionBanner');
     document.getElementById('agentQuestionPrompt').textContent = pregunta;
@@ -986,58 +1049,39 @@ function showAgentQuestionBanner(pregunta) {
     document.getElementById('agentQuestionResponse').focus();
 }
 
-// BUG-025 FIX: Los IDs agentAnswerSendBtn/agentAnswerInput ya no existen.
-// Se usan submitAgentResponseBtn/agentQuestionResponse que están en el HTML.
 document.getElementById('submitAgentResponseBtn').onclick = () => {
     const respuesta = document.getElementById('agentQuestionResponse').value.trim();
     if (!respuesta) return;
     responderAgente(respuesta);
 };
 
-// Enter en el input de respuesta del banner inline
-// BUG-027 FIX: Enter solo envía; Shift+Enter permite salto de línea
 document.getElementById('agentQuestionResponse').addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
         document.getElementById('submitAgentResponseBtn').click();
     }
 });
-// BUG-025 FIX: agentPlanText → agentPlanContent (ID real en HTML).
-// agentPlanFeedback no existe en HTML, se eliminó su referencia.
+
 function showAgentPlanModal(plan) {
     const modal = document.getElementById('agentPlanModal');
     document.getElementById('agentPlanContent').textContent = plan;
     modal.classList.remove('hidden');
 }
 
-// BUG-025 FIX: agentPlanApproveBtn/agentPlanRejectBtn → approvePlanBtn/rejectPlanBtn (IDs reales en HTML).
-// Se eliminó agentPlanFeedback (no existe en el HTML del modal).
-document.getElementById('approvePlanBtn').onclick = () => {
-    aprobarPlan(true, '');
-};
-
-document.getElementById('rejectPlanBtn').onclick = () => {
-    aprobarPlan(false, '');
-};
+document.getElementById('approvePlanBtn').onclick = () => { aprobarPlan(true, ''); };
+document.getElementById('rejectPlanBtn').onclick = () => { aprobarPlan(false, ''); };
 
 function addMessage(role, text, extraClass) {
     const chatArea = document.getElementById('chatArea');
     const div = document.createElement('div');
     div.classList.add('message');
-    if (role === 'user') {
-        div.classList.add('user-msg');
-    } else if (role === 'agent') {
-        div.classList.add('agent-msg');
-    }
+    if (role === 'user') { div.classList.add('user-msg'); }
+    else if (role === 'agent') { div.classList.add('agent-msg'); }
     if (extraClass) div.classList.add(extraClass);
 
-    // Renderizar markdown para mensajes del agente, texto plano para usuario
     if (role === 'agent' && typeof marked !== 'undefined') {
-        try {
-            div.innerHTML = marked.parse(text);
-        } catch(e) {
-            div.textContent = text;
-        }
+        try { div.innerHTML = marked.parse(text); }
+        catch(e) { div.textContent = text; }
     } else {
         div.textContent = text;
     }
@@ -1045,21 +1089,17 @@ function addMessage(role, text, extraClass) {
     chatArea.appendChild(div);
     chatArea.scrollTop = chatArea.scrollHeight;
 }
-// Toast informativo
+
 function showInfoToast(msg) {
     const toast = document.getElementById('infoToast');
     if (!toast) {
-        // Crear toast si no existe
         const t = document.createElement('div');
         t.id = 'infoToast';
         t.className = 'info-toast';
         t.textContent = msg;
         document.body.appendChild(t);
         setTimeout(() => { t.classList.add('show'); }, 10);
-        setTimeout(() => {
-            t.classList.remove('show');
-            setTimeout(() => { t.remove(); }, 300);
-        }, 3000);
+        setTimeout(() => { t.classList.remove('show'); setTimeout(() => { t.remove(); }, 300); }, 3000);
         return;
     }
     toast.textContent = msg;
@@ -1068,15 +1108,13 @@ function showInfoToast(msg) {
 }
 
 // ============================================================================
-// ============================================================================
-// CONSOLE DE AUDITORÍA — renderizado de steps y thinking
+// CONSOLE DE AUDITORÍA
 // ============================================================================
 
 function renderConsoleSteps(steps) {
     const consoleArea = document.getElementById('consoleArea');
     if (!consoleArea) return;
     if (!steps || steps.length === 0) {
-        // Si no hay pasos, dejar el estado actual (no sobreescribir con vacío)
         const emptyEl = consoleArea.querySelector('.console-empty');
         if (emptyEl && window._agentRunning) {
             emptyEl.textContent = '🔍 Agente ejecutándose, esperando primer paso...';
@@ -1085,8 +1123,8 @@ function renderConsoleSteps(steps) {
         return;
     }
 
-    // Evitar re-renderizar si no hay cambios
-    const hash = steps.length + '-' + (steps[steps.length - 1]?.title || '');
+    const lastStep = steps[steps.length - 1];
+    const hash = steps.length + '-' + (lastStep ? (lastStep.title || '') : '');
     if (consoleArea.dataset.stepsHash === hash) return;
     consoleArea.dataset.stepsHash = hash;
 
@@ -1096,10 +1134,7 @@ function renderConsoleSteps(steps) {
                      step.step_type === 'tool_call' ? '🔧' :
                      step.step_type === 'tool_result' ? '📋' :
                      step.step_type === 'info' ? 'ℹ️' : '📌';
-        html += `<div class="console-step">
-            <span class="console-step-icon">${icon}</span>
-            <span class="console-step-title">#${i + 1} ${step.title}</span>
-        </div>`;
+        html += '<div class="console-step"><span class="console-step-icon">' + icon + '</span><span class="console-step-title">#' + (i + 1) + ' ' + step.title + '</span></div>';
     });
     consoleArea.innerHTML = html;
     consoleArea.scrollTop = consoleArea.scrollHeight;
@@ -1108,15 +1143,12 @@ function renderConsoleSteps(steps) {
 function updateConsoleThinking(thinking) {
     const consoleArea = document.getElementById('consoleArea');
     if (!consoleArea) return;
-
-    // Buscar si ya hay un div de thinking
     let thinkDiv = consoleArea.querySelector('.console-thinking');
     if (!thinkDiv) {
         thinkDiv = document.createElement('div');
         thinkDiv.className = 'console-thinking';
         consoleArea.appendChild(thinkDiv);
     }
-    // Mostrar solo las últimas 500 caracteres para no saturar
     const short = thinking.length > 500 ? '...' + thinking.slice(-500) : thinking;
     thinkDiv.textContent = '🧠 Thinking: ' + short;
     consoleArea.scrollTop = consoleArea.scrollHeight;
@@ -1130,6 +1162,45 @@ function updateConsoleStatus(status) {
     div.textContent = status;
     consoleArea.appendChild(div);
     consoleArea.scrollTop = consoleArea.scrollHeight;
+}
+
+// ============================================================================
+// MOBILE HAMBURGER MENU
+// ============================================================================
+
+function initMobileNav() {
+    const hamburgerBtn = document.getElementById('hamburgerBtn');
+    const sidebar = document.querySelector('.sidebar');
+    const overlay = document.getElementById('sidebarOverlay');
+
+    if (!hamburgerBtn || !sidebar || !overlay) return;
+
+    function openSidebar() {
+        sidebar.style.transform = 'translateX(0)';
+        overlay.classList.remove('hidden');
+        overlay.style.display = 'block';
+        document.body.style.overflow = 'hidden';
+    }
+
+    function closeSidebar() {
+        sidebar.style.transform = 'translateX(-100%)';
+        overlay.classList.add('hidden');
+        overlay.style.display = 'none';
+        document.body.style.overflow = '';
+    }
+
+    hamburgerBtn.onclick = openSidebar;
+    overlay.onclick = closeSidebar;
+
+    // Cerrar sidebar al seleccionar un proyecto, chat, o cambiar modo
+    sidebar.addEventListener('click', (e) => {
+        if (e.target.closest('.project-item') ||
+            e.target.closest('.mode-btn') ||
+            e.target.closest('#newChatBtn') ||
+            e.target.closest('#logoutBtn')) {
+            setTimeout(closeSidebar, 150);
+        }
+    });
 }
 
 // ============================================================================
