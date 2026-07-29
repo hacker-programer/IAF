@@ -511,10 +511,9 @@ struct UpdateLimitsRequest {
     limits: UserLimits,
 }
 
-
 async fn admin_update_limits(
     State(state): State<AppState>,
-    State(state): State<AppState>,
+    headers: HeaderMap,
     headers: HeaderMap,
     AxumPath(username): AxumPath<String>,
     Json(payload): Json<UpdateLimitsRequest>,
