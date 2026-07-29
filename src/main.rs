@@ -514,7 +514,6 @@ struct UpdateLimitsRequest {
 async fn admin_update_limits(
     State(state): State<AppState>,
     headers: HeaderMap,
-    headers: HeaderMap,
     AxumPath(username): AxumPath<String>,
     Json(payload): Json<UpdateLimitsRequest>,
 ) -> impl IntoResponse {
