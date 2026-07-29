@@ -12,7 +12,6 @@ let agentQuestionShown = false;  // evita abrir el banner repetidamente
 let agentPlanShown = false;      // evita abrir el modal repetidamente
 
 // Auth state
-// Auth state
 let authToken = null;
 let authUsername = null;
 let authIsAdmin = false;
