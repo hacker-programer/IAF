@@ -416,8 +416,8 @@ impl UserStore {
         let hash_str = match &user.password_hash {
             Some(h) => h.clone(),
             None => return Err("Este usuario no tiene contraseÃ±a configurada (usa nonce).".into()),
-        };
-
+            // FIX #30: Usuario con nonce -> Ok(None) igual que usuario no encontrado
+            None => return Ok(None),
         let parsed_hash = PasswordHash::new(&hash_str)
             .map_err(|e| format!("Error interno: hash mal formado: {}", e))?;
 
@@ -486,8 +486,8 @@ impl UserStore {
         drop(users);
         self.save()
     }
+
     /// Actualiza accesos del usuario (modo programador, modo estudio, editar prompts)
-    /// FIX #27: Permite modificar flags incluso en admins (para delegación de permisos)
     pub fn update_access(
         &self,
         username: &str,
@@ -500,16 +500,34 @@ impl UserStore {
         let user = users.users.iter_mut()
             .find(|u| u.username == username)
             .ok_or_else(|| format!("Usuario '{}' no encontrado.", username))?;
-        // FIX #27: Siempre actualizar, incluso para admins
-        user.modo_estudio = modo_estudio;
-        user.modo_programador = modo_programador;
-        user.editar_system_prompt_global = editar_global;
-        user.editar_system_prompt_local = editar_local;
+        if !user.is_admin {
+            user.modo_estudio = modo_estudio;
+            user.modo_programador = modo_programador;
+            user.editar_system_prompt_global = editar_global;
+            user.editar_system_prompt_local = editar_local;
+        }
+        drop(users);
+        self.save()
+    }
+
+    /// Actualiza horarios de un usuario
+    pub fn update_schedule(&self, username: &str, schedule: WeeklySchedule) -> Result<(), String> {
+        let mut users = self.users.lock();
+        let user = users.users.iter_mut()
+            .find(|u| u.username == username)
+            .ok_or_else(|| format!("Usuario '{}' no encontrado.", username))?;
+        user.limits.horarios = schedule;
         drop(users);
         self.save()
     }
 
     pub fn delete_user(&self, username: &str) -> Result<(), String> {
+        let mut users = self.users.lock();
+        let idx = users.users.iter()
+            .position(|u| u.username == username)
+            .ok_or_else(|| format!("Usuario '{}' no encontrado.", username))?;
+        users.users.remove(idx);
+        drop(users);
         self.save()
     }
 
