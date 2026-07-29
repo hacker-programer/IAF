@@ -164,9 +164,9 @@ async fn run_sub_agent(
          RESTRICCIONES:\n\
          - Solo puedes modificar archivos en: {}\n\
          - Tienes un máximo de 15 iteraciones.\n\
-         - Cuando termines (éxito o fallo), DEBES llamar a finalizar_tarea.\n\
-         - No puedes spawnear otros sub-agentes.\n\
-         - Reporta tus hallazgos de forma concisa.\n\
+    let max_iterations = 15;
+    let mut iteration = 0;
+    let start_time = std::time::Instant::now(); // FIX #44: global timeout
          \n\
          REGLAS:\n\
          - Antes de actuar, piensa en <thinking> tags.\n\
