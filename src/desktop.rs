@@ -140,12 +140,17 @@ impl DesktopController {
     /// FIX #28: Elimina procesos hijo que ya terminaron para evitar acumulación de zombies.
     pub fn reap_zombies(&self) {
         let mut children = self.children.lock().unwrap();
-        children.retain(|child| {
-            match child.try_wait() {
-                Ok(Some(_)) => false, // proceso terminado, eliminarlo
-                Ok(None) => true,     // sigue corriendo, mantenerlo
-                Err(_) => false,      // error, eliminarlo
+        let mut i = 0;
+        while i < children.len() {
+            let should_remove = match children[i].try_wait() {
+                Ok(Some(_)) => true,  // proceso terminado, eliminarlo
+                Ok(None) => false,    // sigue corriendo, mantenerlo
+                Err(_) => true,       // error, eliminarlo
+            };
+            if should_remove {
+                children.remove(i);
+            } else {
+                i += 1;
             }
-        });
+        }
     }
-}
