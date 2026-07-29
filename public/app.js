@@ -368,11 +368,12 @@ function switchMode(mode) {
 
 // ---- Admin Panel ----
 document.getElementById('adminUsersBtn').onclick = openAdminUsers;
-document.getElementById('adminPromptsBtn').onclick = () => {
-    document.querySelector('.config-section').scrollIntoView({ behavior: 'smooth' });
+// FIX #7: scroll seguro con fallback
+document.getElementById('adminPromptsBtn').onclick = function() {
+    var s = document.querySelector('.config-section');
+    if (s) { s.scrollIntoView({ behavior: 'smooth' }); }
+    else { showInfoToast('⚠️ Sección de prompts no visible.'); }
 };
-
-async function openAdminUsers() {
     var modal = document.getElementById('adminUsersModal');
     modal.classList.remove('hidden');
     await refreshUsersTable();
