@@ -1,9 +1,9 @@
-# DOCUMENTATION.md — Mapa Técnico del Proyecto IAF v3.0
+# DOCUMENTATION.md — Mapa Técnico del Proyecto IAF v3.1
 
 > **IAF (Intelligent Agent Framework)** — Framework de agente autónomo + plataforma de enseñanza en Rust + Axum.
 > Servidor HTTP doble puerto (80 auto-admin, 8080 auth), autenticación dual (password + Ed25519),
 > motor de estudio con perfilado de aprendizaje, sincronización de proyectos,
-> cliente Electron (desktop) + Capacitor (Android), túnel Cloudflare para acceso remoto seguro.
+> cliente Electron (desktop) + Capacitor (Android) con ShellExecutor nativo, túnel Cloudflare para acceso remoto seguro.
 
 ---
 
@@ -11,10 +11,10 @@
 
 | Archivo | Líneas | Rol |
 |---------|--------|-----|
-| `src/main.rs` | ~2000 | Servidor HTTP doble puerto, endpoints REST, CAPTCHA, migración de chats, `clean_old_chat_files()`, deduplicación, `sanitize_filename()`, `migrate_chats()` |
+| `src/main.rs` | ~2300 | Servidor HTTP doble puerto, endpoints REST, CAPTCHA, migración de chats, `clean_old_chat_files()`, deduplicación, `sanitize_filename()`, `migrate_chats()`, `client_check()` v3.1 |
 | `src/agent.rs` | ~2418 | Bucle principal del agente, 26 herramientas, extract_text_from_docx(), soporte PDF/DOCX |
 | `src/auth.rs` | ~947 | Auth dual: contraseñas (argon2) + nonce Ed25519, permisos, WeeklySchedule, UserLimits |
-| `src/state.rs` | ~575 | AppState, ActiveAgentStatus, CicleState/CiclePhase, CaptchaRequest, ToolResultStore, SubAgentManager |
+| `src/state.rs` | ~580 | AppState (con `connected_clients` HashMap), ActiveAgentStatus, CicleState/CiclePhase, CaptchaRequest, ToolResultStore, SubAgentManager |
 | `src/study.rs` | ~973 | Motor de estudio: UserLearningProfile, UserKnowledgeBase, StudyEngine, `build_study_system_prompt()` |
 | `src/sync.rs` | ~280 | Sincronización de proyectos (push/pull/conflictos) |
 | `src/client_protocol.rs` | ~180 | Protocolo cliente-servidor (ClientAction, ClientRequest, ClientResponse, ConnectedClient) |
@@ -24,18 +24,20 @@
 | `src/desktop.rs` | ~165 | Control de mouse/teclado (rdev) |
 | `src/lib.rs` | ~12 | Librería pública + `pub const STUDY_SYSTEM_PROMPT` |
 | `src/utils.rs` | ~72 | sanitize_filename() |
-| `electron/main.js` | ~350 | **[v3.0]** Cliente Electron: BrowserWindow + protocolo cliente (connect→poll→execute→respond), ejecuta PowerShell/git/cargo/archivos con Node.js |
-| `electron/preload.js` | ~30 | **[v3.0]** Puente IPC contextBridge: executeLocal, setCredentials, getStatus |
-| `electron/package.json` | ~30 | **[v3.0]** Dependencias: electron, node-fetch, electron-builder |
-| `electron/README.md` | ~100 | **[v3.0]** Documentación del cliente Electron (arquitectura, build, uso) |
-| `capacitor/capacitor.config.ts` | ~75 | **[v3.0]** Config Capacitor Android: webDir=../public, plugins Filesystem/Browser/Network |
-| `capacitor/package.json` | ~20 | **[v3.0]** Dependencias: @capacitor/core, @capacitor/android, @capacitor/filesystem |
-| `capacitor/setup_capacitor.ps1` | ~90 | **[v3.0]** Script de inicialización de plataforma Android |
+| `electron/main.js` | ~350 | Cliente Electron: BrowserWindow + protocolo cliente (connect→poll→execute→respond), ejecuta PowerShell/git/cargo/archivos con Node.js |
+| `electron/preload.js` | ~30 | Puente IPC contextBridge: executeLocal, setCredentials, getStatus |
+| `electron/package.json` | ~30 | Dependencias: electron, node-fetch, electron-builder |
+| `electron/README.md` | ~100 | Documentación del cliente Electron (arquitectura, build, uso) |
+| `capacitor/capacitor.config.ts` | ~75 | Config Capacitor Android: webDir=../public, plugins Filesystem/Browser/Network/ShellExecutor |
+| `capacitor/package.json` | ~20 | Dependencias: @capacitor/core, @capacitor/android, @capacitor/filesystem |
+| `capacitor/setup_capacitor.ps1` | ~140 | **[v3.1]** Script de inicialización + instalación del plugin ShellExecutor |
+| `capacitor/src/plugins/shell-executor.ts` | ~70 | **[v3.1]** Interfaz TypeScript del plugin ShellExecutor (execute, which, info) |
+| `capacitor/android-plugins/src/main/java/com/iaf/plugins/ShellExecutorPlugin.java` | ~220 | **[v3.1]** Implementación nativa Android: ejecuta comandos shell con Runtime.exec(), timeout 60s, buffer 512KB |
 | `scripts/generate_keys.ps1` | ~105 | Genera par de claves Ed25519 |
 | `scripts/sign_nonce.ps1` | ~110 | Firma nonce con clave privada |
 | `scripts/cloudflare_tunnel.ps1` | ~180 | Túnel Cloudflare (quick + permanent) |
 | `public/index.html` | ~300 | Frontend web con hamburger menu mobile, login dual, admin panel, perfil de estudio |
-| `public/app.js` | ~1165 | Lógica frontend: deduplicación client-side, initMobileNav(), username labels para admin, Ctrl+Enter |
+| `public/app.js` | ~1260 | **[v3.1]** Lógica frontend: checkClient() actualizado con detección por plataforma, deduplicación client-side, initMobileNav() |
 | `public/style.css` | ~900 | Estilos + media queries responsive (tablets ≤1024px, móviles ≤768px, small ≤400px, landscape) |
 | `tests/exhaustive_tests.rs` | ~1835 | Tests exhaustivos |
 | `tests/integration_tests.rs` | ~1197 | Tests de integración |
@@ -47,6 +49,65 @@
 | `client/Cargo.toml` | Reemplazado por `electron/` |
 | `client/src/main.rs` | Reemplazado por `electron/main.js` |
 | `client/target/` | Build artifacts del cliente Rust |
+
+---
+
+## 🔧 Cambios v3.1 — Fix "pide cliente" + ShellExecutor Android
+
+### 🐛 Fix: client_check() ya no busca el viejo cliente Rust
+
+**Problema (v3.0)**: `client_check()` verificaba la existencia de `iaf-client.exe` (cliente Rust eliminado en v3.0). Como nunca lo encontraba, siempre mostraba "Cliente no detectado" con instrucciones obsoletas.
+
+**Solución (v3.1)**:
+- `client_check()` ahora recibe `State<AppState>` y consulta el mapa `connected_clients` (línea 483 de state.rs)
+- Verifica clientes activos (heartbeat < 120s)
+- Verifica si Electron está instalado (`electron/package.json` + `electron/main.js`)
+- Devuelve instrucciones actualizadas según el estado real
+
+**Respuesta del endpoint**:
+```json
+{
+  "status": "ok",
+  "client_installed": true|false,
+  "active_clients": [{ "client_id": "...", "username": "...", "host_info": "..." }],
+  "active_client_count": N,
+  "total_connected": N,
+  "electron_installed": true|false,
+  "v3_client": true,
+  "instructions": "..."
+}
+```
+
+### ✅ Frontend checkClient() actualizado
+
+- **Electron**: Verifica estado de conexión vía `window.iafClient.getStatus()`
+- **Capacitor/Android**: Informa sobre comandos shell disponibles (ls, cat, grep, find, curl)
+- **Browser**: Consulta `/api/client/check` y muestra mensajes contextuales con colores
+
+### 📱 ShellExecutor Plugin para Android
+
+**Plugin nativo Capacitor** que permite a la app Android ejecutar comandos shell localmente.
+
+**Archivos**:
+- `capacitor/src/plugins/shell-executor.ts` — Interfaz TypeScript (ShellExecuteOptions, ShellExecuteResult)
+- `capacitor/android-plugins/.../ShellExecutorPlugin.java` — Implementación nativa
+
+**Métodos**:
+| Método | Descripción |
+|--------|-------------|
+| `execute({ command, timeout?, workdir?, env? })` | Ejecuta comando shell con `/system/bin/sh -c` |
+| `which({ command })` | Verifica si un comando está en el PATH |
+| `info()` | Devuelve shell, home, PATH y comandos disponibles |
+
+**Seguridad**:
+- Timeout máximo 60 segundos
+- Buffer limitado a 512 KB para stdout/stderr
+- Registro de auditoría vía Android Log
+
+**Comandos disponibles en Android sin Termux**:
+`ls`, `cat`, `echo`, `mkdir`, `rm`, `cp`, `mv`, `pwd`, `chmod`, `ps`, `df`, `du`, `grep`, `find`, `head`, `tail`, `wc`, `sort`, `uniq`, `cut`, `tr`, `sed`, `awk`, `curl`, `wget`, `tar`, `gzip`, `date`, `whoami`, `id`, `uname`
+
+**Comandos que requieren Termux**: `cargo`, `git`, `rustc`, `python`, `node`, `npm`
 
 ---
 
@@ -76,11 +137,11 @@
 ### 📱 Capacitor Android
 
 - **`capacitor/capacitor.config.ts`**: Configuración para envolver `public/` en una WebView Android
-- **Plugins**: `@capacitor/filesystem` (operaciones básicas de archivos), `@capacitor/network` (conectividad), `@capacitor/browser` (enlaces externos)
-- **Ejecución de comandos en Android**: 
-  - Usuario admin → el servidor ejecuta directamente (regla: "el servidor NUNCA ejecuta comandos, EXCEPTO SI ES ADMIN")
-  - Usuario normal → el servidor reenvía las solicitudes al cliente Electron del usuario en su PC
-  - Operaciones básicas de archivos → plugin `@capacitor/filesystem` ejecuta localmente en Android
+- **Plugins**: `@capacitor/filesystem` (operaciones básicas de archivos), `@capacitor/network` (conectividad), `@capacitor/browser` (enlaces externos), **`ShellExecutor`** (comandos shell nativos, nuevo en v3.1)
+- **Ejecución de comandos en Android (v3.1)**:
+  - **ShellExecutor nativo**: Comandos shell básicos disponibles directamente (ls, cat, grep, find, curl...)
+  - Usuario admin → el servidor ejecuta directamente
+  - Para desarrollo completo (cargo, git) → instalar Termux y usarlo como entorno
 
 ### 🐛 Chat Deduplication (BUG-028)
 
@@ -130,7 +191,7 @@
 
 ---
 
-## 🔀 Arquitectura Completa v3.0
+## 🔀 Arquitectura Completa v3.1
 
 ```
                           ┌──────────────────────────┐
@@ -144,16 +205,49 @@
    │  Electron (PC)      │                   │  Capacitor (Android)│
    │  • UI web embebida  │                   │  • WebView nativo   │
    │  • Ejecuta comandos │                   │  • UI web empaquetada│
-   │    - PowerShell     │                   │  • Filesystem plugin │
-   │    - Git            │                   │  • Comandos vía      │
-   │    - Cargo          │                   │    servidor (admin)  │
-   │  • Poll + Heartbeat │                   │    o PC cliente      │
-   └─────────────────────┘                   └─────────────────────┘
+   │    - PowerShell     │                   │  • ShellExecutor 🔥  │
+   │    - Git            │                   │    (ls,cat,grep,etc) │
+   │    - Cargo          │                   │  • Filesystem plugin │
+   │  • Poll + Heartbeat │                   │  • Comandos vía      │
+   └─────────────────────┘                   │    servidor (admin)  │
+                                             │    o PC cliente      │
+                                             └─────────────────────┘
 ```
 
-**Regla de oro**: El servidor NUNCA ejecuta comandos para usuarios no-admin. Solo admin (puerto 80 o nonce verificado) ejecuta en el servidor. Para usuarios normales, el cliente Electron en su PC ejecuta los comandos.
+**Regla de oro**: El servidor NUNCA ejecuta comandos para usuarios no-admin. Solo admin (puerto 80 o nonce verificado) ejecuta en el servidor. Para usuarios normales:
+- **Windows/Linux/Mac**: cliente Electron ejecuta comandos localmente
+- **Android**: ShellExecutor ejecuta comandos shell nativos localmente
 
 ---
+
+## 📊 AppState (state.rs líneas 470-495)
+
+```rust
+pub struct AppState {
+    pub config_path: PathBuf,
+    pub prompts: Arc<Mutex<PromptConfig>>,
+    pub projects: Arc<Mutex<Vec<Project>>>,
+    pub base_workspace: PathBuf,
+    pub pending_captcha: Arc<Mutex<Option<CaptchaRequest>>>,
+    pub active_agent: Arc<Mutex<ActiveAgentStatus>>,
+    pub abort_handle: Arc<Mutex<Option<tokio::task::AbortHandle>>>,
+    pub desktop: Arc<Mutex<DesktopController>>,
+    pub image_store: Arc<Mutex<HashMap<String, String>>>,
+    pub context_store: Arc<Mutex<HashMap<String, ContextEntry>>>,
+    pub process_registry: ProcessRegistry,
+    pub tool_results: ToolResultStore,
+    pub sub_agents: SubAgentManager,
+    pub user_store: UserStore,
+    pub challenge_store: ChallengeStore,
+    pub session_store: SessionStore,
+    pub study_engine: StudyEngine,
+    pub sync_store: SyncStore,
+    pub connected_clients: Arc<Mutex<HashMap<String, ConnectedClient>>>,    // ← v3.1 client_check usa esto
+    pub client_pending_requests: Arc<Mutex<HashMap<String, Vec<ClientRequest>>>>,
+    pub client_responses: Arc<Mutex<HashMap<String, ClientResponse>>>,
+    pub port_80: bool,
+}
+```
 
 ## 📊 ActiveAgentStatus (state.rs)
 
@@ -205,7 +299,7 @@ pub struct ActiveAgentStatus {
 | `POST` | `/api/client/poll` | `client_poll` | Polling de solicitudes |
 | `POST` | `/api/client/response` | `client_response` | Enviar resultado |
 | `POST` | `/api/client/heartbeat` | `client_heartbeat` | Heartbeat (30s) |
-| `GET` | `/api/client/check` | `client_check` | Verificar si hay cliente |
+| `GET` | `/api/client/check` | `client_check` | **[v3.1]** Verificar clientes conectados (Electron/Capacitor) + Electron instalado |
 
 ---
 
@@ -219,3 +313,20 @@ pub struct ActiveAgentStatus {
 | `electron` 28 | Cliente desktop (Node.js) |
 | `@capacitor/core` 6 | App Android híbrida |
 | `@capacitor/filesystem` 6 | Operaciones de archivos en Android |
+| `ShellExecutor` (custom) | **[v3.1]** Plugin nativo Android para comandos shell |
+
+---
+
+## 🏷️ Términos de Búsqueda
+
+Para encontrar componentes rápidamente con `search_code`:
+- `client_check` → Endpoint de verificación de cliente (main.rs línea ~438)
+- `connected_clients` → Mapa de clientes conectados (state.rs línea ~483)
+- `ShellExecutor` → Plugin Android para comandos shell
+- `checkClient` → Frontend checkClient() en app.js
+- `ActiveAgentStatus` → Estado del agente activo
+- `CiclePhase` → Fases del ciclo de programación
+- `ClientRequest` / `ClientResponse` → Protocolo cliente-servidor
+- `UserLimits` / `WeeklySchedule` → Límites y horarios de usuarios
+- `migrate_chats` → Migración de formato de chats
+- `clean_old_chat_files` → Deduplicación de archivos de chat
