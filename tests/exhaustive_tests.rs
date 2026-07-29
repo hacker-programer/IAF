@@ -1,4 +1,4 @@
-// ============================================================================
+﻿// ============================================================================
 // tests/exhaustive_tests.rs — Tests Exhaustivos: Regresión, Integración,
 // E2E, Estrés, Inyección de Fallos, Casos Límite y Verificación de Código
 //
