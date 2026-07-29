@@ -403,14 +403,15 @@ async function refreshUsersTable() {
     document.querySelectorAll('#editScheduleGrid input[type="text"]').forEach(input => {
         const day = input.dataset.day;
         const raw = input.value.trim();
-        if (!raw) { horarios[day] = []; return; }
-        const ranges = raw.split(',').map(s => s.trim()).filter(Boolean).map(rangeStr => {
-            const parts = rangeStr.split('-').map(Number);
-            if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
-                return [parts[0], parts[1]];
-            }
-            return null;
-        }).filter(Boolean);
+// FIX #18: Helper para escapar HTML (prevención XSS)
+function escHtml(str) {
+    var div = document.createElement('div');
+    div.appendChild(document.createTextNode(str));
+    return div.innerHTML;
+}
+
+// ============================================================================
+// EDIT USER - with schedule, activation, granular permissions
         horarios[day] = ranges;
     });
     return horarios;
