@@ -122,9 +122,10 @@ fn get_chat_path(state: &AppState, username: &str, is_admin_or_port80: bool, tit
     dir.join(format!("{}-{}.json", safe_title, id))
 }
 
-/// Limpia archivos viejos con el mismo UUID. FIX #10: validación estricta del sufijo.
+/// Limpia archivos viejos con el mismo UUID en el directorio de chats
+/// para evitar duplicados cuando el título cambia.
 fn clean_old_chat_files(dir: &PathBuf, session_id: &str) {
-    if !dir.exists() || !looks_like_uuid_stem(session_id) {
+    if !dir.exists() {
         return;
     }
     if let Ok(entries) = fs::read_dir(dir) {
@@ -134,14 +135,14 @@ fn clean_old_chat_files(dir: &PathBuf, session_id: &str) {
                 continue;
             }
             let fname = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
-            let expected_suffix = format!("-{}", session_id);
-            if fname.ends_with(&expected_suffix) && fname.len() > expected_suffix.len() {
+            if fname.ends_with(&format!("-{}", session_id)) {
                 let _ = fs::remove_file(&path);
                 eprintln!("[IAF] Limpiado archivo duplicado: {}", path.display());
             }
         }
     }
 }
+
 /// Determina si un nombre de archivo (sin extensión) parece un UUID
 fn looks_like_uuid_stem(stem: &str) -> bool {
     stem.len() >= 30
@@ -435,12 +436,27 @@ async fn sign_nonce(Json(payload): Json<SignRequest>) -> impl IntoResponse {
 }
 
 async fn client_check() -> impl IntoResponse {
-    // FIX #1/#39: v3.0 — cliente Rust eliminado. Electron + Capacitor.
+    let possible_paths = vec![
+        "client/target/release/iaf-client.exe",
+        "client/target/debug/iaf-client.exe",
+        "iaf-client.exe",
+    ];
+    let mut found = Vec::new();
+    for path in &possible_paths {
+        if std::path::Path::new(path).exists() {
+            found.push(path.to_string());
+        }
+    }
     Json(json!({
         "status": "ok",
-        "client_installed": true,
-        "message": "IAF v3.0 usa Electron (desktop) o Capacitor (Android) como cliente.",
-        "instructions": "Electron: cd electron && npm install && npm start. Capacitor: cd capacitor && .\\setup_capacitor.ps1"
+        "client_installed": !found.is_empty(),
+        "found_at": found,
+        "expected_paths": possible_paths,
+        "instructions": if found.is_empty() {
+            "Para instalar el cliente: cd client && cargo build --release. Luego: .\\client\\target\\release\\iaf-client.exe <url> <user> <token>"
+        } else {
+            "Cliente encontrado. Ejecutalo con: iaf-client.exe http://127.0.0.1:8080 <username> <token>"
+        }
     }))
 }
 
@@ -493,9 +509,6 @@ async fn admin_create_user(
     let limits = if payload.is_admin { UserLimits::admin() } else { UserLimits::default() };
     let result = if payload.is_admin && payload.public_key.is_some() {
         state.user_store.create_admin(&payload.username, &payload.public_key.unwrap(), perms, limits)
-    } else if payload.is_admin && payload.public_key.is_none() {
-        // FIX #13: Error claro cuando admin no tiene clave pública
-        Err("Para crear un admin necesitás generar claves (botón 'Generar Claves') o subir un .pem.".into())
     } else if let Some(ref pw) = payload.password {
         state.user_store.create_user_with_password(
             &payload.username, pw, payload.is_admin, perms, limits,
@@ -513,6 +526,8 @@ async fn admin_create_user(
         Err(e) => (StatusCode::BAD_REQUEST, Json(json!({ "status": "error", "message": e }))).into_response(),
     }
 }
+
+#[derive(Deserialize)]
 struct UpdateLimitsRequest {
     limits: UserLimits,
 }
@@ -1831,14 +1846,9 @@ async fn agent_interrupt(
     };
 
     let mut agent = state.active_agent.lock().unwrap();
-    // FIX #9: Abortar el tokio task para detención inmediata
-    if let Ok(mut abort_handle) = state.abort_handle.lock() {
-        if let Some(handle) = abort_handle.take() {
-            handle.abort();
-        }
-    }
+    agent.interrupted = true;
+    agent.running = false;
 
-    let mut agent = state.active_agent.lock().unwrap();
     if let Some(ref path) = agent.current_chat_path {
         // Append interruption message to chat
         if let Ok(content) = fs::read_to_string(path) {
