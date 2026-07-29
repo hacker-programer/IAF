@@ -435,30 +435,15 @@ async fn client_check() -> impl IntoResponse {
     let mut found = Vec::new();
     for path in &possible_paths {
         if std::path::Path::new(path).exists() {
-            found.push(path.to_string());
-        }
-    }
+async fn client_check() -> impl IntoResponse {
+    // FIX #1/#39: v3.0 — Electron + Capacitor, no Rust client
     Json(json!({
         "status": "ok",
-        "client_installed": !found.is_empty(),
-        "found_at": found,
-        "expected_paths": possible_paths,
-        "instructions": if found.is_empty() {
-            "Para instalar el cliente: cd client && cargo build --release. Luego: .\\client\\target\\release\\iaf-client.exe <url> <user> <token>"
-        } else {
-            "Cliente encontrado. Ejecutalo con: iaf-client.exe http://127.0.0.1:8080 <username> <token>"
-        }
+        "client_installed": true,
+        "message": "IAF v3.0 usa Electron (desktop) o Capacitor (Android).",
+        "instructions": "Electron: cd electron && npm install && npm start. Capacitor: cd capacitor && .\\setup_capacitor.ps1"
     }))
 }
-
-// ============================================================================
-// Endpoints Admin (gestión de usuarios)
-// ============================================================================
-
-async fn admin_list_users(
-    State(state): State<AppState>,
-    headers: HeaderMap,
-) -> impl IntoResponse {
     let admin = match require_admin(&state, &headers).await {
         Ok(a) => a, Err(e) => return (e.0, Json(json!({ "status": "error", "message": e.1 }))).into_response(),
     };
