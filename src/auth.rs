@@ -423,14 +423,17 @@ impl UserStore {
             .map_err(|e| format!("Error interno: hash mal formado: {}", e))?;
 
         let valid = Argon2::default().verify_password(password.as_bytes(), &parsed_hash).is_ok();
-            // Verificar lÃ­mites de horario
+
+        if valid {
+            // Verificar límites de horario
             if !user.limits.is_active_now() && !user.is_admin {
-                return Err("Tu cuenta no estÃ¡ activa en este horario.".into());
+                return Err("Tu cuenta no está activa en este horario.".into());
             }
             Ok(Some(user))
         } else {
             Ok(None)
         }
+    }
     }
 
     /// Cambia la contraseÃ±a de un usuario. SOLO admin.
