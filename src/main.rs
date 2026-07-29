@@ -452,14 +452,14 @@ async fn client_check() -> impl IntoResponse {
         "instructions": "Electron: cd electron && npm install && npm start. Capacitor: cd capacitor && .\\setup_capacitor.ps1"
     }))
 }
-        } else {
-            "Cliente encontrado. Ejecutalo con: iaf-client.exe http://127.0.0.1:8080 <username> <token>"
-        }
+    }))
+}
+
 // ============================================================================
 // Endpoints Admin (gestión de usuarios)
 // ============================================================================
+
 async fn admin_list_users(
-    State(state): State<AppState>,
     headers: HeaderMap,
 ) -> impl IntoResponse {
     let admin = match require_admin(&state, &headers).await {
