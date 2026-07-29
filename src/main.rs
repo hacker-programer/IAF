@@ -1878,23 +1878,9 @@ async fn agent_interrupt(
 
     if let Some(ref path) = agent.current_chat_path {
         // Append interruption message to chat
-        if let Ok(content) = fs::read_to_string(path) {
-            if let Ok(mut session) = serde_json::from_str::<ChatSession>(&content) {
-                session.messages.push(ChatMessage {
-                    role: "system".to_string(),
-                    content: "⏹️ Agente interrumpido por el usuario.".to_string(),
-                    timestamp: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs(),
-                });
-                let _ = fs::write(path, serde_json::to_string_pretty(&session).unwrap());
-            }
-        }
-    }
-
-    Json(json!({ "status": "ok" })).into_response()
-}
-
 // ============================================================================
 // Endpoints de CAPTCHA
+// ============================================================================
 // ============================================================================
 
 #[derive(Deserialize)]
