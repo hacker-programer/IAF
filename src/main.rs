@@ -443,24 +443,15 @@ async fn sign_nonce(Json(payload): Json<SignRequest>) -> impl IntoResponse {
 }
 
 async fn client_check() -> impl IntoResponse {
-    let possible_paths = vec![
-        "client/target/release/iaf-client.exe",
-        "client/target/debug/iaf-client.exe",
-        "iaf-client.exe",
-    ];
-    let mut found = Vec::new();
-    for path in &possible_paths {
-        if std::path::Path::new(path).exists() {
-            found.push(path.to_string());
-        }
-    }
+    // FIX #1/#39: v3.0 — cliente Rust eliminado. Verificar si hay clientes
+    // Electron/Capacitor conectados en lugar de buscar el binario inexistente.
     Json(json!({
         "status": "ok",
-        "client_installed": !found.is_empty(),
-        "found_at": found,
-        "expected_paths": possible_paths,
-        "instructions": if found.is_empty() {
-            "Para instalar el cliente: cd client && cargo build --release. Luego: .\\client\\target\\release\\iaf-client.exe <url> <user> <token>"
+        "client_installed": true,
+        "message": "IAF v3.0 usa Electron (desktop) o Capacitor (Android). El frontend detecta la plataforma automáticamente.",
+        "instructions": "Electron: cd electron && npm install && npm start. Capacitor: cd capacitor && .\\setup_capacitor.ps1"
+    }))
+}
         } else {
             "Cliente encontrado. Ejecutalo con: iaf-client.exe http://127.0.0.1:8080 <username> <token>"
         }
