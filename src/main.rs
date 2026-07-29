@@ -1982,18 +1982,18 @@ async fn client_connect(
     Json(payload): Json<ConnectRequest>,
 ) -> impl IntoResponse {
     let username = match state.session_store.validate_token(&payload.token) {
-        Some(u) => u,
-        None => return (StatusCode::UNAUTHORIZED, Json(json!({ "status": "error", "message": "Token inválido." }))).into_response(),
-    };
+    state.connected_clients.lock().unwrap().insert(client_id.clone(), client.clone());
 
-    let client_id = uuid::Uuid::new_v4().to_string();
-    let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs();
+    // FIX #14: Encolar solicitudes por client_id (dispositivo específico)
+    // y también mantener un mapeo username → client_ids para enrutar a cualquier
+    // dispositivo conectado del mismo usuario.
+    state.client_pending_requests.lock().unwrap().entry(client_id.clone()).or_insert_with(Vec::new);
 
-    let client = ConnectedClient {
-        client_id: client_id.clone(),
-        username: username.clone(),
-        connected_at: now,
-        last_heartbeat: now,
+    // Registrar mapeo username → client_ids para multi-dispositivo
+    {
+        let mut user_clients = state.user_client_map.lock().unwrap();
+        user_clients.entry(username.clone()).or_insert_with(Vec::new).push(client_id.clone());
+    }
         host_info: payload.host_info.clone(),
     };
 
