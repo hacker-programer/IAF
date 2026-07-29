@@ -714,20 +714,25 @@ async function loadPrompts() {
         if (prompts.status === 'ok') {
             document.getElementById('globalPrompt').value = prompts.global_current || '';
             if (activeProject && prompts.projects && prompts.projects[activeProject]) {
-                document.getElementById('localPrompt').value = prompts.projects[activeProject];
-            } else {
-                document.getElementById('localPrompt').value = '';
-            }
-        }
-    } catch(e) {}
-}
-
 document.getElementById('savePromptsBtn').onclick = async () => {
-    const globalContent = document.getElementById('globalPrompt').value;
-    const globalRes = await apiCall('/api/prompts/global', 'POST', { content: globalContent });
+    var globalContent = document.getElementById('globalPrompt').value;
+    var globalRes = await apiCall('/api/prompts/global', 'POST', { content: globalContent });
+
+    var localOk = true;
     if (activeProject && document.getElementById('localPrompt').value.trim()) {
-        const localContent = document.getElementById('localPrompt').value;
-        await apiCall('/api/prompts/local', 'POST', { project_name: activeProject, content: localContent });
+        var localContent = document.getElementById('localPrompt').value;
+        var localRes = await apiCall('/api/prompts/local', 'POST', { project_name: activeProject, content: localContent });
+        localOk = localRes.status === 'ok';
+    }
+
+    if (globalRes.status === 'ok' && localOk) {
+        showInfoToast('✅ Ambos prompts guardados.');
+    } else if (globalRes.status !== 'ok') {
+        alert('Error al guardar prompt global: ' + (globalRes.message || ''));
+    } else {
+        alert('Error al guardar prompt local.');
+    }
+};
     }
     if (globalRes.status === 'ok') {
         showInfoToast('✅ Prompts guardados.');
