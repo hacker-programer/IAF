@@ -12,12 +12,12 @@ let agentQuestionShown = false;  // evita abrir el banner repetidamente
 let agentPlanShown = false;      // evita abrir el modal repetidamente
 
 // Auth state
+// Auth state
 let authToken = null;
 let authUsername = null;
 let authIsAdmin = false;
 let authHasStudy = false;
 let authHasProgramming = false;
-let isPort80 = window.location.port === '80' || window.location.port === '';
 let isPort80 = window.location.port === '80';
 
 // ---- DOM refs ----
