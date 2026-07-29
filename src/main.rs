@@ -435,32 +435,53 @@ async fn sign_nonce(Json(payload): Json<SignRequest>) -> impl IntoResponse {
     }
 }
 
-async fn client_check() -> impl IntoResponse {
-    let possible_paths = vec![
-        "client/target/release/iaf-client.exe",
-        "client/target/debug/iaf-client.exe",
-        "iaf-client.exe",
-    ];
-    let mut found = Vec::new();
-    for path in &possible_paths {
-        if std::path::Path::new(path).exists() {
-            found.push(path.to_string());
-        }
-    }
+async fn client_check(
+    State(state): State<AppState>,
+) -> impl IntoResponse {
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH).unwrap().as_secs();
+
+    // Verificar clientes conectados (Electron, Capacitor, etc.)
+    let clients = state.connected_clients.lock().unwrap();
+    let active_clients: Vec<serde_json::Value> = clients.values()
+        .filter(|c| now.saturating_sub(c.last_heartbeat) < 120) // activos en los últimos 2 min
+        .map(|c| json!({
+            "client_id": c.client_id,
+            "username": c.username,
+            "host_info": c.host_info,
+            "connected_at": c.connected_at,
+            "last_heartbeat": c.last_heartbeat,
+        }))
+        .collect();
+    let has_active_clients = !active_clients.is_empty();
+    let total_connected = clients.len();
+    drop(clients);
+
+    // Verificar si Electron está instalado (aunque no conectado)
+    let electron_installed = std::path::Path::new("electron/package.json").exists()
+        && std::path::Path::new("electron/main.js").exists();
+
     Json(json!({
         "status": "ok",
-        "client_installed": !found.is_empty(),
-        "found_at": found,
-        "expected_paths": possible_paths,
-        "instructions": if found.is_empty() {
-            "Para instalar el cliente: cd client && cargo build --release. Luego: .\\client\\target\\release\\iaf-client.exe <url> <user> <token>"
+        "client_installed": has_active_clients || electron_installed,
+        "active_clients": active_clients,
+        "active_client_count": active_clients.len(),
+        "total_connected": total_connected,
+        "electron_installed": electron_installed,
+        "v3_client": true,
+        "instructions": if has_active_clients {
+            format!("✅ {} cliente(s) conectado(s) y activo(s). Los comandos se ejecutan localmente.", active_clients.len())
+        } else if electron_installed {
+            "🎯 Cliente Electron instalado pero no conectado. Ejecutá: cd electron && npm start".to_string()
         } else {
-            "Cliente encontrado. Ejecutalo con: iaf-client.exe http://127.0.0.1:8080 <username> <token>"
+            "📦 No hay clientes conectados. Opciones:\n\
+             1. Electron (Windows/Linux/Mac): cd electron && npm install && npm start\n\
+             2. Android: La app Capacitor permite comandos básicos de shell (ls, cat, grep...)\n\
+             3. Admin: Usá el puerto 80 para acceso directo sin cliente".to_string()
         }
     }))
 }
 
-// ============================================================================
 // Endpoints Admin (gestión de usuarios)
 // ============================================================================
 
@@ -509,6 +530,9 @@ async fn admin_create_user(
     let limits = if payload.is_admin { UserLimits::admin() } else { UserLimits::default() };
     let result = if payload.is_admin && payload.public_key.is_some() {
         state.user_store.create_admin(&payload.username, &payload.public_key.unwrap(), perms, limits)
+    } else if payload.is_admin && payload.public_key.is_none() {
+        // FIX #13: Error claro cuando admin no tiene clave publica
+        Err("Para crear un admin necesitas generar claves (boton Generar Claves) o subir un .pem.".into())
     } else if let Some(ref pw) = payload.password {
         state.user_store.create_user_with_password(
             &payload.username, pw, payload.is_admin, perms, limits,
