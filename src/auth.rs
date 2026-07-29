@@ -413,29 +413,27 @@ impl UserStore {
             None => return Ok(None),
         };
 
+        // FIX #30: Usuario con nonce -> Ok(None) igual que usuario no encontrado
         let hash_str = match &user.password_hash {
             Some(h) => h.clone(),
-        let hash_str = match &user.password_hash {
-            Some(h) => h.clone(),
-            // FIX #30: Usuario con nonce -> Ok(None) igual que usuario no encontrado
             None => return Ok(None),
         };
+
+        let parsed_hash = PasswordHash::new(&hash_str)
             .map_err(|e| format!("Error interno: hash mal formado: {}", e))?;
 
         let valid = Argon2::default().verify_password(password.as_bytes(), &parsed_hash).is_ok();
 
         if valid {
-            // Verificar lÃ­mites de horario
+            // Verificar límites de horario
             if !user.limits.is_active_now() && !user.is_admin {
-                return Err("Tu cuenta no estÃ¡ activa en este horario.".into());
+                return Err("Tu cuenta no está activa en este horario.".into());
             }
             Ok(Some(user))
         } else {
             Ok(None)
         }
     }
-
-    /// Cambia la contraseÃ±a de un usuario. SOLO admin.
     pub fn change_password(&self, username: &str, new_password: &str) -> Result<(), String> {
         if new_password.len() < 8 {
             return Err("La contraseÃ±a debe tener al menos 8 caracteres.".into());
