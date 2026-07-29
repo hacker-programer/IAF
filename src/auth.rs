@@ -499,13 +499,11 @@ impl UserStore {
         let user = users.users.iter_mut()
             .find(|u| u.username == username)
             .ok_or_else(|| format!("Usuario '{}' no encontrado.", username))?;
-        if !user.is_admin {
-            user.modo_estudio = modo_estudio;
-            user.modo_programador = modo_programador;
-            user.editar_system_prompt_global = editar_global;
-            user.editar_system_prompt_local = editar_local;
-        }
-        drop(users);
+        // FIX #27: Always update flags, even for admins (delegation)
+        user.modo_estudio = modo_estudio;
+        user.modo_programador = modo_programador;
+        user.editar_system_prompt_global = editar_global;
+        user.editar_system_prompt_local = editar_local;
         self.save()
     }
 
