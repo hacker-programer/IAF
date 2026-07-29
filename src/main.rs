@@ -1445,12 +1445,12 @@ async fn chat_endpoint(
                 let mut ag = state_bg.active_agent.lock().unwrap();
                 ag.running = false;
                 if !ag.finished { ag.finished = true; ag.final_message = final_msg; }
+                ag.running = false;
+                if !ag.finished { ag.finished = true; ag.final_message = final_msg; }
             });
-        }
     }
 
     Json(json!({
-        "status": "ok",
         "session_id": session.id,
         "title": session.title,
         "chat_path": save_path.to_string_lossy(),
