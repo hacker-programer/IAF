@@ -134,7 +134,7 @@ async fn search_google(
             });
         }
 
-        for _ in 0..120 {
+        for _ in 0..20 { // FIX #24: 10s max instead of 60s
             tokio::time::sleep(Duration::from_millis(500)).await;
             let current = pending_captcha.lock().unwrap();
             if let Some(ref req) = *current {
@@ -145,10 +145,10 @@ async fn search_google(
                 break;
             }
         }
-        return Err("Google CAPTCHA was triggered and not solved in time by the user".into());
+        return Err("Google CAPTCHA triggered - timeout after 10s. Using DuckDuckGo as fallback.".into());
     }
-
-    let mut results = Vec::new();
+        // FIX #24: 10 segundos maximo (20 iteraciones x 500ms) en vez de 60s
+        for _ in 0..20 {
     let re = Regex::new(r#"<h3[^>]*>(.*?)</h3>"#)?;
     for cap in re.captures_iter(&body) {
         let title = cap[1].replace("href=\"", "").replace("</a>", "");
