@@ -1226,16 +1226,16 @@ function updateConsoleStatus(status) {
     consoleArea.scrollTop = consoleArea.scrollHeight;
 }
 
-// ============================================================================
-// MOBILE HAMBURGER MENU
-// ============================================================================
-
 function initMobileNav() {
     const hamburgerBtn = document.getElementById('hamburgerBtn');
     const sidebar = document.querySelector('.sidebar');
     const overlay = document.getElementById('sidebarOverlay');
 
     if (!hamburgerBtn || !sidebar || !overlay) return;
+
+    function isMobile() {
+        return window.innerWidth <= 768;
+    }
 
     function openSidebar() {
         sidebar.style.transform = 'translateX(0)';
@@ -1254,13 +1254,28 @@ function initMobileNav() {
     hamburgerBtn.onclick = openSidebar;
     overlay.onclick = closeSidebar;
 
-    // Cerrar sidebar al seleccionar un proyecto, chat, o cambiar modo
+    // Solo cerrar sidebar automáticamente en mobile (≤768px).
+    // En desktop/Electron, el sidebar debe quedarse abierto.
     sidebar.addEventListener('click', (e) => {
+        if (!isMobile()) return;
         if (e.target.closest('.project-item') ||
             e.target.closest('.mode-btn') ||
             e.target.closest('#newChatBtn') ||
             e.target.closest('#logoutBtn')) {
             setTimeout(closeSidebar, 150);
+        }
+    });
+
+    // Si se redimensiona a desktop, asegurar que el sidebar esté visible
+    window.addEventListener('resize', () => {
+        if (!isMobile()) {
+            sidebar.style.transform = '';
+            overlay.classList.add('hidden');
+            overlay.style.display = 'none';
+            document.body.style.overflow = '';
+        }
+    });
+}
         }
     });
 }
