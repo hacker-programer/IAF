@@ -587,13 +587,18 @@ app.whenReady().then(() => {
     loadConfig();
     createWindow();
 
+    // Conectar inmediatamente si hay token guardado (sin esperar 2s).
+    // La UI hará polling con getStatus() hasta que conecte.
     if (config.token) {
-        setTimeout(connectToServer, 2000);
+        connectToServer();
     }
 
     app.on('activate', () => {
         if (BrowserWindow.getAllWindows().length === 0) {
             createWindow();
+        }
+    });
+});
         }
     });
 });
