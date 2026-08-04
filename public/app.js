@@ -140,9 +140,13 @@ function downloadScript(name) {
     document.body.removeChild(a);
 }
 
+
 async function init() {
+    // DETECCIÓN TEMPRANA: detectar plataforma antes de cualquier otra cosa
+    detectPlatform();
 
     if (isPort80) {
+
         // Puerto 80: acceso directo como admin local
         authToken = 'admin_local';
         authUsername = 'admin_local';
