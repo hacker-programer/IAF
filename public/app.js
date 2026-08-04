@@ -348,9 +348,19 @@ function setAuth(res) {
         });
     }
 
+    // Iniciar el bridge Capacitor (Android) para ejecutar comandos localmente
+    if (platformType === 'capacitor' && window.IAFCapacitorBridge) {
+        window.IAFCapacitorBridge.start(res.token, res.username).then(connected => {
+            if (connected) {
+                console.log('[IAF] Bridge Capacitor iniciado. Android ejecuta comandos localmente.');
+            }
+        }).catch(e => {
+            console.warn('[IAF] Error iniciando bridge Capacitor:', e);
+        });
+    }
+
     showApp();
 }
-
 function showApp() {
     loginScreen.classList.add('hidden');
     appContainer.classList.remove('hidden');
