@@ -1,5 +1,5 @@
 // ============================================================================
-// IAF Electron Client — main.js
+// IAF Electron Client â€” main.js
 // ============================================================================
 //
 // Reemplaza al cliente Rust (client/src/main.rs).
@@ -7,9 +7,9 @@
 //
 // Responsabilidades:
 //   1. Abre ventana BrowserWindow cargando la UI web del servidor IAF
-//   2. Implementa el protocolo cliente-servidor (connect → poll → execute → respond)
+//   2. Implementa el protocolo cliente-servidor (connect â†’ poll â†’ execute â†’ respond)
 //   3. Ejecuta comandos localmente: PowerShell, git, cargo, operaciones de archivos
-//   4. Heartbeat periódico
+//   4. Heartbeat periÃ³dico
 //
 // El servidor NUNCA ejecuta comandos para usuarios no-admin.
 // Solo admin (puerto 80 o nonce verificado) ejecuta en el servidor.
@@ -25,7 +25,7 @@ const { execSync, exec, spawn } = require('child_process');
 const crypto = require('crypto');
 
 // ============================================================================
-// Seguridad: validación de entrada para prevenir inyección de comandos
+// Seguridad: validaciÃ³n de entrada para prevenir inyecciÃ³n de comandos
 // ============================================================================
 
 /// Solo permite caracteres seguros en subcomandos (estrictos)
@@ -40,13 +40,13 @@ function validateSafeArg(value, context) {
         console.error(`[IAF-Electron] BLOQUEO: ${context} excede 2000 caracteres: ${value.substring(0,80)}...`);
         return false;
     }
-    // Usar regex más permisivo para argumentos, estricto para subcomandos
+    // Usar regex mÃ¡s permisivo para argumentos, estricto para subcomandos
     var regex = context.includes('subcommand') ? SAFE_SUBCMD_REGEX : SAFE_ARGS_REGEX;
     if (!regex.test(value)) {
         console.error(`[IAF-Electron] BLOQUEO: ${context} contiene caracteres no permitidos: ${value.substring(0,100)}`);
         return false;
     }
-    // Bloquear shell metacharacters críticos incluso si el regex los permite
+    // Bloquear shell metacharacters crÃ­ticos incluso si el regex los permite
     if (/[;|`$]/.test(value) && (context.includes('subcommand') || value.length < 500)) {
         console.error(`[IAF-Electron] BLOQUEO: ${context} contiene shell metacharacters: ${value.substring(0,100)}`);
         return false;
@@ -71,7 +71,7 @@ function loadConfig() {
         if (fs.existsSync(CONFIG_PATH)) {
             const data = fs.readFileSync(CONFIG_PATH, 'utf-8');
             config = { ...config, ...JSON.parse(data) };
-            console.log('[IAF-Electron] Configuración cargada:', config.serverUrl, config.username);
+            console.log('[IAF-Electron] ConfiguraciÃ³n cargada:', config.serverUrl, config.username);
         }
     } catch (e) {
         console.error('[IAF-Electron] Error cargando config:', e.message);
@@ -82,7 +82,7 @@ function saveConfig() {
     try {
         if (!fs.existsSync(CONFIG_DIR)) fs.mkdirSync(CONFIG_DIR, { recursive: true });
         fs.writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2));
-        console.log('[IAF-Electron] Configuración guardada.');
+        console.log('[IAF-Electron] ConfiguraciÃ³n guardada.');
     } catch (e) {
         console.error('[IAF-Electron] Error guardando config:', e.message);
     }
@@ -157,7 +157,7 @@ function executePowerShell(params) {
     const command = params.command;
     const workDir = params.work_dir || process.cwd();
 
-    // FIX #3: Usar Base64 encoding para evitar escapes frágiles.
+    // FIX #3: Usar Base64 encoding para evitar escapes frÃ¡giles.
     // PowerShell acepta -EncodedCommand con Base64 UTF-16LE.
     const utf16le = Buffer.from(command, 'utf16le');
     const base64Cmd = utf16le.toString('base64');
@@ -374,7 +374,7 @@ function executeRequest(req) {
                     request_id: req.request_id,
                     status: 'error',
                     result: {},
-                    error: `Acción desconocida: ${req.action}`,
+                    error: `AcciÃ³n desconocida: ${req.action}`,
                     timestamp: now,
                 };
         }
@@ -397,7 +397,7 @@ function executeRequest(req) {
 }
 
 // ============================================================================
-// Loop del Cliente (connect → poll → execute → respond)
+// Loop del Cliente (connect â†’ poll â†’ execute â†’ respond)
 // ============================================================================
 
 let pollInterval = null;
@@ -421,9 +421,9 @@ async function connectToServer() {
         if (resp.status === 'ok') {
             config.clientId = resp.client_id;
             isConnected = true;
-            console.log(`[IAF-Electron] ✅ Conectado como cliente ${config.clientId}`);
+            console.log(`[IAF-Electron] âœ… Conectado como cliente ${config.clientId}`);
 
-            // Enviar estado de conexión a la UI
+            // Enviar estado de conexiÃ³n a la UI
             if (mainWindow) {
                 mainWindow.webContents.send('client-status', {
                     connected: true,
@@ -435,7 +435,7 @@ async function connectToServer() {
             startPolling();
             startHeartbeat();
         } else {
-            console.error('[IAF-Electron] ❌ Error de conexión:', resp.message);
+            console.error('[IAF-Electron] âŒ Error de conexiÃ³n:', resp.message);
             isConnected = false;
             // Reintentar en 10 segundos
             setTimeout(connectToServer, 10000);
@@ -460,13 +460,13 @@ function startPolling() {
             });
 
             if (resp.status !== 'ok') {
-                console.warn('[IAF-Electron] ⚠️ Error en poll:', resp);
+                console.warn('[IAF-Electron] âš ï¸ Error en poll:', resp);
                 return;
             }
 
             const requests = resp.pending_requests || [];
             for (const req of requests) {
-                console.log(`[IAF-Electron] 📋 Ejecutando: ${req.action} (${req.request_id})`);
+                console.log(`[IAF-Electron] ðŸ“‹ Ejecutando: ${req.action} (${req.request_id})`);
                 const response = executeRequest(req);
 
                 await apiCall('/api/client/response', 'POST', {
@@ -518,7 +518,7 @@ function createWindow() {
         height: 900,
         minWidth: 800,
         minHeight: 600,
-        title: 'IAF — Intelligent Agent Framework',
+        title: 'IAF â€” Intelligent Agent Framework',
         icon: path.join(__dirname, 'icon.ico'),
         webPreferences: {
             preload: path.join(__dirname, 'preload.js'),
@@ -541,7 +541,7 @@ function createWindow() {
 }
 
 // ============================================================================
-// IPC Handlers (comunicación entre main process y renderer/preload)
+// IPC Handlers (comunicaciÃ³n entre main process y renderer/preload)
 // ============================================================================
 
 ipcMain.handle('execute-local', async (event, action, params) => {
@@ -588,7 +588,7 @@ app.whenReady().then(() => {
     createWindow();
 
     // Conectar inmediatamente si hay token guardado (sin esperar 2s).
-    // La UI hará polling con getStatus() hasta que conecte.
+    // La UI harÃ¡ polling con getStatus() hasta que conecte.
     if (config.token) {
         connectToServer();
     }
@@ -596,9 +596,6 @@ app.whenReady().then(() => {
     app.on('activate', () => {
         if (BrowserWindow.getAllWindows().length === 0) {
             createWindow();
-        }
-    });
-});
         }
     });
 });
@@ -614,4 +611,4 @@ app.on('before-quit', () => {
     disconnectFromServer();
 });
 
-console.log('[IAF-Electron] Iniciado. Esperando conexión al servidor...');
+console.log('[IAF-Electron] Iniciado. Esperando conexiÃ³n al servidor...');

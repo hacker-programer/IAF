@@ -1,7 +1,23 @@
-﻿cargo :     Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.32s
+﻿cargo :     Checking iaf v0.1.0 (C:\Users\Fa\Desktop\IAF)
 En línea: 1 Carácter: 104
 + ... \Users\Fa\AppData\Local\Temp\cargo-target" ; cargo check 2>&1 | Out-F ...
 +                                                  ~~~~~~~~~~~~~~~~
-    + CategoryInfo          : NotSpecified: (    Finished `d...get(s) in 1.32s:String) [], RemoteException
+    + CategoryInfo          : NotSpecified: (    Checking ia...Fa\Desktop\IAF):String) [], RemoteException
     + FullyQualifiedErrorId : NativeCommandError
  
+error: this file contains an unclosed delimiter
+    --> src\agent.rs:2523:3
+     |
+ 146 | ) -> Result<String, Box<dyn Error + Send + Sync>> {
+     |                                                   - unclosed delimiter
+...
+ 806 |                     "read_file" => {
+     |                                    - this delimiter might not be properly closed...
+...
+1856 |                 };
+     |                 - ...as it matches this but it has different indentation
+...
+2523 | }
+     |  ^
+
+error: could not compile `iaf` (bin "iaf") due to 1 previous error
