@@ -1,5 +1,5 @@
 // ============================================================================
-// IAF â€” app.js â€” Cliente Web con AutenticaciÃ³n
+// IAF Ã¢â‚¬â€ app.js Ã¢â‚¬â€ Cliente Web con AutenticaciÃƒÂ³n
 // ============================================================================
 
 // ---- State ----
@@ -41,8 +41,8 @@ function detectPlatform() {
     // Detectar Electron: el preload.js expone window.iafClient
     if (window.iafClient && window.iafClient.isElectron) {
         platformType = 'electron';
-        platformLabel = 'ðŸ–¥ï¸ Electron';
-        console.log('[IAF] EjecutÃ¡ndose en Electron (cliente desktop)');
+        platformLabel = 'Ã°Å¸â€“Â¥Ã¯Â¸Â Electron';
+        console.log('[IAF] EjecutÃƒÂ¡ndose en Electron (cliente desktop)');
         return;
     }
 
@@ -50,24 +50,24 @@ function detectPlatform() {
     if (window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()) {
         platformType = 'capacitor';
         const platform = window.Capacitor.getPlatform();
-        platformLabel = platform === 'android' ? 'ðŸ“± Android' : 'ðŸ“± Mobile';
-        console.log('[IAF] EjecutÃ¡ndose en Capacitor (' + platform + ')');
+        platformLabel = platform === 'android' ? 'Ã°Å¸â€œÂ± Android' : 'Ã°Å¸â€œÂ± Mobile';
+        console.log('[IAF] EjecutÃƒÂ¡ndose en Capacitor (' + platform + ')');
         return;
     }
 
-    // Detectar si es un dispositivo mÃ³vil tÃ¡ctil (Android Chrome, etc.)
+    // Detectar si es un dispositivo mÃƒÂ³vil tÃƒÂ¡ctil (Android Chrome, etc.)
     const isMobile = /Android|iPhone|iPad|iPod|webOS/i.test(navigator.userAgent)
         || ('ontouchend' in document);
     if (isMobile) {
         platformType = 'mobile-browser';
-        platformLabel = 'ðŸ“± Navegador MÃ³vil';
-        console.log('[IAF] EjecutÃ¡ndose en navegador mÃ³vil');
+        platformLabel = 'Ã°Å¸â€œÂ± Navegador MÃƒÂ³vil';
+        console.log('[IAF] EjecutÃƒÂ¡ndose en navegador mÃƒÂ³vil');
         return;
     }
 
     platformType = 'browser';
-    platformLabel = 'ðŸŒ Web';
-    console.log('[IAF] EjecutÃ¡ndose en navegador desktop');
+    platformLabel = 'Ã°Å¸Å’Â Web';
+    console.log('[IAF] EjecutÃƒÂ¡ndose en navegador desktop');
 }
 
 // ---- Init ----
@@ -111,13 +111,13 @@ function copyNonceCmd(event) {
 
     function onSuccess() {
         if (btn) {
-            btn.textContent = 'âœ“';
-            setTimeout(function () { btn.textContent = 'ðŸ“‹'; }, 1500);
+            btn.textContent = 'Ã¢Å“â€œ';
+            setTimeout(function () { btn.textContent = 'Ã°Å¸â€œâ€¹'; }, 1500);
         }
     }
 
     function onFailure() {
-        alert('No se pudo copiar al portapapeles. CopiÃ¡ manualmente:\n\n' + cmd);
+        alert('No se pudo copiar al portapapeles. CopiÃƒÂ¡ manualmente:\n\n' + cmd);
     }
 
     if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
@@ -142,7 +142,7 @@ function downloadScript(name) {
 
 
 async function init() {
-    // DETECCIÓN TEMPRANA: detectar plataforma antes de cualquier otra cosa
+    // DETECCIÃ“N TEMPRANA: detectar plataforma antes de cualquier otra cosa
     detectPlatform();
 
     if (isPort80) {
@@ -158,7 +158,7 @@ async function init() {
         // Puerto 8080: login obligatorio
         loginScreen.classList.remove('hidden');
         appContainer.classList.add('hidden');
-        // En Electron, intentar reconectar automÃ¡ticamente
+        // En Electron, intentar reconectar automÃƒÂ¡ticamente
         if (platformType === 'electron' && window.iafClient) {
             try {
                 const status = await window.iafClient.getStatus();
@@ -175,24 +175,24 @@ async function init() {
 }
 
 async function checkClient() {
-    // En Electron, verificar estado de conexiÃ³n con el servidor
+    // En Electron, verificar estado de conexiÃƒÂ³n con el servidor
     if (platformType === 'electron') {
         if (window.iafClient) {
             try {
                 const status = await window.iafClient.getStatus();
                 if (status.connected) {
-                    clientWarning.innerHTML = 'ðŸ–¥ï¸ <b>Electron conectado</b> â€” comandos locales disponibles (PowerShell, git, cargo).';
+                    clientWarning.innerHTML = 'Ã°Å¸â€“Â¥Ã¯Â¸Â <b>Electron conectado</b> Ã¢â‚¬â€ comandos locales disponibles (PowerShell, git, cargo).';
                     clientWarning.style.borderColor = 'var(--success)';
                     clientWarning.style.color = 'var(--success)';
                     clientWarning.style.background = 'rgba(16,185,129,0.1)';
                 } else {
-                    clientWarning.innerHTML = 'ðŸ–¥ï¸ <b>Electron desconectado</b> â€” reconectando al servidor...';
+                    clientWarning.innerHTML = 'Ã°Å¸â€“Â¥Ã¯Â¸Â <b>Electron desconectado</b> Ã¢â‚¬â€ reconectando al servidor...';
                     clientWarning.style.borderColor = 'var(--warning, #f59e0b)';
                     clientWarning.style.color = 'var(--warning, #f59e0b)';
                     clientWarning.style.background = 'rgba(245,158,11,0.1)';
                 }
             } catch(e) {
-                clientWarning.innerHTML = 'ðŸ–¥ï¸ <b>Cliente Electron activo</b> â€” comandos locales disponibles.';
+                clientWarning.innerHTML = 'Ã°Å¸â€“Â¥Ã¯Â¸Â <b>Cliente Electron activo</b> Ã¢â‚¬â€ comandos locales disponibles.';
                 clientWarning.style.borderColor = 'var(--success)';
                 clientWarning.style.color = 'var(--success)';
                 clientWarning.style.background = 'rgba(16,185,129,0.1)';
@@ -204,7 +204,7 @@ async function checkClient() {
 
     // En Capacitor/Android, mostrar capacidades
     if (platformType === 'capacitor') {
-        clientWarning.innerHTML = 'ðŸ“± <b>App Android</b> â€” shell disponible (ls, cat, grep, find, curl). UsÃ¡ el puerto 80 para admin directo.';
+        clientWarning.innerHTML = 'Ã°Å¸â€œÂ± <b>App Android</b> Ã¢â‚¬â€ shell disponible (ls, cat, grep, find, curl). UsÃƒÂ¡ el puerto 80 para admin directo.';
         clientWarning.style.borderColor = 'var(--accent)';
         clientWarning.style.color = 'var(--accent)';
         clientWarning.style.background = 'rgba(6,182,212,0.1)';
@@ -225,24 +225,24 @@ async function checkClient() {
                 const clientNames = data.active_clients.map(function(c) {
                     return c.host_info || c.client_id.substring(0, 8);
                 }).join(', ');
-                clientWarning.innerHTML = 'âœ… <b>' + data.active_client_count + ' cliente(s) conectado(s):</b> ' + clientNames;
+                clientWarning.innerHTML = 'Ã¢Å“â€¦ <b>' + data.active_client_count + ' cliente(s) conectado(s):</b> ' + clientNames;
                 clientWarning.style.borderColor = 'var(--success)';
                 clientWarning.style.color = 'var(--success)';
                 clientWarning.style.background = 'rgba(16,185,129,0.1)';
             } else if (data.electron_installed) {
-                clientWarning.innerHTML = 'ðŸŽ¯ <b>Electron instalado pero no conectado.</b><br>EjecutÃ¡: <code>cd electron && npm start</code>';
+                clientWarning.innerHTML = 'Ã°Å¸Å½Â¯ <b>Electron instalado pero no conectado.</b><br>EjecutÃƒÂ¡: <code>cd electron && npm start</code>';
                 clientWarning.style.borderColor = 'var(--warning, #f59e0b)';
                 clientWarning.style.color = 'var(--warning, #f59e0b)';
                 clientWarning.style.background = 'rgba(245,158,11,0.1)';
             } else {
-                clientWarning.innerHTML = 'ðŸ“¦ <b>Sin clientes.</b> InstalÃ¡ Electron:<br><code>cd electron && npm install && npm start</code>';
+                clientWarning.innerHTML = 'Ã°Å¸â€œÂ¦ <b>Sin clientes.</b> InstalÃƒÂ¡ Electron:<br><code>cd electron && npm install && npm start</code>';
                 clientWarning.style.borderColor = 'var(--danger, #ef4444)';
                 clientWarning.style.color = 'var(--danger, #ef4444)';
                 clientWarning.style.background = 'rgba(239,68,68,0.1)';
             }
         } else if (!data.client_installed) {
             // Respuesta legacy (viejo cliente Rust)
-            clientWarning.innerHTML = 'âš ï¸ <b>Cliente no detectado.</b><br>' + data.instructions;
+            clientWarning.innerHTML = 'Ã¢Å¡Â Ã¯Â¸Â <b>Cliente no detectado.</b><br>' + data.instructions;
             clientWarning.style.borderColor = 'var(--danger, #ef4444)';
             clientWarning.style.color = 'var(--danger, #ef4444)';
             clientWarning.style.background = 'rgba(239,68,68,0.1)';
@@ -250,7 +250,7 @@ async function checkClient() {
         clientWarning.classList.remove('hidden');
     } catch(e) {
         // Si el endpoint falla, asumir que no hay cliente
-        clientWarning.innerHTML = 'âš ï¸ <b>No se pudo verificar el estado del cliente.</b>';
+        clientWarning.innerHTML = 'Ã¢Å¡Â Ã¯Â¸Â <b>No se pudo verificar el estado del cliente.</b>';
         clientWarning.style.borderColor = 'var(--warning, #f59e0b)';
         clientWarning.style.color = 'var(--warning, #f59e0b)';
         clientWarning.style.background = 'rgba(245,158,11,0.1)';
@@ -274,16 +274,16 @@ loginTabs.addEventListener('click', (e) => {
 document.getElementById('loginBtn').onclick = async () => {
     const username = document.getElementById('loginUser').value.trim();
     const password = document.getElementById('loginPass').value;
-    if (!username || !password) return showLoginError('Usuario y contraseña requeridos.');
+    if (!username || !password) return showLoginError('Usuario y contraseÃ±a requeridos.');
 
     try {
         const res = await apiCall('/api/auth/login', 'POST', { username, password });
         if (res.status === 'ok') {
             setAuth(res);
         } else {
-            showLoginError(res.message || 'Credenciales invÃ¡lidas.');
+            showLoginError(res.message || 'Credenciales invÃƒÂ¡lidas.');
         }
-    } catch(e) { showLoginError('Error de conexiÃ³n.'); }
+    } catch(e) { showLoginError('Error de conexiÃƒÂ³n.'); }
 };
 
 // ---- Nonce Login ----
@@ -304,7 +304,7 @@ document.getElementById('getChallengeBtn').onclick = async () => {
         } else {
             showLoginError(res.message);
         }
-    } catch(e) { showLoginError('Error de conexiÃ³n.'); }
+    } catch(e) { showLoginError('Error de conexiÃƒÂ³n.'); }
 };
 
 document.getElementById('verifyNonceBtn').onclick = async () => {
@@ -318,9 +318,9 @@ document.getElementById('verifyNonceBtn').onclick = async () => {
         if (res.status === 'ok') {
             setAuth(res);
         } else {
-            showLoginError(res.message || 'Firma invÃ¡lida.');
+            showLoginError(res.message || 'Firma invÃƒÂ¡lida.');
         }
-    } catch(e) { showLoginError('Error de conexiÃ³n.'); }
+    } catch(e) { showLoginError('Error de conexiÃƒÂ³n.'); }
 };
 
 function showLoginError(msg) {
@@ -354,7 +354,7 @@ function setAuth(res) {
 function showApp() {
     loginScreen.classList.add('hidden');
     appContainer.classList.remove('hidden');
-    userBadge.textContent = authUsername + ' ' + platformLabel + (authIsAdmin ? ' ðŸ‘‘' : '');
+    userBadge.textContent = authUsername + ' ' + platformLabel + (authIsAdmin ? ' Ã°Å¸â€˜â€˜' : '');
     if (authIsAdmin) adminPanel.classList.remove('hidden');
     if (!authHasProgramming) document.getElementById('modeProgramming').classList.add('hidden');
     if (!authHasStudy) document.getElementById('modeStudy').classList.add('hidden');
@@ -395,11 +395,11 @@ async function apiCall(endpoint, method = 'GET', body = null) {
         return JSON.parse(text);
     } catch (e) {
         if (text.length === 0) {
-            console.warn('apiCall: respuesta vacÃ­a de ' + endpoint + ' (HTTP ' + res.status + ')');
+            console.warn('apiCall: respuesta vacÃƒÂ­a de ' + endpoint + ' (HTTP ' + res.status + ')');
         } else {
             console.warn('apiCall: respuesta no-JSON de ' + endpoint + ' (HTTP ' + res.status + '):', text.substring(0, 200));
         }
-        return { status: 'error', message: 'Respuesta invÃ¡lida del servidor (HTTP ' + res.status + ')' };
+        return { status: 'error', message: 'Respuesta invÃƒÂ¡lida del servidor (HTTP ' + res.status + ')' };
     }
 }
 
@@ -410,7 +410,7 @@ document.getElementById('modeStudy').onclick = () => switchMode('study');
 function switchMode(mode) {
     document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
     document.getElementById(mode === 'study' ? 'modeStudy' : 'modeProgramming').classList.add('active');
-    document.getElementById('activeMode').textContent = mode === 'study' ? 'ðŸ“š Estudiar' : 'ðŸ’» Programar';
+    document.getElementById('activeMode').textContent = mode === 'study' ? 'Ã°Å¸â€œÅ¡ Estudiar' : 'Ã°Å¸â€™Â» Programar';
     studyProfileSection.classList.toggle('hidden', mode !== 'study');
     if (mode === 'study') {
         loadStudyProfile();
@@ -436,10 +436,10 @@ async function refreshUsersTable() {
         if (res.status !== 'ok') return;
         tbody.innerHTML = res.users.map(u => `
             <tr style="border-bottom:1px solid var(--border-color);">
-                <td style="padding:6px;">${u.username}${u.is_admin ? ' ðŸ‘‘' : ''}</td>
-                <td>${u.is_admin ? 'âœ…' : 'âŒ'}</td>
-                <td>${u.has_study_access ? 'âœ…' : 'âŒ'}</td>
-                <td>${u.has_programming_access ? 'âœ…' : 'âŒ'}</td>
+                <td style="padding:6px;">${u.username}${u.is_admin ? ' Ã°Å¸â€˜â€˜' : ''}</td>
+                <td>${u.is_admin ? 'Ã¢Å“â€¦' : 'Ã¢ÂÅ’'}</td>
+                <td>${u.has_study_access ? 'Ã¢Å“â€¦' : 'Ã¢ÂÅ’'}</td>
+                <td>${u.has_programming_access ? 'Ã¢Å“â€¦' : 'Ã¢ÂÅ’'}</td>
                 <td><button class="btn btn-warning btn-sm" onclick="editUser('${u.username}')">Editar</button></td>
             </tr>
         `).join('');
@@ -575,7 +575,7 @@ document.getElementById('saveEditUserBtn').onclick = async () => {
 
 document.getElementById('deleteUserBtn').onclick = async () => {
     const username = document.getElementById('editUsername').textContent;
-    if (!confirm('Â¿Eliminar permanentemente a ' + username + '?')) return;
+    if (!confirm('Ã‚Â¿Eliminar permanentemente a ' + username + '?')) return;
     await apiCall('/api/admin/users/' + username, 'DELETE');
     document.getElementById('adminEditUserModal').classList.add('hidden');
     await refreshUsersTable();
@@ -617,9 +617,9 @@ document.getElementById('createUserBtn').onclick = async () => {
         const createRes = await apiCall('/api/admin/users', 'POST', payload);
         if (createRes.status === 'ok') {
             if (createRes.user && createRes.user.public_key) {
-                showInfoToast('âœ… Admin ' + username + ' creado. Clave pÃºblica generada.');
+                showInfoToast('Ã¢Å“â€¦ Admin ' + username + ' creado. Clave pÃƒÂºblica generada.');
             } else {
-                showInfoToast('âœ… Admin ' + username + ' creado.');
+                showInfoToast('Ã¢Å“â€¦ Admin ' + username + ' creado.');
             }
             document.getElementById('newUsername').value = '';
             document.getElementById('newPassword').value = '';
@@ -635,7 +635,7 @@ document.getElementById('createUserBtn').onclick = async () => {
         payload.password = pwd;
         const createRes = await apiCall('/api/admin/users', 'POST', payload);
         if (createRes.status === 'ok') {
-            showInfoToast('âœ… Usuario ' + username + ' creado.');
+            showInfoToast('Ã¢Å“â€¦ Usuario ' + username + ' creado.');
             document.getElementById('newUsername').value = '';
             document.getElementById('newPassword').value = '';
             document.getElementById('newPasswordConfirm').value = '';
@@ -662,7 +662,7 @@ document.getElementById('generateKeysBtn').onclick = async () => {
     const res = await apiCall('/api/auth/keygen');
     if (res.status === 'ok') {
         document.getElementById('newPublicKey').value = res.public_key;
-        alert('âš ï¸ GUARDA ESTA CLAVE PRIVADA. ES LA ÃšNICA VEZ QUE LA VERÃS:\n\n' + res.private_key);
+        alert('Ã¢Å¡Â Ã¯Â¸Â GUARDA ESTA CLAVE PRIVADA. ES LA ÃƒÅ¡NICA VEZ QUE LA VERÃƒÂS:\n\n' + res.private_key);
     }
 };
 
@@ -678,9 +678,9 @@ document.getElementById('pemFileInput').onchange = async (e) => {
     const pubMatch = text.match(/-----BEGIN PUBLIC KEY-----[\s\S]*?-----END PUBLIC KEY-----/);
     if (pubMatch) {
         document.getElementById('newPublicKey').value = pubMatch[0].replace(/-----.*?-----/g, '').replace(/\s/g, '');
-        showInfoToast('âœ… Clave pÃºblica extraÃ­da del .pem');
+        showInfoToast('Ã¢Å“â€¦ Clave pÃƒÂºblica extraÃƒÂ­da del .pem');
     } else {
-        alert('No se encontrÃ³ una clave pÃºblica en el archivo .pem');
+        alert('No se encontrÃƒÂ³ una clave pÃƒÂºblica en el archivo .pem');
     }
 };
 
@@ -718,12 +718,12 @@ document.getElementById('forkBtn').onclick = async () => {
         const res = await apiCall('/api/projects/fork', 'POST', { repo_url: url });
         if (res.status === 'ok') {
             document.getElementById('repoUrl').value = '';
-            showInfoToast('âœ… Repo forkeado: ' + res.name);
+            showInfoToast('Ã¢Å“â€¦ Repo forkeado: ' + res.name);
             await loadProjects();
         } else {
             alert('Error: ' + (res.message || 'No se pudo forkear.'));
         }
-    } catch(e) { alert('Error de conexiÃ³n.'); }
+    } catch(e) { alert('Error de conexiÃƒÂ³n.'); }
     btn.disabled = false;
     btn.textContent = 'Fork & Clone';
 };
@@ -740,12 +740,12 @@ document.getElementById('addLocalBtn').onclick = async () => {
         if (res.status === 'ok') {
             document.getElementById('localProjName').value = '';
             document.getElementById('localProjPath').value = '';
-            showInfoToast('âœ… Proyecto local agregado: ' + name);
+            showInfoToast('Ã¢Å“â€¦ Proyecto local agregado: ' + name);
             await loadProjects();
         } else {
             alert('Error: ' + (res.message || 'No se pudo agregar el proyecto.'));
         }
-    } catch(e) { alert('Error de conexiÃ³n al agregar proyecto.'); }
+    } catch(e) { alert('Error de conexiÃƒÂ³n al agregar proyecto.'); }
     btn.disabled = false;
     btn.textContent = 'Agregar Carpeta';
 };
@@ -776,18 +776,18 @@ document.getElementById('savePromptsBtn').onclick = async () => {
         await apiCall('/api/prompts/local', 'POST', { project_name: activeProject, content: localContent });
     }
     if (globalRes.status === 'ok') {
-        showInfoToast('âœ… Prompts guardados.');
+        showInfoToast('Ã¢Å“â€¦ Prompts guardados.');
     } else {
         alert('Error al guardar prompt global: ' + (globalRes.message || ''));
     }
 };
 
 document.getElementById('resetPromptBtn').onclick = async () => {
-    if (!confirm('Â¿Restaurar el prompt global al valor por defecto?')) return;
+    if (!confirm('Ã‚Â¿Restaurar el prompt global al valor por defecto?')) return;
     const res = await apiCall('/api/prompts/global/reset', 'POST');
     if (res.status === 'ok') {
         document.getElementById('globalPrompt').value = res.content || '';
-        showInfoToast('ðŸ”„ Prompt global restaurado.');
+        showInfoToast('Ã°Å¸â€â€ž Prompt global restaurado.');
     } else {
         alert('Error: ' + (res.message || 'No se pudo restaurar.'));
     }
@@ -807,7 +807,7 @@ async function loadStudyProfile() {
             document.getElementById('profileHobbies').value = (p.hobbies || []).join(', ');
             document.getElementById('profileNeuro').value = (p.neurological_conditions || []).join(', ');
 
-            const phaseMap = { 'NotStarted': 'No iniciado', 'Exploration': 'ðŸ” ExploraciÃ³n', 'Exploitation': 'ðŸŽ¯ ExplotaciÃ³n' };
+            const phaseMap = { 'NotStarted': 'No iniciado', 'Exploration': 'Ã°Å¸â€Â ExploraciÃƒÂ³n', 'Exploitation': 'Ã°Å¸Å½Â¯ ExplotaciÃƒÂ³n' };
             const phaseEl = document.getElementById('studyPhase');
             phaseEl.innerHTML = '<b>Fase:</b> ' + (phaseMap[p.phase] || p.phase || 'No definida');
 
@@ -832,15 +832,15 @@ document.getElementById('saveProfileBtn').onclick = async () => {
             neurological_conditions: neuro,
         });
         if (res.status === 'ok') {
-            showInfoToast('âœ… Perfil guardado.');
+            showInfoToast('Ã¢Å“â€¦ Perfil guardado.');
         }
     } catch(e) {
-        alert('Error de conexiÃ³n al guardar perfil.');
+        alert('Error de conexiÃƒÂ³n al guardar perfil.');
     }
 };
 
 // ============================================================================
-// CHAT HISTORY â€” con deduplicaciÃ³n y etiqueta de usuario para admin
+// CHAT HISTORY Ã¢â‚¬â€ con deduplicaciÃƒÂ³n y etiqueta de usuario para admin
 // ============================================================================
 
 async function loadChatHistory() {
@@ -1008,7 +1008,7 @@ async function sendMessageToAgent(text, mode) {
 
 function startAgentMonitoring() {
     if (agentMonitorInterval) clearInterval(agentMonitorInterval);
-    updateConsoleStatus('ðŸ” Agente iniciando...');
+    updateConsoleStatus('Ã°Å¸â€Â Agente iniciando...');
 
     agentMonitorInterval = setInterval(async () => {
         try {
@@ -1036,7 +1036,7 @@ function startAgentMonitoring() {
                     if (!window._shownInfoMsgs.has(msg)) {
                         window._shownInfoMsgs.add(msg);
                         if (msg.startsWith('[NOTIF] ')) {
-                            addMessage('agent', 'â„¹ï¸ ' + msg.slice(8), 'info-msg');
+                            addMessage('agent', 'Ã¢â€žÂ¹Ã¯Â¸Â ' + msg.slice(8), 'info-msg');
                         } else {
                             addMessage('agent', msg);
                         }
@@ -1059,16 +1059,16 @@ function startAgentMonitoring() {
                 clearInterval(agentMonitorInterval);
                 agentMonitorInterval = null;
                 if (res.final_message) {
-                    addMessage('agent', 'âœ… ' + res.final_message, 'final-msg');
+                    addMessage('agent', 'Ã¢Å“â€¦ ' + res.final_message, 'final-msg');
                 }
                 loadChatHistory();
-                updateConsoleStatus('âœ… Agente finalizado.');
+                updateConsoleStatus('Ã¢Å“â€¦ Agente finalizado.');
                 const ib = document.getElementById('interruptBtn');
                 if (ib) ib.classList.add('hidden');
             }
 
             if (res.interrupted) {
-                updateConsoleStatus('âš ï¸ Agente interrumpido.');
+                updateConsoleStatus('Ã¢Å¡Â Ã¯Â¸Â Agente interrumpido.');
                 const ib = document.getElementById('interruptBtn');
                 if (ib) ib.classList.add('hidden');
             }
@@ -1080,7 +1080,7 @@ function startAgentMonitoring() {
 document.getElementById('interruptBtn').onclick = async () => {
     const res = await apiCall('/api/agent/interrupt', 'POST');
     if (res.status === 'ok') {
-        showInfoToast('â¸ï¸ Agente interrumpido.');
+        showInfoToast('Ã¢ÂÂ¸Ã¯Â¸Â Agente interrumpido.');
     }
 };
 
@@ -1170,7 +1170,7 @@ function showInfoToast(msg) {
 }
 
 // ============================================================================
-// CONSOLE DE AUDITORÃA
+// CONSOLE DE AUDITORÃƒÂA
 // ============================================================================
 
 function renderConsoleSteps(steps) {
@@ -1179,7 +1179,7 @@ function renderConsoleSteps(steps) {
     if (!steps || steps.length === 0) {
         const emptyEl = consoleArea.querySelector('.console-empty');
         if (emptyEl && window._agentRunning) {
-            emptyEl.textContent = 'ðŸ” Agente ejecutÃ¡ndose, esperando primer paso...';
+            emptyEl.textContent = 'Ã°Å¸â€Â Agente ejecutÃƒÂ¡ndose, esperando primer paso...';
             emptyEl.className = 'console-step';
         }
         return;
@@ -1192,10 +1192,10 @@ function renderConsoleSteps(steps) {
 
     let html = '';
     steps.forEach((step, i) => {
-        const icon = step.step_type === 'thinking' ? 'ðŸ§ ' :
-                     step.step_type === 'tool_call' ? 'ðŸ”§' :
-                     step.step_type === 'tool_result' ? 'ðŸ“‹' :
-                     step.step_type === 'info' ? 'â„¹ï¸' : 'ðŸ“Œ';
+        const icon = step.step_type === 'thinking' ? 'Ã°Å¸Â§Â ' :
+                     step.step_type === 'tool_call' ? 'Ã°Å¸â€Â§' :
+                     step.step_type === 'tool_result' ? 'Ã°Å¸â€œâ€¹' :
+                     step.step_type === 'info' ? 'Ã¢â€žÂ¹Ã¯Â¸Â' : 'Ã°Å¸â€œÅ’';
         html += '<div class="console-step"><span class="console-step-icon">' + icon + '</span><span class="console-step-title">#' + (i + 1) + ' ' + step.title + '</span></div>';
     });
     consoleArea.innerHTML = html;
@@ -1212,7 +1212,7 @@ function updateConsoleThinking(thinking) {
         consoleArea.appendChild(thinkDiv);
     }
     const short = thinking.length > 500 ? '...' + thinking.slice(-500) : thinking;
-    thinkDiv.textContent = 'ðŸ§  Thinking: ' + short;
+    thinkDiv.textContent = 'Ã°Å¸Â§Â  Thinking: ' + short;
     consoleArea.scrollTop = consoleArea.scrollHeight;
 }
 
@@ -1254,7 +1254,7 @@ function initMobileNav() {
     hamburgerBtn.onclick = openSidebar;
     overlay.onclick = closeSidebar;
 
-    // Solo cerrar sidebar automáticamente en mobile (≤768px).
+    // Solo cerrar sidebar automÃ¡ticamente en mobile (â‰¤768px).
     // En desktop/Electron, el sidebar debe quedarse abierto.
     sidebar.addEventListener('click', (e) => {
         if (!isMobile()) return;
@@ -1266,16 +1266,13 @@ function initMobileNav() {
         }
     });
 
-    // Si se redimensiona a desktop, asegurar que el sidebar esté visible
+    // Si se redimensiona a desktop, asegurar que el sidebar estÃ© visible
     window.addEventListener('resize', () => {
         if (!isMobile()) {
             sidebar.style.transform = '';
             overlay.classList.add('hidden');
             overlay.style.display = 'none';
             document.body.style.overflow = '';
-        }
-    });
-}
         }
     });
 }
