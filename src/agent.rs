@@ -6,7 +6,6 @@ use crate::state::AppState;
 use crate::validator::validate_file_after_write;
 use crate::scraper::{perform_search, scraper_clean_tags};
 use crate::sub_agent;
-use crate::client_protocol::{ClientAction, ClientRequest, ClientResponse};
 use std::fs;
 use std::path::{Path, PathBuf};
 use base64::{engine::general_purpose, Engine as _};
@@ -49,6 +48,7 @@ fn extract_text_from_docx(path: &std::path::Path) -> Result<String, String> {
 // ============================================================================
 // Permite que clientes conectados (Electron en PC, Capacitor en Android)
 // ejecuten comandos localmente en lugar de en el servidor.
+use crate::client_protocol::{ClientAction, ClientRequest, ClientResponse};
 
 /// Intenta delegar un comando al cliente conectado del usuario.
 /// Devuelve Some(resultado) si se delegÃƒÂ³ exitosamente, None si no hay cliente.
@@ -804,6 +804,10 @@ pub async fn run_agent_loop(
                         }
                     }
                     "read_file" => {
+                        // Try delegation to client first (Electron/Capacitor)
+                        if let Some(delegated) = try_delegate_to_client(&state, username, ClientAction::ReadFile, args.clone()).await {
+                            delegated
+                        } else {
                         let rel_path = args["path"].as_str().unwrap_or("");
                         let start_line_opt = args["start_line"].as_i64();
                         let end_line_opt = args["end_line"].as_i64();
@@ -853,8 +857,13 @@ pub async fn run_agent_loop(
                         } else {
                             "No hay ningÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Âºn proyecto activo seleccionado.".to_string()
                         }
+                        } // end delegation else
                     }
                     "write_file_with_commit" => {
+                        // Try delegation to client first (Electron/Capacitor)
+                        if let Some(delegated) = try_delegate_to_client(&state, username, ClientAction::WriteFile, args.clone()).await {
+                            delegated
+                        } else {
                         'write_handler: {
                         let rel_path = args["path"].as_str().unwrap_or("");
                         let commit_msg = args["commit_message"].as_str().unwrap_or("Update by Agent");
@@ -1131,8 +1140,13 @@ pub async fn run_agent_loop(
                             "No hay ningÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Âºn proyecto activo seleccionado.".to_string()
                         }
                         } // Fin de 'write_handler labeled block
+                        } // end delegation else
                     }
                     "execute_powershell" => {
+                        // Try delegation to client first (Electron/Capacitor)
+                        if let Some(delegated) = try_delegate_to_client(&state, username, ClientAction::ExecutePowerShell, args.clone()).await {
+                            delegated
+                        } else {
                         let command = args["command"].as_str().unwrap_or("");
 
                         // ========== SANITIZACIÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œN DE SEGURIDAD ==========
@@ -1251,6 +1265,7 @@ pub async fn run_agent_loop(
                             json!({"error": "No hay ningÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Âºn proyecto activo seleccionado."}).to_string()
                         }
                         } // Fin del else de bloqueo de comandos (blocked_reason)
+                        } // end delegation else
                     }
                     "search_code" => {
                         let query = args["query"].as_str().unwrap_or("");
