@@ -7,6 +7,8 @@ use std::fs;
 
 use crate::desktop::DesktopController;
 use crate::auth::{UserStore, ChallengeStore, SessionStore};
+use crate::google_auth::GoogleAuthStore;
+use crate::task_scheduler::TaskSchedulerStore;
 
 // ============================================================================
 // Proyectos y Configuración
@@ -492,6 +494,10 @@ pub struct AppState {
     pub client_responses: Arc<Mutex<HashMap<String, crate::client_protocol::ClientResponse>>>,
     /// true si este AppState sirve al puerto 80 (admin local sin auth)
     pub port_80: bool,
+    /// Google Auth Store — gestión de OAuth2 para Google APIs
+    pub google_auth: GoogleAuthStore,
+    /// Task Scheduler Store — tareas programadas
+    pub task_scheduler: TaskSchedulerStore,
 }
 
 impl AppState {
