@@ -1315,6 +1315,242 @@ function initMobileNav() {
         }
     });
 }
+// ============================================================================
+// GOOGLE INTEGRATION — OAuth2, Drive, Gmail, Docs, Sheets, Tasks
+// ============================================================================
+
+let googleConnected = false;
+let googlePendingAuthUrl = null;
+let googleSelectedFile = null;
+
+function initGoogle() {
+    var params = new URLSearchParams(window.location.search);
+    if (params.get('google_connected') === '1') {
+        googleConnected = true; updateGoogleUI(); showToast('Cuenta Google vinculada');
+        window.history.replaceState({}, document.title, window.location.pathname);
+    } else if (params.get('google_error')) {
+        showToast('Google error: ' + decodeURIComponent(params.get('google_error') || 'error'));
+        window.history.replaceState({}, document.title, window.location.pathname);
+    }
+    checkGoogleTokenStatus();
+    try { document.getElementById('googleConnectBtn').onclick = showGoogleConsent; } catch(e) {}
+    try { document.getElementById('googleDisconnectBtn').onclick = disconnectGoogle; } catch(e) {}
+    try { document.getElementById('googleConsentAcceptBtn').onclick = redirectToGoogle; } catch(e) {}
+    try { document.getElementById('googleConsentCancelBtn').onclick = function() { closeModal('googleConsentModal'); }; } catch(e) {}
+}
+
+async function checkGoogleTokenStatus() {
+    try {
+        var resp = await fetch('/api/google/token-status?username=' + encodeURIComponent(authUsername || 'default'));
+        var data = await resp.json();
+        if (data.status === 'ok' && data.has_token) { googleConnected = true; updateGoogleUI(); }
+    } catch (e) {}
+}
+
+function updateGoogleUI() {
+    var icon = document.getElementById('googleStatusIcon');
+    var text = document.getElementById('googleStatusText');
+    var conn = document.getElementById('googleConnectBtn');
+    var disc = document.getElementById('googleDisconnectBtn');
+    var serv = document.getElementById('googleServices');
+    if (!icon || !text) return;
+    if (googleConnected) {
+        icon.textContent = '🟢'; text.textContent = 'Conectado a Google';
+        if (conn) conn.classList.add('hidden');
+        if (disc) disc.classList.remove('hidden');
+        if (serv) serv.classList.remove('hidden');
+    } else {
+        icon.textContent = '⚪'; text.textContent = 'No conectado';
+        if (conn) conn.classList.remove('hidden');
+        if (disc) disc.classList.add('hidden');
+        if (serv) serv.classList.add('hidden');
+    }
+}
+
+async function showGoogleConsent() {
+    try {
+        var resp = await fetch('/api/google/consent-info');
+        var data = await resp.json();
+        var scopesDiv = document.getElementById('googleConsentScopes');
+        if (scopesDiv && data.scopes) {
+            scopesDiv.innerHTML = data.scopes.map(function(s) {
+                return '<div style="display:flex;align-items:center;gap:8px;padding:6px;margin-bottom:4px;background:rgba(0,0,0,0.2);border-radius:6px;">' +
+                    '<span style="font-size:20px;">' + s.icon + '</span>' +
+                    '<span style="font-size:12px;">' + s.description + '</span></div>';
+            }).join('');
+        }
+    } catch(e) {}
+    try {
+        var resp = await fetch('/api/google/auth-url', {
+            method: 'POST', headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({username:authUsername||'default'})
+        });
+        var data = await resp.json();
+        if (data.status === 'ok') { googlePendingAuthUrl = data.auth_url; openModal('googleConsentModal'); }
+        else showToast(data.message || 'Configura las credenciales Google primero');
+    } catch(e) { showToast('Error de conexion'); }
+}
+
+function redirectToGoogle() { if (googlePendingAuthUrl) window.location.href = googlePendingAuthUrl; }
+
+async function disconnectGoogle() {
+    if (!confirm('Desconectar cuenta Google?')) return;
+    await fetch('/api/google/revoke', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({username:authUsername||'default'})
+    });
+    googleConnected = false; updateGoogleUI(); showToast('Google desconectado');
+}
+
+function openGoogleModal(type) {
+    if (type === 'drive') { openModal('googleDriveModal'); loadDriveFiles(); }
+    else if (type === 'gmail') { openModal('googleGmailModal'); loadGmailInbox(); }
+    else if (type === 'docs') { openModal('googleDocsModal'); }
+    else if (type === 'tasks') { openModal('googleTasksModal'); loadTasks(); }
+}
+
+// ---- DRIVE ----
+async function loadDriveFiles(query) {
+    var div = document.getElementById('driveFileList'); if(!div) return;
+    div.innerHTML = '<div style="padding:20px;text-align:center;">Cargando...</div>';
+    try {
+        var body = {username:authUsername||'default',max_results:50};
+        if (query) body.query = query;
+        var resp = await fetch('/api/google/drive/list', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+        var data = await resp.json();
+        if (data.status!=='ok') { div.innerHTML='<div style="color:var(--danger);">Error: '+(data.message||'')+'</div>'; return; }
+        var files = data.files || [];
+        if (!files.length) { div.innerHTML='<div style="padding:20px;text-align:center;">No hay archivos.</div>'; return; }
+        div.innerHTML = files.map(function(f) {
+            var icon = f.is_folder ? '[DIR]' : (f.is_google_doc ? '[DOC]' : (f.is_google_sheet ? '[SHT]' : '[FILE]'));
+            return '<div onclick="selectDriveFile(\''+f.id+'\',\''+f.name.replace(/'/g,"\\'")+'\',\''+f.mime_type+'\')" style="cursor:pointer;padding:6px 8px;border-bottom:1px solid var(--border-color);display:flex;align-items:center;gap:8px;" onmouseover="this.style.background=\'rgba(255,255,255,0.05)\'" onmouseout="this.style.background=\'\'"><span>'+icon+'</span><span style="flex:1;">'+f.name+'</span><span style="font-size:10px;">'+f.mime_type+'</span></div>';
+        }).join('');
+    } catch(e) { div.innerHTML='<div style="color:var(--danger);">Error: '+e.message+'</div>'; }
+}
+
+function selectDriveFile(id,name,mime) {
+    googleSelectedFile = {id:id,name:name,mime:mime};
+    var el = document.getElementById('driveSelectedFile'); if(el) el.textContent = name + ' (' + mime + ')';
+    var act = document.getElementById('driveActions'); if(act) act.classList.remove('hidden');
+}
+
+function setupDriveButtons() {
+    var s=document.getElementById('driveSearchBtn'); if(s) s.onclick=function(){var q=document.getElementById('driveSearchQuery').value;loadDriveFiles(q?"name contains '"+q.replace(/'/g,"\\'")+"'":null);};
+    var la=document.getElementById('driveListAllBtn'); if(la) la.onclick=loadDriveFiles;
+    var cf=document.getElementById('driveCreateFolderBtn'); if(cf) cf.onclick=async function(){var n=prompt('Nombre:');if(!n)return;var r=await fetch('/api/google/drive/create-folder',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:authUsername||'default',folder_name:n})});var d=await r.json();showToast(d.status==='ok'?'Creada':d.message);loadDriveFiles();};
+    var up=document.getElementById('driveUploadBtn'); if(up) up.onclick=function(){var p=prompt('Ruta local:');if(!p)return;var nm=prompt('Nombre en Drive:');fetch('/api/google/drive/upload',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:authUsername||'default',local_path:p,drive_name:nm||null})}).then(function(r){return r.json();}).then(function(d){showToast(d.status==='ok'?'Subido':d.message);loadDriveFiles();});};
+    var dl=document.getElementById('driveDownloadBtn'); if(dl) dl.onclick=async function(){if(!googleSelectedFile)return;var p=prompt('Guardar como:',googleSelectedFile.name);if(!p)return;var r=await fetch('/api/google/drive/download',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:authUsername||'default',file_id:googleSelectedFile.id,save_path:p})});var d=await r.json();showToast(d.status==='ok'?d.download_path:d.message);};
+    var rn=document.getElementById('driveRenameBtn'); if(rn) rn.onclick=async function(){if(!googleSelectedFile)return;var n=prompt('Nuevo nombre:',googleSelectedFile.name);if(!n)return;var r=await fetch('/api/google/drive/rename',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:authUsername||'default',file_id:googleSelectedFile.id,new_name:n})});var d=await r.json();showToast(d.status==='ok'?'Renombrado':d.message);loadDriveFiles();};
+    var del=document.getElementById('driveDeleteBtn'); if(del) del.onclick=async function(){if(!googleSelectedFile||!confirm('Papelera: '+googleSelectedFile.name+'?'))return;var r=await fetch('/api/google/drive/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:authUsername||'default',file_id:googleSelectedFile.id})});var d=await r.json();showToast(d.status==='ok'?'Movido a papelera':d.message);loadDriveFiles();};
+    var rd=document.getElementById('driveReadBtn'); if(rd) rd.onclick=async function(){if(!googleSelectedFile)return;var r=await fetch('/api/google/drive/read-content',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:authUsername||'default',file_id:googleSelectedFile.id})});var d=await r.json();if(d.status==='ok'&&d.content){document.getElementById('driveEditContent').value=d.content;showToast('Leido: '+d.content.length+' chars');}else showToast(d.message||'');};
+    var se=document.getElementById('driveSaveEditBtn'); if(se) se.onclick=async function(){if(!googleSelectedFile)return;var c=document.getElementById('driveEditContent').value;var r=await fetch('/api/google/drive/update-content',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:authUsername||'default',file_id:googleSelectedFile.id,content:c})});var d=await r.json();showToast(d.status==='ok'?'Guardado':d.message);};
+}
+
+// ---- GMAIL ----
+async function loadGmailInbox(query) {
+    var div=document.getElementById('gmailMessageList'); if(!div) return;
+    div.innerHTML='<div style="padding:20px;text-align:center;">Cargando...</div>';
+    try {
+        var body={username:authUsername||'default',max_results:20}; if(query) body.query=query;
+        var resp=await fetch('/api/google/gmail/list',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+        var data=await resp.json();
+        if(data.status!=='ok'){div.innerHTML='<div style="color:var(--danger);">Error: '+(data.message||'')+'</div>';return;}
+        var msgs=data.messages||[];
+        if(!msgs.length){div.innerHTML='<div style="padding:20px;text-align:center;">No hay emails.</div>';return;}
+        div.innerHTML=msgs.map(function(m){return '<div style="padding:8px;border-bottom:1px solid var(--border-color);"><strong>'+(m.subject||'(sin asunto)')+'</strong> -- <span style="color:var(--text-muted);">'+m.from+'</span><div style="font-size:10px;">'+m.snippet+'</div></div>';}).join('');
+    } catch(e){div.innerHTML='<div style="color:var(--danger);">Error: '+e.message+'</div>';}
+}
+
+function setupGmailButtons() {
+    var sb=document.getElementById('gmailSearchBtn'); if(sb) sb.onclick=function(){loadGmailInbox(document.getElementById('gmailSearchQuery').value||null);};
+    var cb=document.getElementById('gmailComposeBtn'); if(cb) cb.onclick=function(){document.getElementById('gmailComposeForm').classList.remove('hidden');};
+    var cc=document.getElementById('gmailCancelComposeBtn'); if(cc) cc.onclick=function(){document.getElementById('gmailComposeForm').classList.add('hidden');};
+    var snd=document.getElementById('gmailSendBtn'); if(snd) snd.onclick=async function(){
+        var to=document.getElementById('gmailTo').value, sub=document.getElementById('gmailSubject').value, body=document.getElementById('gmailBody').value;
+        if(!to){showToast('Destinatario requerido');return;}
+        var r=await fetch('/api/google/gmail/send',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:authUsername||'default',to:to,subject:sub,body:body})});
+        var d=await r.json(); showToast(d.status==='ok'?'Email enviado':d.message);
+        if(d.status==='ok'){document.getElementById('gmailTo').value='';document.getElementById('gmailSubject').value='';document.getElementById('gmailBody').value='';document.getElementById('gmailComposeForm').classList.add('hidden');}
+    };
+}
+
+// ---- DOCS / SHEETS ----
+function setupDocsButtons() {
+    var rb=document.getElementById('docsReadBtn'); if(rb) rb.onclick=async function(){
+        var id=document.getElementById('docsDocId').value.trim(); if(!id){showToast('Ingresa un ID');return;}
+        var cd=document.getElementById('docsContent'); cd.textContent='Leyendo...';
+        var r=await fetch('/api/google/docs/read',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:authUsername||'default',document_id:id})});
+        var d=await r.json();
+        if(d.status==='ok'&&d.document){cd.textContent=d.document.full_text||'(vacio)';document.getElementById('docsEditContent').value=d.document.full_text||'';document.getElementById('docsEditForm').classList.remove('hidden');showToast(d.document.title+' ('+d.document.total_lines+' lineas)');}
+        else cd.textContent='Error: '+(d.message||'');
+    };
+    var cd=document.getElementById('docsCreateDocBtn'); if(cd) cd.onclick=async function(){var t=prompt('Titulo:');if(!t)return;var r=await fetch('/api/google/docs/create',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:authUsername||'default',title:t})});var d=await r.json();if(d.status==='ok'){document.getElementById('docsDocId').value=d.document_id;showToast('Creado: '+d.document_id);}else showToast(d.message);};
+    var cs=document.getElementById('docsCreateSheetBtn'); if(cs) cs.onclick=async function(){var t=prompt('Titulo:');if(!t)return;var r=await fetch('/api/google/sheets/create',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:authUsername||'default',title:t})});var d=await r.json();if(d.status==='ok'){document.getElementById('docsDocId').value=d.spreadsheet_id;showToast('Creada: '+d.spreadsheet_id);}else showToast(d.message);};
+    var se=document.getElementById('docsSaveEditBtn'); if(se) se.onclick=async function(){
+        var id=document.getElementById('docsDocId').value.trim(), content=document.getElementById('docsEditContent').value;
+        var mode=document.getElementById('docsEditMode').value, start=parseInt(document.getElementById('docsEditStart').value)||1, end=parseInt(document.getElementById('docsEditEnd').value)||99999;
+        if(!id){showToast('Ingresa un ID');return;}
+        var r=await fetch('/api/google/docs/edit',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:authUsername||'default',document_id:id,mode:mode,content:content,start_line:start,end_line:end})});
+        var d=await r.json(); showToast(d.status==='ok'?d.result.message:d.message);
+    };
+}
+
+// ---- TASKS ----
+async function loadTasks() {
+    var div=document.getElementById('tasksList'); if(!div) return;
+    div.innerHTML='<div style="padding:20px;text-align:center;">Cargando tareas...</div>';
+    try {
+        var r=await fetch('/api/tasks/list',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:authUsername||'default'})});
+        var d=await r.json();
+        if(d.status!=='ok'){div.innerHTML='<div style="color:var(--danger);">Error: '+(d.message||'')+'</div>';return;}
+        var tasks=d.tasks||[];
+        if(!tasks.length){div.innerHTML='<div style="padding:20px;text-align:center;">No hay tareas programadas.</div>';return;}
+        div.innerHTML=tasks.map(function(t){
+            var icon=t.status==='Active'?'ACTIVE':t.status==='Paused'?'PAUSED':t.status==='Completed'?'DONE':'FAIL';
+            return '<div style="padding:6px 8px;border-bottom:1px solid var(--border-color);display:flex;align-items:center;gap:8px;"><span>'+icon+'</span><span style="flex:1;">'+t.name+'</span><span style="font-size:10px;">'+JSON.stringify(t.frequency||'')+'</span><button onclick="deleteTask(\''+t.id+'\')" style="font-size:10px;padding:2px 6px;background:var(--danger);color:#fff;border:none;border-radius:4px;cursor:pointer;">X</button></div>';
+        }).join('');
+    } catch(e){div.innerHTML='<div style="color:var(--danger);">Error: '+e.message+'</div>';}
+}
+
+async function deleteTask(id){if(!confirm('Eliminar tarea?'))return;var r=await fetch('/api/tasks/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:authUsername||'default',task_id:id})});var d=await r.json();showToast(d.status==='ok'?'Tarea eliminada':d.message);loadTasks();}
+
+function setupTaskButtons() {
+    var nb=document.getElementById('tasksNewBtn'); if(nb) nb.onclick=function(){document.getElementById('tasksForm').classList.remove('hidden');};
+    var cb=document.getElementById('tasksCancelBtn'); if(cb) cb.onclick=function(){document.getElementById('tasksForm').classList.add('hidden');};
+    var rb=document.getElementById('tasksRefreshBtn'); if(rb) rb.onclick=loadTasks;
+    var fs=document.getElementById('taskFreq'); if(fs) fs.onchange=function(){var ci=document.getElementById('taskCron');if(ci)ci.classList.toggle('hidden',fs.value!=='cron');};
+    var sb=document.getElementById('tasksSaveBtn'); if(sb) sb.onclick=async function(){
+        var name=document.getElementById('taskName').value; if(!name){showToast('Nombre requerido');return;}
+        var desc=document.getElementById('taskDesc').value, freqVal=document.getElementById('taskFreq').value;
+        var actionType=document.getElementById('taskAction').value, actionContent=document.getElementById('taskActionContent').value;
+        var frequency={};
+        if(freqVal==='once') frequency={Once:{}};
+        else if(freqVal==='every_30_minutes') frequency={EveryMinutes:30};
+        else if(freqVal==='every_1_hours') frequency={EveryHours:1};
+        else if(freqVal==='every_6_hours') frequency={EveryHours:6};
+        else if(freqVal==='every_24_hours') frequency={EveryDays:1};
+        else if(freqVal==='cron'){var p=(document.getElementById('taskCron').value||'* * * * *').split(/\s+/);frequency={Cron:{minute:p[0]||'*',hour:p[1]||'*',day_of_month:p[2]||'*',month:p[3]||'*',day_of_week:p[4]||'*'}};}
+        var action={};
+        if(actionType==='powershell') action={PowerShell:actionContent};
+        else if(actionType==='organize_drive') action={OrganizeDrive:{source_folder_id:null,rules:[]}};
+        else if(actionType==='send_email'){var p=actionContent.split('\n');action={SendEmail:{to:p[0]||'',subject:p[1]||'',body:p.slice(2).join('\n')||''}};}
+        else if(actionType==='agent_prompt') action={AgentPrompt:actionContent};
+        var task={id:'task_'+Date.now(),name:name,description:desc,action:action,frequency:frequency,status:'Active',created_at:Math.floor(Date.now()/1000),last_run:null,next_run:Math.floor(Date.now()/1000)+60,run_count:0,max_runs:null,enabled:true,username:authUsername||'default'};
+        var r=await fetch('/api/tasks/create',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(task)});
+        var d=await r.json(); showToast(d.status==='ok'?'Tarea creada':d.message);
+        if(d.status==='ok'){document.getElementById('tasksForm').classList.add('hidden');document.getElementById('taskName').value='';loadTasks();}
+    };
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    setTimeout(function() {
+        setupDriveButtons(); setupGmailButtons(); setupDocsButtons(); setupTaskButtons();
+        ['closeDriveModalBtn','closeGmailModalBtn','closeDocsModalBtn','closeTasksModalBtn'].forEach(function(id) {
+            var btn = document.getElementById(id);
+            if (btn) btn.onclick = function() { closeModal(id.replace('close','google').replace('ModalBtn','Modal')); };
+        });
+    }, 600);
+});
 
 // ============================================================================
 // INIT
