@@ -54,6 +54,7 @@ pub struct DriveResult {
 // Google Drive API Client
 // ============================================================================
 
+#[derive(Clone)]
 pub struct GoogleDriveClient {
     auth: GoogleAuthStore,
 }
