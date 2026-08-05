@@ -1,9 +1,9 @@
-# DOCUMENTATION.md — Mapa Técnico del Proyecto IAF v3.2
+# DOCUMENTATION.md — Mapa Técnico del Proyecto IAF v3.3
 
 > **IAF (Intelligent Agent Framework)** — Framework de agente autónomo + plataforma de enseñanza en Rust + Axum.
 > Servidor HTTP doble puerto (80 auto-admin, 8080 auth), autenticación dual (password + Ed25519),
 > motor de estudio con perfilado de aprendizaje, sincronización de proyectos,
-> **Google APIs (Drive, Gmail, Docs, Sheets)**, **Task Scheduler**, **File Editor 3 modos**,
+> **Google APIs (Drive, Gmail, Docs, Sheets) con herramientas nativas del agente**, **Task Scheduler**, **File Editor 3 modos**,
 > cliente Electron (desktop) + Capacitor (Android) con ShellExecutor nativo, túnel Cloudflare.
 
 ---
@@ -12,10 +12,10 @@
 
 | Archivo | Líneas | Rol |
 |---------|--------|-----|
-| `src/main.rs` | ~3150 | Servidor HTTP doble puerto, endpoints REST (incluye Google, Tasks, FileEditor), CAPTCHA, migración de chats |
-| `src/agent.rs` | ~2523 | Bucle principal del agente, 26 herramientas, extract_text_from_docx(), soporte PDF/DOCX |
+| `src/main.rs` | ~3196 | Servidor HTTP doble puerto, endpoints REST (incluye Google, Tasks, FileEditor), CAPTCHA, migración de chats |
+| `src/agent.rs` | ~2776 | Bucle principal del agente, **32 herramientas** (incluye 6 de Google Drive), extract_text_from_docx(), soporte PDF/DOCX |
 | `src/auth.rs` | ~947 | Auth dual: contraseñas (argon2) + nonce Ed25519, permisos, WeeklySchedule, UserLimits |
-| `src/state.rs` | ~580 | AppState (con google_auth, task_scheduler), ActiveAgentStatus, CicleState, SubAgentManager |
+| `src/state.rs` | ~600 | AppState (con google_auth, **google_drive**, task_scheduler), ActiveAgentStatus, CicleState, SubAgentManager |
 | `src/study.rs` | ~973 | Motor de estudio: UserLearningProfile, UserKnowledgeBase, StudyEngine |
 | `src/sync.rs` | ~280 | Sincronización de proyectos (push/pull/conflictos) |
 | `src/client_protocol.rs` | ~180 | Protocolo cliente-servidor (ClientAction, ClientRequest, ClientResponse, ConnectedClient) |
@@ -27,7 +27,7 @@
 | `src/utils.rs` | ~72 | sanitize_filename() |
 | **`src/file_editor.rs`** | ~260 | **Editor de archivos con 3 modos: Adicion, Reemplazo, Eliminacion** |
 | **`src/google_auth.rs`** | ~340 | **Autenticación OAuth2 para Google APIs (token, refresh, estados)** |
-| **`src/google_drive.rs`** | ~670 | **API Google Drive v3 (list, create, rename, download, upload, delete)** |
+| **`src/google_drive.rs`** | ~666 | **API Google Drive v3 (list, create, rename, download, upload, delete, read_content, update_content). Draw.io soportado.** |
 | **`src/google_gmail.rs`** | ~340 | **API Gmail v1 (listar, leer, enviar, archivar, papelera)** |
 | **`src/google_docs.rs`** | ~530 | **API Google Docs v1 + Sheets v4 (leer, crear, editar con 3 modos)** |
 | **`src/task_scheduler.rs`** | ~460 | **Planificador de tareas cron-like (one-time, recurrentes, cron)** |
@@ -40,7 +40,41 @@
 
 ---
 
-## 🔑 Nuevos Módulos v3.2
+## 🔑 Novedades v3.3 — Google Drive Tools para el Agente
+
+### Herramientas del agente para Google Drive
+
+El agente ahora tiene **6 herramientas nativas** para interactuar con Google Drive (antes solo existían como endpoints REST, ahora el agente puede usarlas directamente):
+
+| Herramienta | Descripción | Requiere auth Google |
+|-------------|-------------|---------------------|
+| `google_drive_list` | Listar archivos/carpetas con query, parent_id, max_results | ✅ |
+| `google_drive_download` | Descargar archivo → DOCX/XLSX/PPTX/.drawio | ✅ |
+| `google_drive_read_content` | Leer contenido textual sin descargar (incluye XML de .drawio) | ✅ |
+| `google_drive_metadata` | Obtener metadatos (nombre, MIME, si es drawio, etc.) | ✅ |
+| `google_drive_create_folder` | Crear carpeta en Drive | ✅ |
+| `google_drive_upload` | Subir archivo local a Drive | ✅ |
+
+### Draw.io en Google Drive
+
+Los archivos `.drawio` almacenados en Google Drive son totalmente soportados:
+- `google_drive_list` los marca como `[DRAW.IO]`
+- `google_drive_download` los descarga como archivo `.drawio` (XML editable)
+- `google_drive_read_content` lee el XML directamente sin descargar
+- `google_drive_metadata` reporta `is_drawio: true`
+
+El agente puede usar `read_file` local sobre el `.drawio` descargado para ver/editar el XML.
+
+### Cambios técnicos
+
+1. **`src/google_drive.rs`**: `GoogleDriveClient` ahora deriva `Clone` para integrarse en `AppState`.
+2. **`src/state.rs`**: `AppState` tiene nuevo campo `google_drive: GoogleDriveClient`.
+3. **`src/main.rs`**: Inicializa `GoogleDriveClient` desde `GoogleAuthStore` al crear `AppState`.
+4. **`src/agent.rs`**: 6 nuevas definiciones de herramientas + 6 nuevos handlers en el dispatch.
+
+---
+
+## 🔑 Módulos v3.2
 
 ### 1. File Editor (`src/file_editor.rs`) — 3 Modos de Edición
 
@@ -73,14 +107,13 @@ Endpoints REST:
 - `GET /api/google/callback` — callback OAuth2
 - `GET /api/google/token-status` — verificar token
 - `POST /api/google/revoke` — revocar token
-- `GET/POST /api/google/credentials` — configurar/ver credenciales
 
 ### 3. Google Drive (`src/google_drive.rs`) — API Drive v3
 
 Componentes clave:
 - `DriveFile` (struct): id, name, mime_type, is_folder, is_drawio — líneas ~15-30
 - `DriveResult` (struct): success, message, files, content, download_path — líneas ~35-50
-- `GoogleDriveClient` (struct): cliente con auth — líneas ~55-60
+- `GoogleDriveClient` (struct): cliente con auth (Clone) — líneas ~55-60
 - `list_files()`: listar archivos con query — líneas ~70-120
 - `get_file_metadata()`: metadatos de archivo — líneas ~125-155
 - `download_file()`: descargar (exporta Google Docs a DOCX/XLSX) — líneas ~160-230
@@ -128,87 +161,79 @@ Componentes clave:
 - `create_document()`: crear Google Doc — líneas ~85-105
 - `edit_document()`: editar con 3 modos (Adicion/Reemplazo/Eliminacion) — líneas ~110-190
 - `GoogleSheetData` (struct): spreadsheet_id, title, values — líneas ~200-215
-- `GoogleSheetsClient` (struct): leer, escribir, crear, editar hojas — líneas ~220-230
-- `read_sheet()`: leer hoja de cálculo — líneas ~235-280
-- `write_sheet_range()`: escribir en rango — líneas ~285-320
-- `create_spreadsheet()`: crear hoja nueva — líneas ~325-350
-- `edit_sheet_lines()`: editar con 3 modos sobre filas — líneas ~355-430
+- `read_sheet()`: leer hoja de cálculo — líneas ~220-260
+- `write_sheet()`: escribir en hoja — líneas ~265-310
 
 Endpoints REST:
 - `POST /api/google/docs/read` — leer documento
 - `POST /api/google/docs/create` — crear documento
-- `POST /api/google/docs/edit` — editar (mode: adicion/reemplazo/eliminacion)
+- `POST /api/google/docs/edit` — editar documento
 - `POST /api/google/sheets/read` — leer hoja
-- `POST /api/google/sheets/write` — escribir rango
-- `POST /api/google/sheets/create` — crear hoja
-- `POST /api/google/sheets/edit` — editar con 3 modos
+- `POST /api/google/sheets/write` — escribir hoja
 
-### 6. Task Scheduler (`src/task_scheduler.rs`) — Planificador de Tareas
+### 6. Task Scheduler (`src/task_scheduler.rs`)
 
 Componentes clave:
-- `TaskFrequency` (enum): Once, EveryMinutes, EveryHours, EveryDays, Cron — líneas ~18-40
-- `TaskAction` (enum): PowerShell, OrganizeDrive, SendEmail, AgentPrompt — líneas ~43-65
-- `DriveOrganizeRule` (struct): reglas para organizar Drive — líneas ~68-80
-- `TaskStatus` (enum): Active, Paused, Completed, Failed — líneas ~83-88
-- `ScheduledTask` (struct): tarea completa con metadatos — líneas ~91-105
-- `TaskExecutionLog` (struct): registro de ejecución — líneas ~108-115
-- `TaskSchedulerStore` (struct): almacén persistente — líneas ~120-130
-- `create_task()`, `update_task()`, `delete_task()`, `list_tasks()` — líneas ~160-220
-- `get_due_tasks()`: tareas pendientes de ejecución — líneas ~240-260
-- `start_scheduler_loop()`: loop de ejecución cada 30s — líneas ~340-390
-- `execute_task()`: ejecuta la acción según el tipo — líneas ~395-460
-- Soporte cron: minute, hour, day_of_month, month, day_of_week — líneas ~290-335
+- `ScheduledTask` (struct): id, name, schedule (cron/one-time/recurring), action — líneas ~15-40
+- `TaskSchedulerStore` (struct): almacén de tareas — líneas ~45-55
+- `add_task()`: agregar tarea — líneas ~60-80
+- `list_tasks()`: listar tareas — líneas ~85-100
+- `remove_task()`: eliminar tarea — líneas ~105-120
+- `execute_due_tasks()`: ejecutar tareas pendientes — líneas ~140-200
 
 Endpoints REST:
-- `POST /api/tasks/list` — listar tareas del usuario
-- `POST /api/tasks/get` — obtener tarea por ID
-- `POST /api/tasks/create` — crear tarea (todos los tipos de acción y frecuencia)
-- `POST /api/tasks/update` — actualizar tarea
-- `POST /api/tasks/delete` — eliminar tarea
-- `POST /api/tasks/logs` — ver historial de ejecuciones
+- `POST /api/tasks/add` — agregar tarea
+- `GET /api/tasks/list` — listar tareas
+- `POST /api/tasks/remove` — eliminar tarea
+- `POST /api/tasks/run-due` — ejecutar pendientes
 
 ---
 
-## 🔄 Flujo de Google OAuth2
+## 🔧 Herramientas del Agente (32 herramientas en v3.3)
 
-1. Usuario configura client_id y client_secret desde Google Cloud Console
-2. `POST /api/google/auth-url` → devuelve URL de autorización
-3. Usuario visita la URL y autoriza
-4. Google redirige a `/api/google/callback?code=...&state=...`
-5. El servidor intercambia el código por access_token + refresh_token
-6. Tokens se guardan en `.config/google/google_tokens.json`
-7. Refresh automático cuando el token expira
+| # | Herramienta | Categoría |
+|---|-------------|-----------|
+| 1 | `search_google` | Búsqueda web |
+| 2 | `read_file` | Archivos (soporta PDF/DOCX) |
+| 3 | `write_file_with_commit` | Archivos + Git |
+| 4 | `execute_powershell` | Sistema |
+| 5 | `search_code` | Búsqueda en código |
+| 6 | `fork_and_clone_repo` | GitHub |
+| 7 | `read_url` | Web |
+| 8 | `check_github_cli` | GitHub |
+| 9 | `notificar_usuario` | Comunicación |
+| 10 | `finalizar_tarea` | Control |
+| 11 | `image_fetch` | Multimedia |
+| 12 | `image_view` | Multimedia |
+| 13 | `image_release` | Multimedia |
+| 14 | `git_resolve_divergence` | Git |
+| 15 | `analyze_images` | Multimedia (Qwen2.5-VL) |
+| 16 | `kill_process` | Sistema |
+| 17 | `fetch_tool_result` | Memoria |
+| 18 | `release_tool_result` | Memoria |
+| 19 | `spawn_sub_agent` | Sub-agentes |
+| 20 | `check_sub_agent` | Sub-agentes |
+| 21 | `kill_sub_agent` | Sub-agentes |
+| 22 | `no_sync` | Sincronización |
+| 23 | `reportar_fallo` | Sistema |
+| **24** | **`google_drive_list`** | **🆕 Google Drive** |
+| **25** | **`google_drive_download`** | **🆕 Google Drive** |
+| **26** | **`google_drive_read_content`** | **🆕 Google Drive** |
+| **27** | **`google_drive_metadata`** | **🆕 Google Drive** |
+| **28** | **`google_drive_create_folder`** | **🆕 Google Drive** |
+| **29** | **`google_drive_upload`** | **🆕 Google Drive** |
+| 30-32 | (reservadas para Google Docs/Gmail tools) | Futuro |
 
 ---
 
-## 📝 Modos de Edición (File Editor + Google Docs/Sheets/Drive)
+## 🔄 Flujo de Google Drive con el Agente
 
-Los 3 modos de edición están disponibles tanto para archivos locales como para Google Drive/Docs/Sheets:
-
-| Modo | Parámetros | Descripción |
-|------|-----------|-------------|
-| **Adicion** | start_line, content | Inserta líneas después de start_line (0=principio, N=final si N>total) |
-| **Reemplazo** | start_line, end_line, content | Reemplaza líneas en el rango [start, end] con el nuevo contenido |
-| **Eliminacion** | start_line, end_line | Elimina líneas en el rango [start, end] |
-
----
-
-## 🧪 Tests
-
-Archivos de tests actualizados:
-- `tests/exhaustive_tests.rs` (1835 líneas) — 15 módulos, 123 tests
-- `tests/integration_tests.rs` (1197 líneas) — 10 módulos
-- `tests/frontend_regression_tests.js` — Tests de regresión del frontend
-- `src/file_editor.rs` — Tests unitarios incluidos (8 tests: adicion, reemplazo, eliminacion)
-
----
-
-## 🔧 Dependencias
-
-- `reqwest` — HTTP client para Google APIs
-- `serde` / `serde_json` — Serialización
-- `uuid` — IDs para tareas y estados OAuth
-- `chrono` — Cálculo de tiempos para cron
-- `base64` — Decodificación de emails
-- `mime_guess` — Detección de MIME types
-- `urlencoding` — URL encoding para OAuth y queries
+```
+1. Admin configura credenciales Google Cloud en panel de admin
+2. Usuario vincula cuenta Google → /api/google/auth-url → OAuth2 callback
+3. Agente usa google_drive_list → ve archivos/carpetas de Drive
+4. Agente usa google_drive_read_content → lee .drawio XML sin descargar
+5. Agente usa google_drive_download → descarga archivos al proyecto local
+6. Agente usa read_file local → manipula PDF/DOCX/.drawio descargados
+7. Agente usa google_drive_upload → sube resultados de vuelta a Drive
+```
