@@ -3083,6 +3083,7 @@ async fn main() {
         }
     }
 
+    let google_auth_store = GoogleAuthStore::new(base_workspace.join(".config").join("google"));
     let state = AppState {
         config_path: config_path.clone(),
         prompts: Arc::new(Mutex::new(prompts)),
@@ -3106,7 +3107,8 @@ async fn main() {
         client_pending_requests: Arc::new(Mutex::new(HashMap::new())),
         client_responses: Arc::new(Mutex::new(HashMap::new())),
         port_80: false,
-        google_auth: GoogleAuthStore::new(base_workspace.join(".config").join("google")),
+        google_auth: google_auth_store.clone(),
+        google_drive: GoogleDriveClient::new(google_auth_store.clone()),
         task_scheduler: TaskSchedulerStore::new(base_workspace.join(".config").join("tasks")),
     };
 
