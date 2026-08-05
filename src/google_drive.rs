@@ -276,13 +276,8 @@ impl GoogleDriveClient {
                 .unwrap_or("archivo_sin_nombre")
         });
 
-        let mime = mime_type.unwrap_or_else(|| {
-            mime_guess::from_path(path)
-                .first_or_octet_stream()
-                .to_string()
-                .as_str()
-                .to_string()
-        });
+        let guessed_mime = mime_guess::from_path(path).first_or_octet_stream().essence_str().to_string();
+        let mime: &str = mime_type.unwrap_or(&guessed_mime);
 
         let content = std::fs::read(path)
             .map_err(|e| format!("Error leyendo archivo local: {}", e))?;
