@@ -298,7 +298,7 @@ fn next_cron_time(
     month: &str,
     day_of_week: &str,
 ) -> Option<u64> {
-    use chrono::{Local, Datelike, Timelike, Duration, NaiveDateTime};
+    use chrono::{Local, Datelike, Timelike, Duration};
 
     let now = Local::now();
     let mut candidate = now + Duration::minutes(1); // empezar desde el minuto siguiente
@@ -444,7 +444,7 @@ async fn execute_task(
                     if matches_rule(file, rule) {
                         match rule.action.as_str() {
                             "move" => {
-                                if let Some(ref target) = rule.target_folder_id {
+                                if let Some(ref _target) = rule.target_folder_id {
                                     // Mover archivo (actualizar parents)
                                     let _ = dc.rename_file(&task.username, &file.id, &file.name).await;
                                     organized += 1;

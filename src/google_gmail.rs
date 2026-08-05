@@ -83,7 +83,7 @@ impl GmailClient {
             .await
             .map_err(|e| format!("Error parseando: {}", e))?;
 
-        let message_list = body["messages"].as_array().unwrap_or(&vec![]);
+        let message_list = body["messages"].as_array().cloned().unwrap_or_else(|| vec![]);
         let total = body["resultSizeEstimate"].as_u64().unwrap_or(0) as usize;
 
         let mut messages = Vec::new();
@@ -134,7 +134,7 @@ impl GmailClient {
             .await
             .map_err(|e| format!("Error parseando email: {}", e))?;
 
-        let headers = body["payload"]["headers"].as_array().unwrap_or(&vec![]);
+        let headers = body["payload"]["headers"].as_array().cloned().unwrap_or_else(|| vec![]);
         let mut subject = String::new();
         let mut from = String::new();
         let mut to = String::new();
