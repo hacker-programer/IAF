@@ -2186,6 +2186,7 @@ fn build_app(state: AppState) -> Router {
         .route("/api/google/auth-url", post(google_auth_url))
         .route("/api/google/callback", get(google_callback))
         .route("/api/google/token-status", get(google_token_status))
+        .route("/api/google/consent-info", get(google_consent_info))
         .route("/api/google/revoke", post(google_revoke))
         .route("/api/google/credentials", get(google_get_credentials).post(google_set_credentials))
         // ====================================================================
@@ -2309,6 +2310,26 @@ async fn google_token_status(
     let has_token = state.google_auth.has_token(&username);
     let has_creds = state.google_auth.has_credentials();
     Json(json!({"status": "ok", "has_token": has_token, "has_credentials": has_creds})).into_response()
+}
+
+
+// ============================================================================
+// ENDPOINT: Informacion de consentimiento Google (para mostrar al usuario)
+// ============================================================================
+
+async fn google_consent_info() -> impl IntoResponse {
+    Json(json!({
+        "status": "ok",
+        "app_name": "IAF Agent",
+        "scopes": [
+            {"scope": "https://www.googleapis.com/auth/drive", "description": "Ver, crear, modificar y eliminar archivos de Google Drive", "icon": "📁"},
+            {"scope": "https://www.googleapis.com/auth/gmail.modify", "description": "Leer, enviar y organizar emails de Gmail", "icon": "📧"},
+            {"scope": "https://www.googleapis.com/auth/documents", "description": "Ver y editar documentos de Google Docs", "icon": "📝"},
+            {"scope": "https://www.googleapis.com/auth/spreadsheets", "description": "Ver y editar hojas de calculo de Google Sheets", "icon": "📊"}
+        ],
+        "redirect_uri": "/api/google/callback",
+        "auth_url_base": "https://accounts.google.com/o/oauth2/v2/auth"
+    }))
 }
 
 #[derive(Deserialize)]
