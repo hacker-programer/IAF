@@ -308,7 +308,154 @@
             </div>
         </div>
     </div>
+    </div>
 
+    <!-- ===== GOOGLE CONSENT MODAL ===== -->
+    <div id="googleConsentModal" class="modal hidden">
+        <div class="modal-content" style="max-width:500px;">
+            <h3>🔐 Google solicita acceso</h3>
+            <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px;">
+                La aplicación <strong>IAF Agent</strong> requiere permiso para:
+            </p>
+            <div id="googleConsentScopes" style="margin-bottom:16px;"></div>
+            <p style="font-size:11px;color:var(--warning);margin-bottom:12px;">
+                ⚠️ Se abrirá la ventana de Google para que autorices. 
+                Solo vos podés conceder estos permisos.
+            </p>
+            <div class="btn-group">
+                <button id="googleConsentAcceptBtn" class="btn btn-success">🔑 Ir a Google para Autorizar</button>
+                <button id="googleConsentCancelBtn" class="btn btn-danger">Cancelar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== GOOGLE DRIVE MODAL ===== -->
+    <div id="googleDriveModal" class="modal hidden">
+        <div class="modal-content" style="max-width:700px;max-height:80vh;overflow-y:auto;">
+            <h3>📁 Google Drive</h3>
+            <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;">
+                <input type="text" id="driveSearchQuery" placeholder="Buscar archivos..." style="flex:1;min-width:150px;padding:8px;background:rgba(0,0,0,0.2);border:1px solid var(--border-color);border-radius:6px;color:var(--text-color);">
+                <button id="driveSearchBtn" class="btn btn-primary btn-sm">🔍 Buscar</button>
+                <button id="driveListAllBtn" class="btn btn-secondary btn-sm">📋 Listar Todo</button>
+                <button id="driveCreateFolderBtn" class="btn btn-secondary btn-sm">📁 Nueva Carpeta</button>
+                <button id="driveUploadBtn" class="btn btn-warning btn-sm">⬆️ Subir</button>
+            </div>
+            <div id="driveFileList" style="max-height:300px;overflow-y:auto;font-size:12px;"></div>
+            <div id="driveActions" class="hidden" style="margin-top:12px;padding:8px;background:rgba(0,0,0,0.2);border-radius:8px;">
+                <strong style="font-size:12px;">Archivo seleccionado: <span id="driveSelectedFile"></span></strong>
+                <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;">
+                    <button id="driveDownloadBtn" class="btn btn-primary btn-sm">⬇️ Descargar</button>
+                    <button id="driveRenameBtn" class="btn btn-secondary btn-sm">✏️ Renombrar</button>
+                    <button id="driveDeleteBtn" class="btn btn-danger btn-sm">🗑️ Papelera</button>
+                    <button id="driveReadBtn" class="btn btn-secondary btn-sm">📖 Leer Contenido</button>
+                </div>
+                <div style="margin-top:8px;">
+                    <textarea id="driveEditContent" rows="6" placeholder="Contenido para editar..." style="width:100%;background:rgba(0,0,0,0.2);border:1px solid var(--border-color);border-radius:6px;color:var(--text-color);padding:8px;"></textarea>
+                    <div style="display:flex;gap:6px;margin-top:4px;align-items:center;">
+                        <select id="driveEditMode" style="padding:6px;background:rgba(0,0,0,0.3);border:1px solid var(--border-color);border-radius:6px;color:var(--text-color);">
+                            <option value="reemplazo">Reemplazo (todo)</option>
+                            <option value="adicion">Adicion (al final)</option>
+                            <option value="eliminacion">Eliminacion (lineas)</option>
+                        </select>
+                        <input type="number" id="driveEditStart" placeholder="Linea inicio" value="1" style="width:80px;padding:6px;background:rgba(0,0,0,0.2);border:1px solid var(--border-color);border-radius:6px;color:var(--text-color);">
+                        <input type="number" id="driveEditEnd" placeholder="Linea fin" style="width:80px;padding:6px;background:rgba(0,0,0,0.2);border:1px solid var(--border-color);border-radius:6px;color:var(--text-color);">
+                        <button id="driveSaveEditBtn" class="btn btn-success btn-sm">💾 Guardar Cambios</button>
+                    </div>
+                </div>
+            </div>
+            <button id="closeDriveModalBtn" class="btn btn-secondary" style="margin-top:12px;">Cerrar</button>
+        </div>
+    </div>
+
+    <!-- ===== GMAIL MODAL ===== -->
+    <div id="googleGmailModal" class="modal hidden">
+        <div class="modal-content" style="max-width:700px;max-height:80vh;overflow-y:auto;">
+            <h3>📧 Gmail</h3>
+            <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;">
+                <input type="text" id="gmailSearchQuery" placeholder="Buscar emails (ej: from:juan subject:factura)..." style="flex:1;min-width:200px;padding:8px;background:rgba(0,0,0,0.2);border:1px solid var(--border-color);border-radius:6px;color:var(--text-color);">
+                <button id="gmailSearchBtn" class="btn btn-primary btn-sm">🔍 Buscar</button>
+                <button id="gmailComposeBtn" class="btn btn-warning btn-sm">✉️ Redactar</button>
+            </div>
+            <div id="gmailMessageList" style="max-height:300px;overflow-y:auto;font-size:12px;"></div>
+            <div id="gmailComposeForm" class="hidden" style="margin-top:12px;padding:12px;background:rgba(0,0,0,0.2);border-radius:8px;">
+                <input type="text" id="gmailTo" placeholder="Para: correo@ejemplo.com" style="width:100%;padding:8px;margin-bottom:6px;background:rgba(0,0,0,0.2);border:1px solid var(--border-color);border-radius:6px;color:var(--text-color);">
+                <input type="text" id="gmailSubject" placeholder="Asunto" style="width:100%;padding:8px;margin-bottom:6px;background:rgba(0,0,0,0.2);border:1px solid var(--border-color);border-radius:6px;color:var(--text-color);">
+                <textarea id="gmailBody" rows="6" placeholder="Escribe tu mensaje..." style="width:100%;background:rgba(0,0,0,0.2);border:1px solid var(--border-color);border-radius:6px;color:var(--text-color);padding:8px;"></textarea>
+                <button id="gmailSendBtn" class="btn btn-success btn-sm" style="margin-top:6px;">📨 Enviar</button>
+                <button id="gmailCancelComposeBtn" class="btn btn-secondary btn-sm" style="margin-top:6px;">Cancelar</button>
+            </div>
+            <button id="closeGmailModalBtn" class="btn btn-secondary" style="margin-top:12px;">Cerrar</button>
+        </div>
+    </div>
+
+    <!-- ===== GOOGLE DOCS/SHEETS MODAL ===== -->
+    <div id="googleDocsModal" class="modal hidden">
+        <div class="modal-content" style="max-width:700px;max-height:80vh;overflow-y:auto;">
+            <h3>📝 Google Docs / Sheets</h3>
+            <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;">
+                <button id="docsCreateDocBtn" class="btn btn-primary btn-sm">📄 Nuevo Documento</button>
+                <button id="docsCreateSheetBtn" class="btn btn-secondary btn-sm">📊 Nueva Hoja</button>
+            </div>
+            <div style="display:flex;gap:8px;margin-bottom:12px;">
+                <input type="text" id="docsDocId" placeholder="ID del documento/spreadsheet..." style="flex:1;padding:8px;background:rgba(0,0,0,0.2);border:1px solid var(--border-color);border-radius:6px;color:var(--text-color);">
+                <button id="docsReadBtn" class="btn btn-primary btn-sm">📖 Leer</button>
+            </div>
+            <div id="docsContent" style="max-height:300px;overflow-y:auto;font-size:12px;background:rgba(0,0,0,0.2);padding:12px;border-radius:8px;white-space:pre-wrap;font-family:monospace;"></div>
+            <div id="docsEditForm" class="hidden" style="margin-top:12px;">
+                <textarea id="docsEditContent" rows="8" placeholder="Contenido para editar..." style="width:100%;background:rgba(0,0,0,0.2);border:1px solid var(--border-color);border-radius:6px;color:var(--text-color);padding:8px;font-family:monospace;"></textarea>
+                <div style="display:flex;gap:6px;margin-top:4px;align-items:center;">
+                    <select id="docsEditMode" style="padding:6px;background:rgba(0,0,0,0.3);border:1px solid var(--border-color);border-radius:6px;color:var(--text-color);">
+                        <option value="reemplazo">Reemplazo</option>
+                        <option value="adicion">Adicion</option>
+                        <option value="eliminacion">Eliminacion</option>
+                    </select>
+                    <input type="number" id="docsEditStart" value="1" style="width:80px;padding:6px;background:rgba(0,0,0,0.2);border:1px solid var(--border-color);border-radius:6px;color:var(--text-color);">
+                    <input type="number" id="docsEditEnd" style="width:80px;padding:6px;background:rgba(0,0,0,0.2);border:1px solid var(--border-color);border-radius:6px;color:var(--text-color);">
+                    <button id="docsSaveEditBtn" class="btn btn-success btn-sm">💾 Guardar</button>
+                </div>
+            </div>
+            <button id="closeDocsModalBtn" class="btn btn-secondary" style="margin-top:12px;">Cerrar</button>
+        </div>
+    </div>
+
+    <!-- ===== TASKS MODAL ===== -->
+    <div id="googleTasksModal" class="modal hidden">
+        <div class="modal-content" style="max-width:650px;max-height:80vh;overflow-y:auto;">
+            <h3>⏰ Tareas Programadas</h3>
+            <div style="display:flex;gap:8px;margin-bottom:12px;">
+                <button id="tasksNewBtn" class="btn btn-primary btn-sm">➕ Nueva Tarea</button>
+                <button id="tasksRefreshBtn" class="btn btn-secondary btn-sm">🔄 Refrescar</button>
+            </div>
+            <div id="tasksList" style="max-height:250px;overflow-y:auto;font-size:12px;"></div>
+            <div id="tasksForm" class="hidden" style="margin-top:12px;padding:12px;background:rgba(0,0,0,0.2);border-radius:8px;">
+                <input type="text" id="taskName" placeholder="Nombre de la tarea" style="width:100%;padding:8px;margin-bottom:6px;background:rgba(0,0,0,0.2);border:1px solid var(--border-color);border-radius:6px;color:var(--text-color);">
+                <input type="text" id="taskDesc" placeholder="Descripcion" style="width:100%;padding:8px;margin-bottom:6px;background:rgba(0,0,0,0.2);border:1px solid var(--border-color);border-radius:6px;color:var(--text-color);">
+                <div style="display:flex;gap:6px;margin-bottom:6px;">
+                    <select id="taskFreq" style="flex:1;padding:6px;background:rgba(0,0,0,0.3);border:1px solid var(--border-color);border-radius:6px;color:var(--text-color);">
+                        <option value="once">Una vez</option>
+                        <option value="every_30_minutes">Cada 30 min</option>
+                        <option value="every_1_hours">Cada 1 hora</option>
+                        <option value="every_6_hours">Cada 6 horas</option>
+                        <option value="every_24_hours">Cada 24 horas</option>
+                        <option value="cron">Cron personalizado</option>
+                    </select>
+                    <input type="text" id="taskCron" placeholder="*/5 * * * *" style="flex:1;padding:6px;background:rgba(0,0,0,0.2);border:1px solid var(--border-color);border-radius:6px;color:var(--text-color);" class="hidden">
+                </div>
+                <select id="taskAction" style="width:100%;padding:6px;margin-bottom:6px;background:rgba(0,0,0,0.3);border:1px solid var(--border-color);border-radius:6px;color:var(--text-color);">
+                    <option value="powershell">PowerShell</option>
+                    <option value="organize_drive">Organizar Drive</option>
+                    <option value="send_email">Enviar Email</option>
+                    <option value="agent_prompt">Prompt del Agente</option>
+                </select>
+                <textarea id="taskActionContent" rows="4" placeholder="Comando PowerShell / Prompt..." style="width:100%;background:rgba(0,0,0,0.2);border:1px solid var(--border-color);border-radius:6px;color:var(--text-color);padding:8px;"></textarea>
+                <button id="tasksSaveBtn" class="btn btn-success btn-sm" style="margin-top:6px;">💾 Guardar Tarea</button>
+                <button id="tasksCancelBtn" class="btn btn-secondary btn-sm" style="margin-top:6px;">Cancelar</button>
+            </div>
+            <button id="closeTasksModalBtn" class="btn btn-secondary" style="margin-top:12px;">Cerrar</button>
+        </div>
+    </div>
+
+    <!-- Modals (CAPTCHA, Refine, Plan) -->
     <!-- Modals (CAPTCHA, Refine, Plan) — NOTA: agentQuestionModal eliminado, ahora es banner inline -->
     <div id="captchaModal" class="modal hidden">
         <div class="modal-content"><h3>Resolver CAPTCHA</h3><p>Abrí la página, resolvé el CAPTCHA y pegá el resultado:</p>
