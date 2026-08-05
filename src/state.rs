@@ -8,6 +8,7 @@ use std::fs;
 use crate::desktop::DesktopController;
 use crate::auth::{UserStore, ChallengeStore, SessionStore};
 use crate::google_auth::GoogleAuthStore;
+use crate::google_drive::GoogleDriveClient;
 use crate::task_scheduler::TaskSchedulerStore;
 
 // ============================================================================
@@ -496,6 +497,8 @@ pub struct AppState {
     pub port_80: bool,
     /// Google Auth Store — gestión de OAuth2 para Google APIs
     pub google_auth: GoogleAuthStore,
+    /// Google Drive Client — API Google Drive v3
+    pub google_drive: GoogleDriveClient,
     /// Task Scheduler Store — tareas programadas
     pub task_scheduler: TaskSchedulerStore,
 }
