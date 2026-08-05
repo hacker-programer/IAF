@@ -2270,12 +2270,33 @@ async fn google_callback(
 ) -> impl IntoResponse {
     let code = params.get("code").cloned().unwrap_or_default();
     let oauth_state = params.get("state").cloned().unwrap_or_default();
+    
+    // Siempre redirigir al frontend, con éxito o error en el fragmento
+    let redirect_base = if state.port_80 {
+        "http://localhost:80".to_string()
+    } else {
+        "http://localhost:8080".to_string()
+    };
+
     if code.is_empty() {
-        return (StatusCode::BAD_REQUEST, Json(json!({"status": "error", "message": "Falta el codigo de autorizacion."}))).into_response();
+        return axum::response::Redirect::to(
+            &format!("{}/?google_error=missing_code", redirect_base)
+        ).into_response();
     }
+
     match state.google_auth.exchange_code(&code, &oauth_state).await {
-        Ok(token) => Json(json!({"status": "ok", "message": "Cuenta Google vinculada exitosamente.", "scope": token.scope})).into_response(),
-        Err(e) => (StatusCode::BAD_REQUEST, Json(json!({"status": "error", "message": e}))).into_response(),
+        Ok(token) => {
+            let scopes = token.scope.replace(' ', ",");
+            axum::response::Redirect::to(
+                &format!("{}/?google_connected=1&scopes={}", redirect_base, scopes)
+            ).into_response()
+        }
+        Err(e) => {
+            let encoded = urlencoding::encode(&e);
+            axum::response::Redirect::to(
+                &format!("{}/?google_error={}", redirect_base, encoded)
+            ).into_response()
+        }
     }
 }
 
