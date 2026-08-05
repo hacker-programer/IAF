@@ -127,8 +127,30 @@
                     <button onclick="downloadScript('generate_keys')" class="btn btn-secondary btn-sm" style="width:100%;margin-bottom:4px;font-size:11px;">📥 generate_keys.ps1</button>
                     <button onclick="downloadScript('sign_nonce')" class="btn btn-secondary btn-sm" style="width:100%;font-size:11px;">📥 sign_nonce.ps1</button>
                 </div>
+            <!-- ===== GOOGLE INTEGRATION ===== -->
+            <section id="googleSection" class="section">
+                <h3>🔗 Google</h3>
+                <div id="googleStatus" style="font-size:11px;margin-bottom:8px;padding:6px;border-radius:6px;background:rgba(0,0,0,0.2);">
+                    <span id="googleStatusIcon">⚪</span> 
+                    <span id="googleStatusText">No conectado</span>
+                </div>
+                <button id="googleConnectBtn" class="btn btn-primary" style="width:100%;margin-bottom:4px;">
+                    🔑 Conectar con Google
+                </button>
+                <button id="googleDisconnectBtn" class="btn btn-danger btn-sm hidden" style="width:100%;margin-bottom:8px;">
+                    ❌ Desconectar
+                </button>
+                <div id="googleServices" class="hidden" style="margin-top:8px;">
+                    <button onclick="openGoogleModal('drive')" class="btn btn-secondary btn-sm" style="width:100%;margin-bottom:3px;">📁 Google Drive</button>
+                    <button onclick="openGoogleModal('gmail')" class="btn btn-secondary btn-sm" style="width:100%;margin-bottom:3px;">📧 Gmail</button>
+                    <button onclick="openGoogleModal('docs')" class="btn btn-secondary btn-sm" style="width:100%;margin-bottom:3px;">📝 Docs / Sheets</button>
+                    <button onclick="openGoogleModal('tasks')" class="btn btn-secondary btn-sm" style="width:100%;">⏰ Tareas Programadas</button>
+                </div>
             </section>
 
+            <div style="margin-top:auto;padding:12px;">
+                <button id="logoutBtn" class="btn btn-danger" style="width:100%">Cerrar Sesión</button>
+            </div>
             <div style="margin-top:auto;padding:12px;">
                 <button id="logoutBtn" class="btn btn-danger" style="width:100%">Cerrar Sesión</button>
             </div>
