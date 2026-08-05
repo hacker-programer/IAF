@@ -1,9 +1,10 @@
-# DOCUMENTATION.md — Mapa Técnico del Proyecto IAF v3.1
+# DOCUMENTATION.md — Mapa Técnico del Proyecto IAF v3.2
 
 > **IAF (Intelligent Agent Framework)** — Framework de agente autónomo + plataforma de enseñanza en Rust + Axum.
 > Servidor HTTP doble puerto (80 auto-admin, 8080 auth), autenticación dual (password + Ed25519),
 > motor de estudio con perfilado de aprendizaje, sincronización de proyectos,
-> cliente Electron (desktop) + Capacitor (Android) con ShellExecutor nativo, túnel Cloudflare para acceso remoto seguro.
+> **Google APIs (Drive, Gmail, Docs, Sheets)**, **Task Scheduler**, **File Editor 3 modos**,
+> cliente Electron (desktop) + Capacitor (Android) con ShellExecutor nativo, túnel Cloudflare.
 
 ---
 
@@ -11,322 +12,203 @@
 
 | Archivo | Líneas | Rol |
 |---------|--------|-----|
-| `src/main.rs` | ~2300 | Servidor HTTP doble puerto, endpoints REST, CAPTCHA, migración de chats, `clean_old_chat_files()`, deduplicación, `sanitize_filename()`, `migrate_chats()`, `client_check()` v3.1 |
-| `src/agent.rs` | ~2418 | Bucle principal del agente, 26 herramientas, extract_text_from_docx(), soporte PDF/DOCX |
+| `src/main.rs` | ~3150 | Servidor HTTP doble puerto, endpoints REST (incluye Google, Tasks, FileEditor), CAPTCHA, migración de chats |
+| `src/agent.rs` | ~2523 | Bucle principal del agente, 26 herramientas, extract_text_from_docx(), soporte PDF/DOCX |
 | `src/auth.rs` | ~947 | Auth dual: contraseñas (argon2) + nonce Ed25519, permisos, WeeklySchedule, UserLimits |
-| `src/state.rs` | ~580 | AppState (con `connected_clients` HashMap), ActiveAgentStatus, CicleState/CiclePhase, CaptchaRequest, ToolResultStore, SubAgentManager |
-| `src/study.rs` | ~973 | Motor de estudio: UserLearningProfile, UserKnowledgeBase, StudyEngine, `build_study_system_prompt()` |
+| `src/state.rs` | ~580 | AppState (con google_auth, task_scheduler), ActiveAgentStatus, CicleState, SubAgentManager |
+| `src/study.rs` | ~973 | Motor de estudio: UserLearningProfile, UserKnowledgeBase, StudyEngine |
 | `src/sync.rs` | ~280 | Sincronización de proyectos (push/pull/conflictos) |
 | `src/client_protocol.rs` | ~180 | Protocolo cliente-servidor (ClientAction, ClientRequest, ClientResponse, ConnectedClient) |
 | `src/validator.rs` | ~508 | Validación post-escritura (líneas duplicadas, delimitadores, errores Rust) |
 | `src/scraper.rs` | ~170 | Búsqueda web DuckDuckGo Lite |
 | `src/sub_agent.rs` | ~520 | Sub-agentes paralelos (máx 8, permisos por Patrón Composite) |
 | `src/desktop.rs` | ~165 | Control de mouse/teclado (rdev) |
-| `src/lib.rs` | ~12 | Librería pública + `pub const STUDY_SYSTEM_PROMPT` |
+| `src/lib.rs` | ~22 | Librería pública + `pub const STUDY_SYSTEM_PROMPT` |
 | `src/utils.rs` | ~72 | sanitize_filename() |
-| `electron/main.js` | ~350 | Cliente Electron: BrowserWindow + protocolo cliente (connect→poll→execute→respond), ejecuta PowerShell/git/cargo/archivos con Node.js |
-| `electron/preload.js` | ~30 | Puente IPC contextBridge: executeLocal, setCredentials, getStatus |
-| `electron/package.json` | ~30 | Dependencias: electron, node-fetch, electron-builder |
-| `electron/README.md` | ~100 | Documentación del cliente Electron (arquitectura, build, uso) |
-| `capacitor/capacitor.config.ts` | ~75 | Config Capacitor Android: webDir=../public, plugins Filesystem/Browser/Network/ShellExecutor |
-| `capacitor/package.json` | ~20 | Dependencias: @capacitor/core, @capacitor/android, @capacitor/filesystem |
-| `capacitor/setup_capacitor.ps1` | ~140 | **[v3.1]** Script de inicialización + instalación del plugin ShellExecutor |
-| `capacitor/src/plugins/shell-executor.ts` | ~70 | **[v3.1]** Interfaz TypeScript del plugin ShellExecutor (execute, which, info) |
-| `capacitor/android-plugins/src/main/java/com/iaf/plugins/ShellExecutorPlugin.java` | ~220 | **[v3.1]** Implementación nativa Android: ejecuta comandos shell con Runtime.exec(), timeout 60s, buffer 512KB |
-| `scripts/generate_keys.ps1` | ~105 | Genera par de claves Ed25519 |
-| `scripts/sign_nonce.ps1` | ~110 | Firma nonce con clave privada |
-| `scripts/cloudflare_tunnel.ps1` | ~180 | Túnel Cloudflare (quick + permanent) |
-| `public/index.html` | ~300 | Frontend web con hamburger menu mobile, login dual, admin panel, perfil de estudio |
-| `public/app.js` | ~1260 | **[v3.1]** Lógica frontend: checkClient() actualizado con detección por plataforma, deduplicación client-side, initMobileNav() |
-| `public/style.css` | ~900 | Estilos + media queries responsive (tablets ≤1024px, móviles ≤768px, small ≤400px, landscape) |
-| `tests/exhaustive_tests.rs` | ~1835 | Tests exhaustivos |
-| `tests/integration_tests.rs` | ~1197 | Tests de integración |
-| `tests/frontend_regression_tests.js` | ~230 | Tests de regresión del frontend |
-
-### ❌ Eliminado en v3.0
-| Archivo | Motivo |
-|---------|--------|
-| `client/Cargo.toml` | Reemplazado por `electron/` |
-| `client/src/main.rs` | Reemplazado por `electron/main.js` |
-| `client/target/` | Build artifacts del cliente Rust |
+| **`src/file_editor.rs`** | ~260 | **Editor de archivos con 3 modos: Adicion, Reemplazo, Eliminacion** |
+| **`src/google_auth.rs`** | ~340 | **Autenticación OAuth2 para Google APIs (token, refresh, estados)** |
+| **`src/google_drive.rs`** | ~670 | **API Google Drive v3 (list, create, rename, download, upload, delete)** |
+| **`src/google_gmail.rs`** | ~340 | **API Gmail v1 (listar, leer, enviar, archivar, papelera)** |
+| **`src/google_docs.rs`** | ~530 | **API Google Docs v1 + Sheets v4 (leer, crear, editar con 3 modos)** |
+| **`src/task_scheduler.rs`** | ~460 | **Planificador de tareas cron-like (one-time, recurrentes, cron)** |
+| `electron/main.js` | ~350 | Cliente Electron (connect→poll→execute→respond) |
+| `capacitor/` | - | Cliente Android Capacitor |
+| `public/index.html` | ~314 | Interfaz web SPA |
+| `public/app.js` | ~1322 | Lógica frontend (chat, auth, admin, study) |
+| `prompts/default_system_prompt.txt` | - | System prompt global por defecto |
+| `prompts/study_system_prompt.txt` | - | System prompt para modo estudio |
 
 ---
 
-## 🔧 Cambios v3.1 — Fix "pide cliente" + ShellExecutor Android
+## 🔑 Nuevos Módulos v3.2
 
-### 🐛 Fix: client_check() ya no busca el viejo cliente Rust
+### 1. File Editor (`src/file_editor.rs`) — 3 Modos de Edición
 
-**Problema (v3.0)**: `client_check()` verificaba la existencia de `iaf-client.exe` (cliente Rust eliminado en v3.0). Como nunca lo encontraba, siempre mostraba "Cliente no detectado" con instrucciones obsoletas.
+Componentes clave:
+- `EditMode` (enum): `Adicion`, `Reemplazo`, `Eliminacion` — líneas ~20-30
+- `EditResult` (struct): resultado con `success`, `message`, `lines_before`, `lines_after`, `preview` — líneas ~38-50
+- `edit_file()`: aplica el modo de edición al archivo — líneas ~60-180
+- `read_file_full()`: lee archivo completo — líneas ~185-190
+- `read_file_range()`: lee rango de líneas — líneas ~195-215
 
-**Solución (v3.1)**:
-- `client_check()` ahora recibe `State<AppState>` y consulta el mapa `connected_clients` (línea 483 de state.rs)
-- Verifica clientes activos (heartbeat < 120s)
-- Verifica si Electron está instalado (`electron/package.json` + `electron/main.js`)
-- Devuelve instrucciones actualizadas según el estado real
+Endpoints REST:
+- `POST /api/file-editor/read` — leer archivo completo
+- `POST /api/file-editor/read-range` — leer rango de líneas
+- `POST /api/file-editor/edit` — editar con modo (adicion/reemplazo/eliminacion)
 
-**Respuesta del endpoint**:
-```json
-{
-  "status": "ok",
-  "client_installed": true|false,
-  "active_clients": [{ "client_id": "...", "username": "...", "host_info": "..." }],
-  "active_client_count": N,
-  "total_connected": N,
-  "electron_installed": true|false,
-  "v3_client": true,
-  "instructions": "..."
-}
-```
+### 2. Google Auth (`src/google_auth.rs`) — OAuth2
 
-### ✅ Frontend checkClient() actualizado
+Componentes clave:
+- `GoogleCredentials` (struct): client_id, client_secret, redirect_uri — líneas ~20-30
+- `GoogleToken` (struct): access_token, refresh_token, expires_at — líneas ~35-45
+- `GoogleAuthStore` (struct): almacén de credenciales y tokens — líneas ~60-70
+- `generate_auth_url()`: URL de autorización OAuth2 — líneas ~120-145
+- `exchange_code()`: intercambia código por token — líneas ~150-185
+- `get_valid_token()`: token válido (refresh automático) — líneas ~190-210
+- `refresh_token()`: refresca token expirado — líneas ~220-255
+- `ALL_SCOPES`: [DRIVE, GMAIL, DOCS, SHEETS] — línea ~340
 
-- **Electron**: Verifica estado de conexión vía `window.iafClient.getStatus()`
-- **Capacitor/Android**: Informa sobre comandos shell disponibles (ls, cat, grep, find, curl)
-- **Browser**: Consulta `/api/client/check` y muestra mensajes contextuales con colores
+Endpoints REST:
+- `POST /api/google/auth-url` — generar URL OAuth2
+- `GET /api/google/callback` — callback OAuth2
+- `GET /api/google/token-status` — verificar token
+- `POST /api/google/revoke` — revocar token
+- `GET/POST /api/google/credentials` — configurar/ver credenciales
 
-### 📱 ShellExecutor Plugin para Android
+### 3. Google Drive (`src/google_drive.rs`) — API Drive v3
 
-**Plugin nativo Capacitor** que permite a la app Android ejecutar comandos shell localmente.
+Componentes clave:
+- `DriveFile` (struct): id, name, mime_type, is_folder, is_drawio — líneas ~15-30
+- `DriveResult` (struct): success, message, files, content, download_path — líneas ~35-50
+- `GoogleDriveClient` (struct): cliente con auth — líneas ~55-60
+- `list_files()`: listar archivos con query — líneas ~70-120
+- `get_file_metadata()`: metadatos de archivo — líneas ~125-155
+- `download_file()`: descargar (exporta Google Docs a DOCX/XLSX) — líneas ~160-230
+- `upload_file()`: subir archivo (multipart) — líneas ~235-320
+- `create_folder()`: crear carpeta — líneas ~325-360
+- `rename_file()`: renombrar — líneas ~365-400
+- `trash_file()` / `delete_permanently()`: eliminar — líneas ~405-460
+- `read_file_content()`: leer contenido textual — líneas ~465-510
+- `update_file_content()`: actualizar contenido — líneas ~515-555
+- Draw.io: soportado como archivo normal de Drive (`.drawio` = XML editable)
 
-**Archivos**:
-- `capacitor/src/plugins/shell-executor.ts` — Interfaz TypeScript (ShellExecuteOptions, ShellExecuteResult)
-- `capacitor/android-plugins/.../ShellExecutorPlugin.java` — Implementación nativa
+Endpoints REST:
+- `POST /api/google/drive/list` — listar archivos
+- `GET /api/google/drive/file/:file_id` — metadatos
+- `POST /api/google/drive/download` — descargar
+- `POST /api/google/drive/upload` — subir
+- `POST /api/google/drive/create-folder` — crear carpeta
+- `POST /api/google/drive/rename` — renombrar
+- `POST /api/google/drive/delete` — eliminar (papelera o permanente)
+- `POST /api/google/drive/read-content` — leer contenido
+- `POST /api/google/drive/update-content` — actualizar contenido
 
-**Métodos**:
-| Método | Descripción |
-|--------|-------------|
-| `execute({ command, timeout?, workdir?, env? })` | Ejecuta comando shell con `/system/bin/sh -c` |
-| `which({ command })` | Verifica si un comando está en el PATH |
-| `info()` | Devuelve shell, home, PATH y comandos disponibles |
+### 4. Google Gmail (`src/google_gmail.rs`) — API Gmail v1
 
-**Seguridad**:
-- Timeout máximo 60 segundos
-- Buffer limitado a 512 KB para stdout/stderr
-- Registro de auditoría vía Android Log
+Componentes clave:
+- `GmailMessage` (struct): id, subject, from, to, body_text, labels — líneas ~12-25
+- `GmailResult` (struct): success, messages, total_results — líneas ~28-35
+- `GmailClient` (struct): cliente con auth — líneas ~38-42
+- `list_emails()`: listar inbox con query — líneas ~48-95
+- `send_email()`: enviar email (RFC 2822 + base64) — líneas ~130-170
+- `archive_email()` / `trash_email()`: archivar/papelera — líneas ~175-220
 
-**Comandos disponibles en Android sin Termux**:
-`ls`, `cat`, `echo`, `mkdir`, `rm`, `cp`, `mv`, `pwd`, `chmod`, `ps`, `df`, `du`, `grep`, `find`, `head`, `tail`, `wc`, `sort`, `uniq`, `cut`, `tr`, `sed`, `awk`, `curl`, `wget`, `tar`, `gzip`, `date`, `whoami`, `id`, `uname`
+Endpoints REST:
+- `POST /api/google/gmail/list` — listar emails
+- `POST /api/google/gmail/send` — enviar email
+- `POST /api/google/gmail/archive` — archivar
+- `POST /api/google/gmail/trash` — papelera
 
-**Comandos que requieren Termux**: `cargo`, `git`, `rustc`, `python`, `node`, `npm`
+### 5. Google Docs & Sheets (`src/google_docs.rs`) — APIs Docs v1 + Sheets v4
 
----
+Componentes clave:
+- `GoogleDocContent` (struct): document_id, title, full_text, lines — líneas ~15-25
+- `GoogleDocsClient` (struct): leer, crear, editar documentos — líneas ~30-40
+- `read_document()`: leer Google Doc completo — líneas ~45-80
+- `create_document()`: crear Google Doc — líneas ~85-105
+- `edit_document()`: editar con 3 modos (Adicion/Reemplazo/Eliminacion) — líneas ~110-190
+- `GoogleSheetData` (struct): spreadsheet_id, title, values — líneas ~200-215
+- `GoogleSheetsClient` (struct): leer, escribir, crear, editar hojas — líneas ~220-230
+- `read_sheet()`: leer hoja de cálculo — líneas ~235-280
+- `write_sheet_range()`: escribir en rango — líneas ~285-320
+- `create_spreadsheet()`: crear hoja nueva — líneas ~325-350
+- `edit_sheet_lines()`: editar con 3 modos sobre filas — líneas ~355-430
 
-## 🔧 Cambios v3.0 — Electron + Capacitor + Chat Dedup + Android UX
+Endpoints REST:
+- `POST /api/google/docs/read` — leer documento
+- `POST /api/google/docs/create` — crear documento
+- `POST /api/google/docs/edit` — editar (mode: adicion/reemplazo/eliminacion)
+- `POST /api/google/sheets/read` — leer hoja
+- `POST /api/google/sheets/write` — escribir rango
+- `POST /api/google/sheets/create` — crear hoja
+- `POST /api/google/sheets/edit` — editar con 3 modos
 
-### 🖥️ Cliente Electron (reemplaza al cliente Rust)
+### 6. Task Scheduler (`src/task_scheduler.rs`) — Planificador de Tareas
 
-```
-┌──────────────────────────────────────────────────┐
-│              IAF Electron Client                  │
-│                                                   │
-│  ┌─────────────────────┐  ┌────────────────────┐ │
-│  │   Renderer (UI)     │  │   Main Process     │ │
-│  │   Carga UI desde    │  │   • connect/poll   │ │
-│  │   servidor IAF      │  │   • execute local  │ │
-│  │   (HTTP/HTTPS)      │  │   • heartbeat      │ │
-│  └─────────────────────┘  └────────────────────┘ │
-│               ↕ IPC (contextBridge)               │
-└──────────────────────────────────────────────────┘
-```
+Componentes clave:
+- `TaskFrequency` (enum): Once, EveryMinutes, EveryHours, EveryDays, Cron — líneas ~18-40
+- `TaskAction` (enum): PowerShell, OrganizeDrive, SendEmail, AgentPrompt — líneas ~43-65
+- `DriveOrganizeRule` (struct): reglas para organizar Drive — líneas ~68-80
+- `TaskStatus` (enum): Active, Paused, Completed, Failed — líneas ~83-88
+- `ScheduledTask` (struct): tarea completa con metadatos — líneas ~91-105
+- `TaskExecutionLog` (struct): registro de ejecución — líneas ~108-115
+- `TaskSchedulerStore` (struct): almacén persistente — líneas ~120-130
+- `create_task()`, `update_task()`, `delete_task()`, `list_tasks()` — líneas ~160-220
+- `get_due_tasks()`: tareas pendientes de ejecución — líneas ~240-260
+- `start_scheduler_loop()`: loop de ejecución cada 30s — líneas ~340-390
+- `execute_task()`: ejecuta la acción según el tipo — líneas ~395-460
+- Soporte cron: minute, hour, day_of_month, month, day_of_week — líneas ~290-335
 
-- **`electron/main.js`**: Implementa el mismo protocolo que el cliente Rust (connect→poll→execute→respond) usando Node.js built-ins (`fs`, `child_process`, `crypto`)
-- **`electron/preload.js`**: Puente seguro entre renderer (UI web) y main process vía `contextBridge`
-- El renderer NO tiene acceso directo a Node.js — solo 3 funciones expuestas: `executeLocal`, `setCredentials`, `getStatus`
-- Comandos soportados: PowerShell, git, cargo, archivos (read/write/exists/metadata), directorios, búsqueda de código
-
-### 📱 Capacitor Android
-
-- **`capacitor/capacitor.config.ts`**: Configuración para envolver `public/` en una WebView Android
-- **Plugins**: `@capacitor/filesystem` (operaciones básicas de archivos), `@capacitor/network` (conectividad), `@capacitor/browser` (enlaces externos), **`ShellExecutor`** (comandos shell nativos, nuevo en v3.1)
-- **Ejecución de comandos en Android (v3.1)**:
-  - **ShellExecutor nativo**: Comandos shell básicos disponibles directamente (ls, cat, grep, find, curl...)
-  - Usuario admin → el servidor ejecuta directamente
-  - Para desarrollo completo (cargo, git) → instalar Termux y usarlo como entorno
-
-### 🐛 Chat Deduplication (BUG-028)
-
-**Síntoma**: Dos archivos `.json` con mismo UUID pero diferente título aparecían como conversaciones duplicadas.
-
-**Causa**: Al cambiar el título de una conversación, se creaba un nuevo archivo sin eliminar el viejo.
-
-**Fixes**:
-- **Backend** (`clean_old_chat_files()`): Elimina archivos viejos con el mismo UUID antes de guardar
-- **Backend** (`get_chats`): `HashSet<String>` para deduplicar por `id`, salta `.bak`
-- **Frontend** (`loadChatHistory`): Deduplicación client-side como defensa en profundidad
-- **Frontend** (`selectChatSession`): Corregida línea repetida `chatArea.innerHTML = ''`
-
-### 👑 Admin ve username en chats
-
-- **`get_chats`**: Respuesta incluye campo `username` con el dueño de cada chat
-- **`loadChatHistory`**: Muestra `(@username)` para admins viendo chats de otros usuarios
-
-### 📱 Android / Mobile Responsive
-
-- **CSS media queries**:
-  - ≤1024px: sidebar 320px, console 280px
-  - ≤768px: sidebar → drawer deslizable, console → bottom sheet, botones ≥44px touch-friendly, inputs 16px para evitar zoom iOS
-  - ≤400px: ajustes adicionales de espaciado
-  - ≤500px height (landscape): layout horizontal compacto
-- **Hamburger menu**: botón ☰ con toggle, overlay semitransparente, cierre al hacer click fuera
-- **JS** (`initMobileNav()`): Manejo completo del drawer en mobile
-
----
-
-## 🔧 Cambios v2.9 — Cloudflare Tunnel (Solo Puerto 8080)
-
-### Arquitectura de doble puerto con túnel
-
-```
-                    ┌──────────────────────────────────────┐
-                    │         IAF Server (Rust/Axum)        │
-                    │                                      │
-                    │  ┌─────────────┐  ┌───────────────┐  │
- Firewall local ◄───┼──│ Puerto 80   │  │ Puerto 8080   │──┼──► cloudflared
- (solo confianza)   │  │ 0.0.0.0:80  │  │ 127.0.0.1:8080│  │    (túnel TLS)
-                    │  │ port_80:true│  │ port_80:false │  │    │
-                    │  │ SIN auth    │  │ CON auth      │  │    ▼
-                    │  └─────────────┘  └───────────────┘  │  Internet
-                    └──────────────────────────────────────┘  (https://...)
-```
+Endpoints REST:
+- `POST /api/tasks/list` — listar tareas del usuario
+- `POST /api/tasks/get` — obtener tarea por ID
+- `POST /api/tasks/create` — crear tarea (todos los tipos de acción y frecuencia)
+- `POST /api/tasks/update` — actualizar tarea
+- `POST /api/tasks/delete` — eliminar tarea
+- `POST /api/tasks/logs` — ver historial de ejecuciones
 
 ---
 
-## 🔀 Arquitectura Completa v3.1
+## 🔄 Flujo de Google OAuth2
 
-```
-                          ┌──────────────────────────┐
-                          │     IAF Server (Rust)     │
-                          │   Puerto 80 + Puerto 8080 │
-                          └─────┬──────────┬─────────┘
-                                │          │
-              ┌─────────────────┘          └──────────────┐
-              ▼                                           ▼
-   ┌─────────────────────┐                   ┌─────────────────────┐
-   │  Electron (PC)      │                   │  Capacitor (Android)│
-   │  • UI web embebida  │                   │  • WebView nativo   │
-   │  • Ejecuta comandos │                   │  • UI web empaquetada│
-   │    - PowerShell     │                   │  • ShellExecutor 🔥  │
-   │    - Git            │                   │    (ls,cat,grep,etc) │
-   │    - Cargo          │                   │  • Filesystem plugin │
-   │  • Poll + Heartbeat │                   │  • Comandos vía      │
-   └─────────────────────┘                   │    servidor (admin)  │
-                                             │    o PC cliente      │
-                                             └─────────────────────┘
-```
-
-**Regla de oro**: El servidor NUNCA ejecuta comandos para usuarios no-admin. Solo admin (puerto 80 o nonce verificado) ejecuta en el servidor. Para usuarios normales:
-- **Windows/Linux/Mac**: cliente Electron ejecuta comandos localmente
-- **Android**: ShellExecutor ejecuta comandos shell nativos localmente
+1. Usuario configura client_id y client_secret desde Google Cloud Console
+2. `POST /api/google/auth-url` → devuelve URL de autorización
+3. Usuario visita la URL y autoriza
+4. Google redirige a `/api/google/callback?code=...&state=...`
+5. El servidor intercambia el código por access_token + refresh_token
+6. Tokens se guardan en `.config/google/google_tokens.json`
+7. Refresh automático cuando el token expira
 
 ---
 
-## 📊 AppState (state.rs líneas 470-495)
+## 📝 Modos de Edición (File Editor + Google Docs/Sheets/Drive)
 
-```rust
-pub struct AppState {
-    pub config_path: PathBuf,
-    pub prompts: Arc<Mutex<PromptConfig>>,
-    pub projects: Arc<Mutex<Vec<Project>>>,
-    pub base_workspace: PathBuf,
-    pub pending_captcha: Arc<Mutex<Option<CaptchaRequest>>>,
-    pub active_agent: Arc<Mutex<ActiveAgentStatus>>,
-    pub abort_handle: Arc<Mutex<Option<tokio::task::AbortHandle>>>,
-    pub desktop: Arc<Mutex<DesktopController>>,
-    pub image_store: Arc<Mutex<HashMap<String, String>>>,
-    pub context_store: Arc<Mutex<HashMap<String, ContextEntry>>>,
-    pub process_registry: ProcessRegistry,
-    pub tool_results: ToolResultStore,
-    pub sub_agents: SubAgentManager,
-    pub user_store: UserStore,
-    pub challenge_store: ChallengeStore,
-    pub session_store: SessionStore,
-    pub study_engine: StudyEngine,
-    pub sync_store: SyncStore,
-    pub connected_clients: Arc<Mutex<HashMap<String, ConnectedClient>>>,    // ← v3.1 client_check usa esto
-    pub client_pending_requests: Arc<Mutex<HashMap<String, Vec<ClientRequest>>>>,
-    pub client_responses: Arc<Mutex<HashMap<String, ClientResponse>>>,
-    pub port_80: bool,
-}
-```
+Los 3 modos de edición están disponibles tanto para archivos locales como para Google Drive/Docs/Sheets:
 
-## 📊 ActiveAgentStatus (state.rs)
-
-```rust
-pub struct ActiveAgentStatus {
-    pub running: bool,
-    pub interrupted: bool,
-    pub finished: bool,
-    pub final_message: Option<String>,
-    pub esperando_respuesta_usuario: bool,
-    pub pregunta_usuario: Option<String>,
-    pub respuesta_usuario: Option<String>,
-    pub esperando_aprobacion_plan: bool,
-    pub plan_propuesto: Option<String>,
-    pub info_messages: Vec<String>,
-    pub thinking_content: Vec<String>,
-    pub steps: Vec<AuditStep>,
-    pub current_session_id: Option<String>,
-}
-```
-
-## 🔐 Autenticación Dual
-
-| Método | Usuarios | Endpoint |
-|--------|----------|----------|
-| **Username + Password (argon2id)** | Usuarios normales | `POST /api/auth/login` |
-| **Ed25519 Challenge-Response** | Solo admins | `POST /api/auth/challenge` → `POST /api/auth/verify` |
+| Modo | Parámetros | Descripción |
+|------|-----------|-------------|
+| **Adicion** | start_line, content | Inserta líneas después de start_line (0=principio, N=final si N>total) |
+| **Reemplazo** | start_line, end_line, content | Reemplaza líneas en el rango [start, end] con el nuevo contenido |
+| **Eliminacion** | start_line, end_line | Elimina líneas en el rango [start, end] |
 
 ---
 
-## 🌐 Endpoints REST
+## 🧪 Tests
 
-### Agente y Chat
-| Método | Ruta | Handler | Descripción |
-|--------|------|---------|-------------|
-| `POST` | `/api/chat` | `chat_endpoint` | Enviar mensaje al agente |
-| `GET` | `/api/agent/status` | `get_agent_status` | Estado del agente |
-| `GET` | `/api/agent/steps` | `agent_steps` | Pasos de auditoría |
-| `POST` | `/api/agent/responder` | `agent_responder` | Responder a pregunta |
-| `POST` | `/api/agent/aprobar_plan` | `agent_approve_plan` | Aprobar/rechazar plan |
-| `POST` | `/api/agent/interrupt` | `interrupt_agent` | Interrumpir agente |
-| `GET` | `/api/chats` | `get_chats` | Listar chats (admin ve todos con username) |
-| `GET` | `/api/chats/:id` | `get_chat_session` | Obtener chat por ID |
-
-### Cliente (Electron / Capacitor)
-| Método | Ruta | Handler | Descripción |
-|--------|------|---------|-------------|
-| `POST` | `/api/client/connect` | `client_connect` | Registrar cliente |
-| `POST` | `/api/client/poll` | `client_poll` | Polling de solicitudes |
-| `POST` | `/api/client/response` | `client_response` | Enviar resultado |
-| `POST` | `/api/client/heartbeat` | `client_heartbeat` | Heartbeat (30s) |
-| `GET` | `/api/client/check` | `client_check` | **[v3.1]** Verificar clientes conectados (Electron/Capacitor) + Electron instalado |
+Archivos de tests actualizados:
+- `tests/exhaustive_tests.rs` (1835 líneas) — 15 módulos, 123 tests
+- `tests/integration_tests.rs` (1197 líneas) — 10 módulos
+- `tests/frontend_regression_tests.js` — Tests de regresión del frontend
+- `src/file_editor.rs` — Tests unitarios incluidos (8 tests: adicion, reemplazo, eliminacion)
 
 ---
 
-## 📦 Dependencias Clave
+## 🔧 Dependencias
 
-| Dependencia | Uso |
-|-------------|-----|
-| `axum` 0.7 | Framework HTTP |
-| `ed25519-dalek` 2 | Firmas Ed25519 |
-| `argon2` 0.5 | Hashing de contraseñas |
-| `electron` 28 | Cliente desktop (Node.js) |
-| `@capacitor/core` 6 | App Android híbrida |
-| `@capacitor/filesystem` 6 | Operaciones de archivos en Android |
-| `ShellExecutor` (custom) | **[v3.1]** Plugin nativo Android para comandos shell |
-
----
-
-## 🏷️ Términos de Búsqueda
-
-Para encontrar componentes rápidamente con `search_code`:
-- `client_check` → Endpoint de verificación de cliente (main.rs línea ~438)
-- `connected_clients` → Mapa de clientes conectados (state.rs línea ~483)
-- `ShellExecutor` → Plugin Android para comandos shell
-- `checkClient` → Frontend checkClient() en app.js
-- `ActiveAgentStatus` → Estado del agente activo
-- `CiclePhase` → Fases del ciclo de programación
-- `ClientRequest` / `ClientResponse` → Protocolo cliente-servidor
-- `UserLimits` / `WeeklySchedule` → Límites y horarios de usuarios
-- `migrate_chats` → Migración de formato de chats
-- `clean_old_chat_files` → Deduplicación de archivos de chat
+- `reqwest` — HTTP client para Google APIs
+- `serde` / `serde_json` — Serialización
+- `uuid` — IDs para tareas y estados OAuth
+- `chrono` — Cálculo de tiempos para cron
+- `base64` — Decodificación de emails
+- `mime_guess` — Detección de MIME types
+- `urlencoding` — URL encoding para OAuth y queries
