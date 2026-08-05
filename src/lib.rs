@@ -6,6 +6,12 @@ pub mod study;
 pub mod desktop;
 pub mod sync;
 pub mod client_protocol;
+pub mod file_editor;
+pub mod google_auth;
+pub mod google_drive;
+pub mod google_gmail;
+pub mod google_docs;
+pub mod task_scheduler;
 
 /// System prompt para el modo estudio.
 /// Contiene las reglas pedagógicas: anti-resúmenes, anti-.md, tests obligatorios,
