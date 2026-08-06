@@ -11,10 +11,17 @@
 - **Regla de seguridad**: Servidor NUNCA ejecuta comandos para no-admin. Electron ejecuta localmente.
 
 ### BUG-028 (SOLUCIONADO v3.0): Conversaciones duplicadas con mismo UUID
-- **Síntoma**: Dos archivos `.json` en `chats/` con mismo UUID pero títulos diferentes. Al hacer clic en uno, se seleccionaban ambos.
-- **Causa**: Al cambiar el título de una conversación, se creaba un nuevo archivo `<nuevo-titulo>-<uuid>.json` sin eliminar el viejo.
+### BUG-030 (SOLUCIONADO v3.3): API DeepSeek retornaba 400 Bad Request — "messages[0]: missing field 'role'"
+
+- **Síntoma**: Al iniciar el agente, la API retornaba 400 Bad Request con el error `messages[0]: missing field 'role'`. El servidor mostraba "Advertencia: La API retornó status 400 Bad Request" y reintentaba 3 veces antes de fallar.
+- **Causa raíz**: Las 6 herramientas de Google Drive (`google_drive_list`, `google_drive_download`, `google_drive_read_content`, `google_drive_metadata`, `google_drive_create_folder`, `google_drive_upload`) se estaban definiendo como elementos del array `messages` en lugar de estar en el array `tools`. La API DeepSeek espera que cada elemento en `messages` tenga los campos `role` y `content`, pero las tool definitions solo tienen `type` y `function`.
 - **Fix**:
-  - `main.rs::clean_old_chat_files()`: Elimina archivos viejos con mismo UUID antes de guardar
+  - `agent.rs::run_agent_loop()`: Se movieron las 6 Google Drive tools desde `let mut messages = vec![...]` (líneas 216-305) hacia `let tools = vec![...]` (después de línea 276), donde pertenecen.
+  - `messages` ahora solo contiene `{ "role": "system", "content": system_prompt }` como único elemento inicial.
+  - `tools` ahora contiene las 32 herramientas (6 Google Drive + 26 regulares).
+- **Archivos modificados**: `src/agent.rs`
+- **Lección**: Las tool definitions van en el campo `tools` del request body, NO en `messages`. La API DeepSeek/OpenRouter sigue el estándar OpenAI: `messages` requiere `role` + `content`, `tools` requiere `type` + `function`.
+- **Verificación**: `cargo check` pasa limpiamente. El servidor ya no muestra el error 400.
   - `main.rs::get_chats()`: `HashSet<String>` para deduplicar por `id`, salta `.bak`
   - `app.js::loadChatHistory()`: Deduplicación client-side como defensa en profundidad
   - `app.js::selectChatSession()`: Eliminada línea `chatArea.innerHTML = ''` duplicada
