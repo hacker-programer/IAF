@@ -93,7 +93,7 @@ async fn try_delegate_to_client(
     }
 
     let start = std::time::Instant::now();
-    let timeout = std::time::Duration::from_secs(30);
+    let timeout = std::time::Duration::from_secs(10);
 
     loop {
         if start.elapsed() > timeout {
@@ -101,7 +101,7 @@ async fn try_delegate_to_client(
             if let Some(reqs) = pending.get_mut(&client_id) {
                 reqs.retain(|r| r.request_id != request_id);
             }
-            return Some("TIMEOUT: El cliente no respondio en 30s. Comando cancelado.".to_string());
+            eprintln!("[IAF] TIMEOUT: Cliente no respondio en 10s. Haciendo fallback a ejecucion local."); return None;
         }
 
         let response = {
