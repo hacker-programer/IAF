@@ -10,6 +10,17 @@
 - **Android responsive**: Hamburger menu `☰`, sidebar drawer, bottom sheet, media queries
 - **Regla de seguridad**: Servidor NUNCA ejecuta comandos para no-admin. Electron ejecuta localmente.
 
+### BUG-031 (SOLUCIONADO): read_file siempre daba timeout en usuarios no-admin
+
+- **Síntoma**: Al usar `read_file`, el agente reportaba "TIMEOUT: El cliente no respondio en 30s. Comando cancelado." y NUNCA intentaba la lectura local del archivo, incluso cuando el archivo existía en el servidor (proyectos sincronizados).
+- **Causa raíz**: `try_delegate_to_client()` en `agent.rs` devolvía `Some("TIMEOUT: El cliente no respondio en 30s. Comando cancelado.")` cuando el cliente conectado no respondía a tiempo. El handler de `read_file` usaba `if let Some(delegated) = try_delegate_to_client(...)` — esto capturaba el mensaje de timeout como "delegación exitosa" y lo devolvía al agente, sin nunca ejecutar el bloque `else` que contiene la lectura local.
+- **Fix**:
+  - `agent.rs::try_delegate_to_client()`: Reducido timeout de 30s → 10s (el cliente hace polling cada 2s, 10s es más que suficiente).
+  - `agent.rs::try_delegate_to_client()`: Cambiado `return Some("TIMEOUT: ...")` → `eprintln!("[IAF] TIMEOUT: ..."); return None;`. Esto permite que los handlers hagan fallback a ejecución local cuando el cliente no responde.
+- **Archivos modificados**: `src/agent.rs` (función `try_delegate_to_client`, líneas 96 y 104)
+- **Impacto**: Beneficia a `read_file` (fallback a lectura local), `write_file_with_commit` (fallback a escritura local), y `execute_powershell` (fallback a ejecución local).
+- **Verificación**: `cargo check` pasa limpiamente.
+
 ### BUG-028 (SOLUCIONADO v3.0): Conversaciones duplicadas con mismo UUID
 ### BUG-030 (SOLUCIONADO v3.3): API DeepSeek retornaba 400 Bad Request — "messages[0]: missing field 'role'"
 
@@ -21,7 +32,7 @@
   - `tools` ahora contiene las 32 herramientas (6 Google Drive + 26 regulares).
 - **Archivos modificados**: `src/agent.rs`
 - **Lección**: Las tool definitions van en el campo `tools` del request body, NO en `messages`. La API DeepSeek/OpenRouter sigue el estándar OpenAI: `messages` requiere `role` + `content`, `tools` requiere `type` + `function`.
-- **Verificación**: `cargo check` pasa limpiamente. El servidor ya no muestra el error 400.
+- **Verificación**: `cargo check` pasa limpiamente.
   - `main.rs::get_chats()`: `HashSet<String>` para deduplicar por `id`, salta `.bak`
   - `app.js::loadChatHistory()`: Deduplicación client-side como defensa en profundidad
   - `app.js::selectChatSession()`: Eliminada línea `chatArea.innerHTML = ''` duplicada
