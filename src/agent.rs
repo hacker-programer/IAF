@@ -723,14 +723,12 @@ pub async fn run_agent_loop(
         state.active_agent.lock().unwrap().steps.iter().filter(|s| s.step_type == "thinking").count()
     };
     loop {
-        // Verificar seÃƒÆ’Ã†â€™Ãƒâ€ ââ‚¬â„¢ÃƒÆ’ââ‚¬ Ãƒ¢ââ€š¬ââ€ž¢ÃƒÆ’Ã†â€™Ãƒ¢ââ€š¬Ã‚ ÃƒÆ’Ã‚¢Ãƒ¢ââ‚¬šÃ‚¬Ãƒ¢ââ‚¬žÃ‚¢ÃƒÆ’Ã†â€™Ãƒâ€ ââ‚¬â„¢ÃƒÆ’Ã‚¢Ãƒ¢ââ‚¬šÃ‚¬Ãƒâ€¦Ã‚¡ÃƒÆ’Ã†â€™Ãƒ¢ââ€š¬Ã…¡ÃƒÆ’ââ‚¬šÃƒâ€šÃ‚±al de interrupciÃƒÆ’Ã†â€™Ãƒâ€ ââ‚¬â„¢ÃƒÆ’ââ‚¬ Ãƒ¢ââ€š¬ââ€ž¢ÃƒÆ’Ã†â€™Ãƒ¢ââ€š¬Ã‚ ÃƒÆ’Ã‚¢Ãƒ¢ââ‚¬šÃ‚¬Ãƒ¢ââ‚¬žÃ‚¢ÃƒÆ’Ã†â€™Ãƒâ€ ââ‚¬â„¢ÃƒÆ’Ã‚¢Ãƒ¢ââ‚¬šÃ‚¬Ãƒâ€¦Ã‚¡ÃƒÆ’Ã†â€™Ãƒ¢ââ€š¬Ã…¡ÃƒÆ’ââ‚¬šÃƒâ€šÃ‚³n
-        {
-            let status = state.active_agent.lock().unwrap();
-            if status.interrupted {
-                state.process_registry.kill_all();
-                return Ok("EjecuciÃƒÆ’Ã†â€™Ãƒâ€ ââ‚¬â„¢ÃƒÆ’ââ‚¬ Ãƒ¢ââ€š¬ââ€ž¢ÃƒÆ’Ã†â€™Ãƒ¢ââ€š¬Ã‚ ÃƒÆ’Ã‚¢Ãƒ¢ââ‚¬šÃ‚¬Ãƒ¢ââ‚¬žÃ‚¢ÃƒÆ’Ã†â€™Ãƒâ€ ââ‚¬â„¢ÃƒÆ’Ã‚¢Ãƒ¢ââ‚¬šÃ‚¬Ãƒâ€¦Ã‚¡ÃƒÆ’Ã†â€™Ãƒ¢ââ€š¬Ã…¡ÃƒÆ’ââ‚¬šÃƒâ€šÃ‚³n del agente interrumpida manualmente por el usuario.".to_string());
-            }
-        }
+        // Verificar señal de interrupción
+        {
+            let status = state.active_agent.lock().unwrap();
+            if status.interrupted {
+                state.process_registry.kill_all();
+                return Ok("Ejecución del agente interrumpida manualmente por el usuario.".to_string());
 
         iteration += 1;
         
