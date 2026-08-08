@@ -729,8 +729,8 @@ pub async fn run_agent_loop(
             if status.interrupted {
                 state.process_registry.kill_all();
                 return Ok("Ejecución del agente interrumpida manualmente por el usuario.".to_string());
-
-        iteration += 1;
+            }
+        }
         
         {
             let mut status = state.active_agent.lock().unwrap();
