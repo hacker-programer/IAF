@@ -484,7 +484,7 @@ pub async fn run_agent_loop(
             "function": {
                 "name": "notificar_usuario",
                 "description": "Permite al agente comunicarse con el usuario durante su ejecuciÃƒÆ’Ã†â€™Ãƒâ€ ââ‚¬â„¢ÃƒÆ’ââ‚¬ Ãƒ¢ââ€š¬ââ€ž¢ÃƒÆ’Ã†â€™Ãƒ¢ââ€š¬Ã‚ ÃƒÆ’Ã‚¢Ãƒ¢ââ‚¬šÃ‚¬Ãƒ¢ââ‚¬žÃ‚¢ÃƒÆ’Ã†â€™Ãƒâ€ ââ‚¬â„¢ÃƒÆ’Ã‚¢Ãƒ¢ââ‚¬šÃ‚¬Ãƒâ€¦Ã‚¡ÃƒÆ’Ã†â€™Ãƒ¢ââ€š¬Ã…¡ÃƒÆ’ââ‚¬šÃƒâ€šÃ‚³n. Puede usarse para dar informaciÃƒÆ’Ã†â€™Ãƒâ€ ââ‚¬â„¢ÃƒÆ’ââ‚¬ Ãƒ¢ââ€š¬ââ€ž¢ÃƒÆ’Ã†â€™Ãƒ¢ââ€š¬Ã‚ ÃƒÆ’Ã‚¢Ãƒ¢ââ‚¬šÃ‚¬Ãƒ¢ââ‚¬žÃ‚¢ÃƒÆ’Ã†â€™Ãƒâ€ ââ‚¬â„¢ÃƒÆ’Ã‚¢Ãƒ¢ââ‚¬šÃ‚¬Ãƒâ€¦Ã‚¡ÃƒÆ’Ã†â€™Ãƒ¢ââ€š¬Ã…¡ÃƒÆ’ââ‚¬šÃƒâ€šÃ‚³n o para pausar y hacer preguntas obligatorias de aclaraciÃƒÆ’Ã†â€™Ãƒâ€ ââ‚¬â„¢ÃƒÆ’ââ‚¬ Ãƒ¢ââ€š¬ââ€ž¢ÃƒÆ’Ã†â€™Ãƒ¢ââ€š¬Ã‚ ÃƒÆ’Ã‚¢Ãƒ¢ââ‚¬šÃ‚¬Ãƒ¢ââ‚¬žÃ‚¢ÃƒÆ’Ã†â€™Ãƒâ€ ââ‚¬â„¢ÃƒÆ’Ã‚¢Ãƒ¢ââ‚¬šÃ‚¬Ãƒâ€¦Ã‚¡ÃƒÆ’Ã†â€™Ãƒ¢ââ€š¬Ã…¡ÃƒÆ’ââ‚¬šÃƒâ€šÃ‚³n.",
-                "parameters": {
+                "description": "Permite al agente comunicarse con el usuario durante su ejecución. Puede usarse para dar información o para pausar y hacer preguntas obligatorias de aclaración.",
                     "type": "object",
                     "properties": {
                         "tipo": { "type": "string", "enum": ["informativo", "pregunta"] },
