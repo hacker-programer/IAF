@@ -525,7 +525,7 @@ pub async fn run_agent_loop(
         json!({
             "type": "function",
             "function": {
-                "name": "image_view",
+                "description": "Inyecta una imagen previamente descargada en el contexto del chat para que puedas verla. La imagen se codifica en Base64 y se envía como contenido multimodal. Usa image_release cuando ya no necesites verla para ahorrar tokens.",
                 "description": "Inyecta una imagen previamente descargada en el contexto del chat para que puedas verla. La imagen se codifica en Base64 y se envÃƒÆ’Ã†â€™Ãƒâ€ ââ‚¬â„¢ÃƒÆ’ââ‚¬ Ãƒ¢ââ€š¬ââ€ž¢ÃƒÆ’Ã†â€™Ãƒ¢ââ€š¬Ã‚ ÃƒÆ’Ã‚¢Ãƒ¢ââ‚¬šÃ‚¬Ãƒ¢ââ‚¬žÃ‚¢ÃƒÆ’Ã†â€™Ãƒâ€ ââ‚¬â„¢ÃƒÆ’Ã‚¢Ãƒ¢ââ‚¬šÃ‚¬Ãƒâ€¦Ã‚¡ÃƒÆ’Ã†â€™Ãƒ¢ââ€š¬Ã…¡ÃƒÆ’ââ‚¬šÃƒâ€šÃ‚­a como contenido multimodal. Usa image_release cuando ya no necesites verla para ahorrar tokens.",
                 "parameters": {
                     "type": "object",
