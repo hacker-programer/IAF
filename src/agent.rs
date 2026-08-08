@@ -561,7 +561,7 @@ pub async fn run_agent_loop(
                         "action": {
                             "type": "string",
                             "enum": ["keep_local", "keep_remote", "merge_both"],
-                            "description": "AcciÃƒÆ’Ã†â€™Ãƒâ€ ââ‚¬â„¢ÃƒÆ’ââ‚¬ Ãƒ¢ââ€š¬ââ€ž¢ÃƒÆ’Ã†â€™Ãƒ¢ââ€š¬Ã‚ ÃƒÆ’Ã‚¢Ãƒ¢ââ‚¬šÃ‚¬Ãƒ¢ââ‚¬žÃ‚¢ÃƒÆ’Ã†â€™Ãƒâ€ ââ‚¬â„¢ÃƒÆ’Ã‚¢Ãƒ¢ââ‚¬šÃ‚¬Ãƒâ€¦Ã‚¡ÃƒÆ’Ã†â€™Ãƒ¢ââ€š¬Ã…¡ÃƒÆ’ââ‚¬šÃƒâ€šÃ‚³n para resolver la divergencia."
+                            "description": "Acción para resolver la divergencia."
                         }
                     },
                     "required": ["action"]
