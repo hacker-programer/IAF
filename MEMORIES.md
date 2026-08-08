@@ -10,6 +10,30 @@
 - **Android responsive**: Hamburger menu `☰`, sidebar drawer, bottom sheet, media queries
 - **Regla de seguridad**: Servidor NUNCA ejecuta comandos para no-admin. Electron ejecuta localmente.
 
+### BUG-033 (SOLUCIONADO 2026-07-09): Mismatch execute_power_shell entre servidor Rust y cliente Electron
+
+- **Síntoma**: El agente NO podía leer archivos preexistentes en la máquina. En el chat aparecía "Error del cliente: Acción desconocida: execute_power_shell". El agente solo podía leer archivos que él mismo creaba (porque ya conocía sus rutas), pero no podía explorar directorios con `execute_powershell` para encontrar archivos preexistentes.
+- **Causa raíz**: El enum `ClientAction::ExecutePowerShell` en Rust se serializa como `"execute_power_shell"` (snake_case con underscore entre "power" y "shell"), pero el cliente Electron (`electron/main.js`) esperaba `"execute_powershell"` (sin underscore). Esto causaba que el cliente respondiera "Acción desconocida" para cada comando de PowerShell, imposibilitando al agente explorar el filesystem.
+- **Fix**: `electron/main.js` línea 365: cambiado `case 'execute_powershell':` → `case 'execute_power_shell':`
+- **Archivos modificados**: `electron/main.js`
+- **Lección**: Mantener sincronizados los nombres de acciones entre servidor (Rust) y cliente (JS). El `#[serde(rename_all = "snake_case")]` convierte `ExecutePowerShell` en `execute_power_shell` (con underscore), NO en `execute_powershell` (todo junto). Hacer tests de integración que verifiquen el protocolo completo.
+
+### BUG-032 (DOCUMENTADO - PENDIENTE DE REPARACIÓN): Encoding corrupto masivo en agent.rs
+
+- **Síntoma**: El archivo `src/agent.rs` contiene 16,589 ocurrencias de texto corrupto (mojibake) en strings literales en español. Cada carácter acentuado (á, é, í, ó, ú, ñ) fue inflado de 2 bytes UTF-8 a ~40-70 bytes de basura debido a doble/triple codificación (UTF-8 → Windows-1252 → UTF-8 repetido). El archivo pesa 569 KB en lugar de ~200 KB estimados.
+- **Impacto**: 
+  - El system prompt que recibe el modelo DeepSeek contiene texto corrupto (ej: "OBLIGACIÓN" aparece como "OBLIGACIÃƒÆ'Ã†â€™...")
+  - Las descripciones de herramientas son parcialmente ilegibles para el modelo
+  - Los mensajes de error en español son ilegibles en el chat
+  - NO afecta la compilación (Rust trata los strings como bytes arbitrarios)
+- **Causa raíz**: En algún momento, el archivo fue escrito con encoding incorrecto (probablemente write_file_with_commit con contenido que tenía doble codificación). El problema se propagó en commits sucesivos.
+- **Solución propuesta**: 
+  1. Extraer el texto del system prompt adicional a archivos `.txt` separados (cargados con `include_str!`)
+  2. Reescribir las secciones críticas de agent.rs con UTF-8 correcto
+  3. Agregar un test de regresión que verifique que no hay secuencias de mojibake en strings clave
+- **Workaround temporal**: Los archivos `prompts/default_system_prompt.txt` y `prompts/study_system_prompt.txt` NO están corruptos (UTF-8 correcto). El system prompt base se carga correctamente. Solo el texto adicional concatenado en agent.rs está corrupto.
+- **Archivos afectados**: `src/agent.rs` (líneas ~189-213, ~385-430, ~898-980 y disperso en otras 16,500+ ubicaciones)
+
 ### BUG-031 (SOLUCIONADO): read_file siempre daba timeout en usuarios no-admin
 
 - **Síntoma**: Al usar `read_file`, el agente reportaba "TIMEOUT: El cliente no respondio en 30s. Comando cancelado." y NUNCA intentaba la lectura local del archivo, incluso cuando el archivo existía en el servidor (proyectos sincronizados).
@@ -62,6 +86,7 @@
 - El validador JS marca falsos positivos en variables duplicadas entre funciones distintas
 - **NUNCA reescribir un archivo completo para un fix pequeño** — usar ediciones parciales
 - `cargo check` pasa limpiamente después de todas las correcciones v3.0
+- `#[serde(rename_all = "snake_case")]` convierte `ExecutePowerShell` → `"execute_power_shell"` (con underscore entre "power" y "shell"), NO `"execute_powershell"` (BUG-033)
 
 ## Archivos de tests
 - `tests/exhaustive_tests.rs` (1835 líneas) — 15 módulos, 123 tests
