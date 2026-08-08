@@ -206,7 +206,7 @@ pub async fn run_agent_loop(
 
     // BUG-026 FIX: Si estamos en modo estudio, reemplazar COMPLETAMENTE el system prompt
     // con STUDY_SYSTEM_PROMPT + perfil del estudiante (intereses, conocimientos, fase, etc.).
-    // Esto SOBREESCRIBE el prompt de programaciÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³n, no lo aumenta.
+    // Esto SOBREESCRIBE el prompt de programación, no lo aumenta.
     if mode == "study" {
         system_prompt = state.study_engine.build_study_system_prompt(username, crate::STUDY_SYSTEM_PROMPT);
     }
