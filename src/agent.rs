@@ -500,7 +500,7 @@ pub async fn run_agent_loop(
                 "name": "finalizar_tarea",
                 "description": "Indica explÃƒÆ’Ã†â€™Ãƒâ€ ââ‚¬â„¢ÃƒÆ’ââ‚¬ Ãƒ¢ââ€š¬ââ€ž¢ÃƒÆ’Ã†â€™Ãƒ¢ââ€š¬Ã‚ ÃƒÆ’Ã‚¢Ãƒ¢ââ‚¬šÃ‚¬Ãƒ¢ââ‚¬žÃ‚¢ÃƒÆ’Ã†â€™Ãƒâ€ ââ‚¬â„¢ÃƒÆ’Ã‚¢Ãƒ¢ââ‚¬šÃ‚¬Ãƒâ€¦Ã‚¡ÃƒÆ’Ã†â€™Ãƒ¢ââ€š¬Ã…¡ÃƒÆ’ââ‚¬šÃƒâ€šÃ‚­citamente que el agente ha terminado de resolver la tarea y la da por finalizada.",
                 "parameters": {
-                    "type": "object",
+                "description": "Indica explícitamente que el agente ha terminado de resolver la tarea y la da por finalizada.",
                     "properties": {
                         "mensaje_final": { "type": "string", "description": "Mensaje final de resumen para el usuario detallando todo lo que se ha realizado." }
                     },
