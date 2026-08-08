@@ -362,7 +362,7 @@ function executeRequest(req) {
         switch (req.action) {
             case 'read_file':          result = executeReadFile(req.params); break;
             case 'write_file':         result = executeWriteFile(req.params); break;
-            case 'execute_powershell': result = executePowerShell(req.params); break;
+            case 'execute_power_shell': result = executePowerShell(req.params); break;
             case 'list_directory':     result = executeListDirectory(req.params); break;
             case 'file_exists':        result = executeFileExists(req.params); break;
             case 'file_metadata':      result = executeFileMetadata(req.params); break;
